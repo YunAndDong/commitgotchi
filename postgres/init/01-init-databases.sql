@@ -1,0 +1,12 @@
+-- Runs once on first container start (empty data volume), via
+-- /docker-entrypoint-initdb.d. The POSTGRES_DB from the environment creates the
+-- Spring Boot (System of Record) database; here we add the separate FastAPI
+-- (Intelligence) database on the SAME PostgreSQL instance.
+--
+-- Decision: one PostgreSQL instance, one database per service. The two backends
+-- do NOT share a database — Spring Boot and FastAPI each own their schema.
+
+-- :SPRING_DB_NAME and :FASTAPI_DB_NAME are passed via psql -v from the entrypoint
+-- wrapper (10-create-fastapi-db.sh). This file documents intent; creation happens
+-- in the shell wrapper because CREATE DATABASE cannot run inside a transaction
+-- block and needs conditional logic.

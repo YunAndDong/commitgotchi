@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: commitgotchi-springboot
+  datasource:
+    # All DB connection values come from the environment (see .env.example).
+    # Spring Boot (System of Record) owns its own database, separate from FastAPI.
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${SPRING_DB_NAME:commitgotchi}
+    username: ${DB_USER:commitgotchi}
+    password: ${DB_PASSWORD:commitgotchi}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      # 'validate' in real envs; 'update' is convenient for early scaffolding.
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

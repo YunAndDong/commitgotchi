@@ -1,0 +1,95 @@
+# Commit-Gotchi — initial Docker infrastructure.
+#
+# Services: Vue SPA, Spring Boot (System of Record), FastAPI (Intelligence),
+# and a single shared PostgreSQL instance with one database per backend.
+#
+# NOTE: The public Nginx reverse proxy + Certbot/HTTPS layer is intentionally
+# NOT here — it is added on the server instance after provisioning. Locally,
+# each service is reachable directly on its mapped port.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: commitgotchi-postgres
+    restart: unless-stopped
+    environment:
+      # POSTGRES_DB creates the Spring Boot (SoR) database automatically.
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${SPRING_DB_NAME}
+      # Consumed by the init script to create the separate FastAPI database.
+      FASTAPI_DB_NAME: ${FASTAPI_DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Init scripts run once, only when the data volume is empty.
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${SPRING_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - commitgotchi-net
+
+  springboot:
+    build:
+      context: ./springboot
+    container_name: commitgotchi-springboot
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SPRING_DB_NAME: ${SPRING_DB_NAME}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO}
+    ports:
+      - "${SPRING_PORT}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - commitgotchi-net
+
+  fastapi:
+    build:
+      context: ./fastapi
+    container_name: commitgotchi-fastapi
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      FASTAPI_DB_NAME: ${FASTAPI_DB_NAME}
+    ports:
+      - "${FASTAPI_PORT}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - commitgotchi-net
+
+  vue:
+    build:
+      context: ./vue
+      args:
+        # Browser calls the Spring Boot host port. Override per environment.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    container_name: commitgotchi-vue
+    restart: unless-stopped
+    ports:
+      - "${VUE_PORT}:80"
+    depends_on:
+      - springboot
+    networks:
+      - commitgotchi-net
+
+volumes:
+  postgres-data:
+
+networks:
+  commitgotchi-net:
+    driver: bridge

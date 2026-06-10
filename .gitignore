@@ -1,0 +1,16 @@
+# Secrets / local env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+
+# Per-service ignores live in vue/, springboot/, fastapi/
+
+# Hidden directories
+**/.*/
+
+# BMad
+_bmad/
+_bmad-output/
