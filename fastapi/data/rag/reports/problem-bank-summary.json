@@ -1,0 +1,20 @@
+{
+  "candidateFileCount": 170,
+  "discoveredFileCount": 205,
+  "dryRun": false,
+  "outputDir": "/Users/tlsdla1235/study/관통프로젝트/commitgotchi/fastapi/data/rag",
+  "parsedCandidateCount": 1148,
+  "rejectedByReason": {},
+  "rejectedCount": 0,
+  "skippedByReason": {
+    "confidential_path": 1,
+    "csv_metadata_only": 8,
+    "ds_store": 2,
+    "image_file": 32,
+    "missing_model_answer": 350
+  },
+  "skippedCount": 393,
+  "skippedFileCount": 35,
+  "sourceRoot": "/Users/tlsdla1235/study/md파일들",
+  "storedProblemCount": 798
+}

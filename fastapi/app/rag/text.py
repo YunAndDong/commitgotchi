@@ -124,6 +124,10 @@ FIELD_KEYWORDS: dict[str, tuple[str, ...]] = {
         "lazy loading",
         "react",
         "next",
+        "javascript",
+        "typescript",
+        "html",
+        "css",
         "frontend",
         "docker",
         "kubernetes",
@@ -131,6 +135,9 @@ FIELD_KEYWORDS: dict[str, tuple[str, ...]] = {
         "aws",
         "devops",
         "fastapi",
+        "llm",
+        "rag",
+        "vector",
         "프레임워크",
         "스프링",
         "자바",
@@ -224,6 +231,8 @@ def relative_source_path(path: Path, source_root: Path) -> str:
 def is_excluded_path(path: Path) -> bool:
     normalized = normalize_text(path.as_posix())
     if "(대외비)" in normalized:
+        return True
+    if any(part == "node_modules" for part in path.parts):
         return True
     return any(part.startswith(".") for part in path.parts)
 
