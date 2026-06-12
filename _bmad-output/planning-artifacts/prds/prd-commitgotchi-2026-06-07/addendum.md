@@ -12,7 +12,7 @@
 
 ## 시스템 구성 및 담당
 
-- **PostgreSQL** — 사용자, 캐릭터, 학습 리포트, 퀴즈 및 모범답안, 퀴즈 제출 결과, 공유 게시글, 리뷰 저장.
+- **PostgreSQL** — 전체 MVP에서는 사용자, 캐릭터, 학습 리포트, 퀴즈 및 모범답안, 퀴즈 제출 결과, 공유 게시글, 리뷰를 저장한다. 단, **첫 번째 인증·인가 구현 증분에서는 `users`, `refresh_tokens` 테이블만 생성한다.**
 - **Spring Boot 서버 (담당: 김윤석)** — 가입·로그인·JWT 인증, 사용자/캐릭터 관리, 활성 캐릭터 단일성 보장, 학습 기록 저장, **퀴즈 즉시 채점 중계(동기)**, **캐릭터 이미지 생성 요청 적재(비동기-즉시)**, 자정 리포트 SQS 적재, FastAPI 처리 결과 수신, 캐릭터 능력치·감정·진화 반영, 랭킹·대시보드 API, 게시글·리뷰 CRUD.
 - **FastAPI AI 서버 (담당: 신동운)** — 리포트 SQS 단건 처리·AI 일일 레포트 생성·다음 학습 추천·퀴즈 추천(흐름 A), **퀴즈 답안 즉시 채점·피드백(동기, 흐름 B)**, **캐릭터 스프라이트 이미지 생성(비동기-즉시, 흐름 C)**, 결과를 Spring Boot API로 전달.
 - **AWS SQS** — 큐 2종: `report-request-queue`(자정 리포트), `character-image-queue`(이미지 생성). 퀴즈 채점은 큐 없이 동기 HTTP.
@@ -80,6 +80,64 @@
 - ✅ SQS 큐 2종 구성, 재시도·DLQ·멱등성(requestId/submissionId/imageRequestId).
 - ✅ 점수 반영 트랜잭션·활성 단일성·이중계상 금지(흐름 A·B 출처 분리).
 - ✅ Fallback 정책(이미지/채점/리포트 흐름별 구체 동작).
+
+## 첫 번째 구현 증분 — 인증·인가 기술 제약
+
+- 구현 대상은 Spring Boot의 회원가입, 로그인, JWT Access Token 발급·검증, Refresh Token Rotation 기반 재발급, 로그아웃, 보호 API, Role 기반 인가다.
+- Spring AI 및 캐릭터·리포트·퀴즈·게시판 관련 구현과 전체 도메인 테이블 생성은 이 증분에서 제외한다.
+- 공개 회원가입은 Role 입력을 허용하지 않고 항상 `USER`를 생성한다. 초기 `ADMIN` 프로비저닝 방식은 미해결 항목이며 공개 API 생성은 금지한다.
+- Access Token은 서명된 JWT이며 사용자 식별자, Role, 발급 시각, 만료 시각을 포함한다. 서버는 보호 API마다 서명·형식·만료를 검증한다.
+- JWT 비밀키는 환경변수 또는 외부 Secret으로 주입하고 소스코드 및 Git 저장소에 저장하지 않는다.
+- Refresh Token 원문은 저장하지 않고 해시값만 저장하며, 재발급 시 Rotation으로 기존 토큰을 폐기한다.
+- Access Token은 로그아웃 시 즉시 무효화하지 않는 무상태 방식이다. 이 증분에서는 Access Token 블랙리스트를 구현하지 않고 짧은 유효기간으로 위험을 완화한다.
+
+### 인증 데이터 모델
+
+**USERS**
+
+| 필드 | 제약/의미 |
+|---|---|
+| `id` | PK, 사용자 식별자 |
+| `email` | unique, 로그인 식별 이메일 |
+| `password_hash` | 안전한 단방향 비밀번호 해시 |
+| `role` | `USER \| ADMIN` |
+| `created_at` | 생성 시각 |
+
+**REFRESH_TOKENS**
+
+| 필드 | 제약/의미 |
+|---|---|
+| `id` | PK, Refresh Token 레코드 식별자 |
+| `user_id` | FK → `users.id` |
+| `token_hash` | unique, Refresh Token 원문의 안전한 해시 |
+| `expires_at` | 만료 시각 |
+| `revoked_at` | nullable, 폐기 시각 |
+| `created_at` | 생성 시각 |
+
+```mermaid
+erDiagram
+    USERS ||--o{ REFRESH_TOKENS : owns
+    USERS {
+        id id PK
+        string email UK
+        string password_hash
+        string role
+        datetime created_at
+    }
+    REFRESH_TOKENS {
+        id id PK
+        id user_id FK
+        string token_hash UK
+        datetime expires_at
+        datetime revoked_at
+        datetime created_at
+    }
+```
+
+### 인증 증분 미해결 기술 결정
+
+- `[ASSUMPTION]` Access Token의 정확한 유효기간, Refresh Token 유효기간, JWT 서명 알고리즘 및 운영 비밀키 최소 길이는 아키텍처 단계에서 확정한다.
+- 초기 `ADMIN` 계정 프로비저닝 방식은 공개 회원가입 외의 안전한 운영 절차로 확정해야 한다.
 
 ## 잔여 미해결 질문 (PRD §8과 연동)
 
