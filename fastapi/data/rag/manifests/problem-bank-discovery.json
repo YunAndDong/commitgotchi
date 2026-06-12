@@ -1,0 +1,826 @@
+{
+  "skippedFiles": [
+    {
+      "reason": "ds_store",
+      "sourcePath": ".DS_Store"
+    },
+    {
+      "reason": "ds_store",
+      "sourcePath": "quiz/.DS_Store"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/3회차 CS 기초 - 알고리즘/image.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/1회차 Java 기초/image.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/4회차 Spring 기초/image.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/5회차 Spring 심화/image.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/7회차 Database 심화 (2)/image.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/2회차 시스템 설계 (1)/image 1.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/2회차 시스템 설계 (1)/image 2.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/2회차 시스템 설계 (1)/image 3.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/2회차 시스템 설계 (1)/image.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 1.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 10.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 11.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 2.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 3.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 4.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 5.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 6.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 7.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 8.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image 9.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/image.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/5회차 SW공학 & 버전 관리/image 1.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/5회차 SW공학 & 버전 관리/image 2.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/5회차 SW공학 & 버전 관리/image 3.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/5회차 SW공학 & 버전 관리/image 4.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/5회차 SW공학 & 버전 관리/image 5.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/5회차 SW공학 & 버전 관리/image 6.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/5회차 SW공학 & 버전 관리/image.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/클라우드 심화 (1)/image 1.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/클라우드 심화 (1)/image 2.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/클라우드 심화 (1)/image 3.png"
+    },
+    {
+      "reason": "image_file",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/클라우드 심화 (1)/image.png"
+    },
+    {
+      "reason": "confidential_path",
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/CJ 올리브네트웍스 코딩테스트 기출 회고용 (대외비) 3617f669b13380629617d01559418359.md"
+    }
+  ],
+  "sourceFiles": [
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/algorithm/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/algorithm/qna-algorithm.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/computer-architecture/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/computer-architecture/qna-computer-architecture.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/data-structure/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/data-structure/qna-data-structure.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/network/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/network/qna-network.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/operating-system/01-process-thread.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/operating-system/02-memory-management.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/operating-system/03-context-switching.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/operating-system/04-deadlock-race-condition.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/operating-system/05-virtual-memory.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/operating-system/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/01-computer-science-fundamentals/operating-system/qna-os.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/02-backend-engineering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/02-backend-engineering/authentication/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/02-backend-engineering/authentication/qna-authentication.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/02-backend-engineering/database/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/02-backend-engineering/database/qna-database.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/02-backend-engineering/java-fundamentals/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/02-backend-engineering/java-fundamentals/qna-java.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/02-backend-engineering/spring-framework/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/02-backend-engineering/spring-framework/qna-spring.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/browser-fundamentals/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/browser-fundamentals/qna-browser.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/build-tools/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/build-tools/qna-build-tools.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/frontend-architecture/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/frontend-architecture/qna-frontend-architecture.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/html-css/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/html-css/qna-html-css.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/javascript-deep-dive/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/javascript-deep-dive/qna-javascript.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/nextjs-rendering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/nextjs-rendering/qna-nextjs.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/react-architecture/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/react-architecture/qna-react.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/typescript/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/03-frontend-engineering/typescript/qna-typescript.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/04-system-design/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/04-system-design/caching/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/04-system-design/caching/qna-caching.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/04-system-design/performance/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/04-system-design/performance/qna-performance.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/04-system-design/qna-infrastructure.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/04-system-design/scalability/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/04-system-design/scalability/qna-scalability.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/05-ai-engineering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/05-ai-engineering/llm-integration/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/05-ai-engineering/llm-integration/qna-llm.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/05-ai-engineering/rag-pipeline/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/05-ai-engineering/rag-pipeline/qna-rag.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/05-ai-engineering/vector-database/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/05-ai-engineering/vector-database/qna-vector-db.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/06-design-patterns/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/06-design-patterns/qna-design-patterns.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/07-security/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/07-security/qna-security.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/08-api-design/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/08-api-design/qna-api-design.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/09-software-engineering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/09-software-engineering/qna-software-engineering.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/10-version-control/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/10-version-control/qna-version-control.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/aws/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/aws/qna-aws.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/cloud-fundamentals/02-virtualization-hypervisor.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/cloud-fundamentals/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/cloud-fundamentals/qna-cloud-fundamentals.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/containerization/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/containerization/docker/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/containerization/docker/qna-docker.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/devops-cicd/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/devops-cicd/qna-cicd.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/kubernetes/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/kubernetes/qna-kubernetes.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/linux-networking/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/linux-networking/qna-linux-networking.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/monitoring-observability/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/monitoring-observability/qna-monitoring.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/practical-scenarios/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/practical-scenarios/qna-architecture.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/practical-scenarios/qna-behavioral.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/11-cloud-engineering/practical-scenarios/qna-troubleshooting.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/99-practical-interview/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/99-practical-interview/qna-behavioral.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/99-practical-interview/qna-frontend-companies.md",
+      "sourceType": "qna"
+    },
+    {
+      "sourcePath": "computer-science-interview-KR/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디 3127f669b1338034a71eee6fe0a83b46.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals 3347f669b133804c8ec2ccc0680bedcd.csv",
+      "sourceType": "csv"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals 3347f669b133804c8ec2ccc0680bedcd_all.csv",
+      "sourceType": "csv"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/1회차 CS 기초 - 컴퓨터구조 3527f669b133805f9c7fccd7ee21662f.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/1회차 CS 기초 - 컴퓨터구조/문제 3527f669b133804db2bbcb20e1c47859.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/1회차 CS 기초 - 컴퓨터구조/백엔드 개발자용 컴퓨터 구조 3557f669b13380d0ab72d1bfc74a0088.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/2회차 CS 기초 - 운영체제 (1) 3347f669b13381fdb7a6f95e82dfe508.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/2회차 CS 기초 - 운영체제 (1)/1회차 프로세스 스레드, 메모리 관리, 컨텍스트 스위칭 3507f669b13380d4881dff401f7afdde.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/3회차 CS 기초 - 알고리즘 3347f669b133812c980ce360467a0bf8.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/3회차 CS 기초 - 알고리즘/문제 3517f669b13380c6b7f5e26d52bb55f7.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/3회차 CS 기초 - 운영체제 (2) 3507f669b133804589f1f03d6d2186c0.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/3회차 CS 기초 - 운영체제 (2)/2회차 동시성 제어, 가상 메모리 3507f669b13380d3a816f117900ca178.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/4회차 CS 기초 - 자료구조 3347f669b13381f2b508eaccca29682a.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/5회차 CS 기초 - 네트워크 (1) 3347f669b1338123bdbbf45744795167.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/5회차 CS 기초 - 네트워크 (1)/문제 3347f669b13381ec9454f424713b3c05.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/6회차 CS 기초 - 네트워크 (2) 3517f669b133808b9efee7bf1afccf5f.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/01 (Re) Computer Science Fundamentals/6회차 CS 기초 - 네트워크 (2)/문제 3517f669b133811faf23cf13bbbda3e1.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering 3347f669b13380d29ea7f91312b913c6.csv",
+      "sourceType": "csv"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering 3347f669b13380d29ea7f91312b913c6_all.csv",
+      "sourceType": "csv"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/1회차 Java 기초 3297f669b13380188f61c2c3c2025ee0.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/1회차 Java 기초/문제 3307f669b13380198eebd1426854a297.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/2회차 Java 심화 3347f669b1338052878ad097eec9f35b.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/2회차 Java 심화/문제 (1회) 3307f669b133808a9fbfde7131bd2a7f.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/2회차 Java 심화/문제 (2회) 35f7f669b13380e98953e0efd974228e.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/3회차 Database 기초 3297f669b1338037bdf2f15b61c71f25.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/3회차 Database 기초/4 8 수요일 문제 33b7f669b13380ce9042df5c3ee9943b.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/3회차 Database 기초/문제 (5 18) 3637f669b13380eeaeebc248ea9b7410.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/4회차 Spring 기초 3297f669b13380e3b623f46a4a52551d.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/4회차 Spring 기초/DI 주입 방식(생성자, 필드, Setter) 코드 예시 33d7f669b133804ebfacfb20c41af284.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/4회차 Spring 기초/IoC 구현 방법이 DI 말고도 있어 33d7f669b13380088635cdcbb557d304.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/4회차 Spring 기초/문제 3667f669b1338015958beaf55a7efc69.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/5회차 Spring 심화 3357f669b1338001a796c492b50af063.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/5회차 Spring 심화/👀 문제 3427f669b13380cf950ee86ca08c1483.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/6회차 Database 심화 (1) 3357f669b133805f920be3e8315b0d3e.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/6회차 Database 심화 (1)/문제 3497f669b133809f9033fe89db96168a.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/7회차 Database 심화 (2) 3437f669b1338076b66dfa828f8c5b35.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/02 Backend Engineering/7회차 Database 심화 (2)/문제 3437f669b133802f86d6e863adf261ef.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering 3497f669b13380da9eeacda3138ad14c.csv",
+      "sourceType": "csv"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering 3497f669b13380da9eeacda3138ad14c_all.csv",
+      "sourceType": "csv"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/1회차 HTML & CSS 3727f669b1338004bf69cd967205e169.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/1회차 HTML & CSS/HTML CSS 서술형 면접 대비 문제집 3727f669b13380ea9564d569c7e68617.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/1회차 HTML & CSS/HTML CSS 서술형 면접 대비 문제집/영훈(오답노트) 3727f669b13380938066c2e2770e0148.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/1회차 HTML & CSS/HTML CSS 서술형 면접 대비 문제집/영훈(오답노트) 3727f669b13380a2966dd0c49ba09586.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/2회차 JavaScript 3497f669b13380b19252dc8516178839.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/2회차 JavaScript/HTML CSS 서술형 면접 대비 문제집 3727f669b1338007a778e793be0a30a3.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/3회차 Browser 3497f669b1338007a0c6c94f1e4626af.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/3회차 Browser/브라우저 동작 원리 서술형 면접 대비 문제집 3727f669b1338037adc0d9d0528f0594.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/4회차 TypeScript 3497f669b133809cb79ed3d2497cccd8.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/5회차 React 3497f669b1338008a91fd5bb0c90b30f.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/5회차 React/제목 없음 3727f669b133800f99a9eab5d38d081b.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/6회차 Next js 3497f669b1338050acbbc4c315082372.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/7회차 Frontend Architecture 3727f669b13380f98261cffe81f7780f.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/03 Frontend Engineering/8회차 Build Tools 3727f669b13380bdab30e180a16ebe4a.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통 3487f669b1338091934eea036711d421.csv",
+      "sourceType": "csv"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통 3487f669b1338091934eea036711d421_all.csv",
+      "sourceType": "csv"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/1회차 인증 인가 & 보안 3487f669b133808aa295e6527d88b928.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/1회차 인증 인가 & 보안/🔐 보안 & 인증 인가 문제 3487f669b1338082a218f45927aa6c7f.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/2회차 시스템 설계 (1) 3487f669b13380ebaeecf12f7fdba1c5.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/2회차 시스템 설계 (1)/문제 확장성, 로드 밸런싱 & 인프라, 캐싱 3517f669b1338083975ec9fac80ad8f8.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/3회차 시스템 설계 (2) 3517f669b1338021a1a1cb86bf61f5b3.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/3회차 시스템 설계 (2)/문제 성능 최적화, 장애 대응 & 배포 전략, 종합 시스템 설계 3517f669b13380ffa7e8e87dc9d31b0e.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계 3487f669b133803da204eabe5491a200.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/4회차 디자인 패턴 & API 설계/디자인 패턴 & API 설계 서술형 문제 3567f669b133803388f9c706bc493012.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/5회차 SW공학 & 버전 관리 3487f669b13380d8bb79cb1100f59a93.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/5회차 SW공학 & 버전 관리/SW공학 & 버전 관리 서술형 면접 문제 35a7f669b13380c7b740c491ecf98916.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/6회차 클라우드 기초 (1) 3617f669b13380fc87c3e49fac788fd5.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/6회차 클라우드 기초 (1)/클라우드, 가상화, Docker 3647f669b133803299c7d4dfdf7eed53.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/7회차 클라우드 기초 (2) 3647f669b1338067ae8ef6f77987e901.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/7회차 클라우드 기초 (2)/AWS, CI CD, 모니터링, Linux 기초 3647f669b13380118727ca2a9c62924e.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/8회차 AI 엔지니어링 3487f669b133806f94edd610068fa6f9.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/8회차 AI 엔지니어링/AI 엔지니어링 서술형 면접 문제 3647f669b133805e9059d18109eb424e.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/클라우드 심화 (1) 3487f669b1338013b866d4c16a31e86d.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/클라우드 심화 (1)/클라우드 기초 & 가상화, Docker & 컨테이너 & Kubernetes 35a7f669b13380c4bd8bf82277961be5.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/클라우드 심화 (2) 3487f669b13380d28ef3d413d70a947e.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/클라우드 심화 (2)/AWS, CI CD & DevOps, 모니터링 & 관측성 35a7f669b13380ae8173e2cc6a9275ed.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/클라우드 심화 (3) 3647f669b133805a8bd8c80ee5b23345.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/04 공통/클라우드 심화 (3)/Linux & 네트워킹, Troubleshooting 3647f669b1338135bbbbe7a47ae93fac.md",
+      "sourceType": "quiz"
+    },
+    {
+      "sourcePath": "quiz/SSAFY 서울 17반 CS 스터디/💜 CS 스터디 커리큘럼 💜 3127f669b13380a6ab1df89372cc86d8.md",
+      "sourceType": "quiz"
+    }
+  ]
+}
