@@ -1,6 +1,9 @@
 spring:
   application:
     name: commitgotchi-springboot
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
   datasource:
     # All DB connection values come from the environment (see .env.example).
     # Spring Boot (System of Record) owns its own database, separate from FastAPI.
@@ -10,12 +13,19 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      # 'validate' in real envs; 'update' is convenient for early scaffolding.
-      ddl-auto: ${JPA_DDL_AUTO:update}
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
     open-in-view: false
+  flyway:
+    enabled: true
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 
 server:
   port: 8080
@@ -25,3 +35,22 @@ management:
     web:
       exposure:
         include: health,info
+
+commitgotchi:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  jwt:
+    secret-base64: ${JWT_SECRET_BASE64}
+    issuer: ${JWT_ISSUER:commitgotchi-springboot}
+    access-token-ttl: PT15M
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "!prod & (local | dev | test)"
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

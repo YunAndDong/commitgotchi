@@ -4,11 +4,17 @@ inputDocuments:
   - briefs/brief-commitgotchi-2026-06-07/brief.md
   - briefs/brief-commitgotchi-2026-06-07/addendum.md
   - prds/prd-commitgotchi-2026-06-07/prd.md
+  - prds/prd-commitgotchi-2026-06-07/addendum.md
+  - prds/prd-commitgotchi-2026-06-07/.decision-log.md
   - ux-designs/ux-commitgotchi-2026-06-07/DESIGN.md
 workflowType: 'architecture'
 project_name: 'commitgotchi'
 user_name: 'Kimyunseok'
 date: '2026-06-07'
+lastStep: 8
+status: 'complete'
+updatedAt: '2026-06-11'
+completedAt: '2026-06-11'
 ---
 
 # Architecture Decision Document — commitgotchi
@@ -47,9 +53,9 @@ _혼자 CS를 공부하는 사람의 학습을 캐릭터 성장으로 바꾸는 
 
 ### 1.1 Requirements Overview
 
-**기능 요구사항 (PRD FR-1~23)** 은 9개 기능군으로 묶이며, 아키텍처 관점에서 3개 책임 영역으로 재분류된다:
+**기능 요구사항 (PRD FR-1~28)** 은 9개 기능군으로 묶이며, 아키텍처 관점에서 3개 책임 영역으로 재분류된다:
 
-- **Transactional / SoR (Spring Boot):** 회원(FR-1~2), 캐릭터 CRUD·활성화(FR-3~7), 리포트 저장(FR-8), 요청 적재(FR-9), 점수 반영(FR-11), 결과 제공(FR-12), 능력치·전투력·진화·감정(FR-21~23), 랭킹·대시보드(FR-17~18), 공유·리뷰(FR-19~20).
+- **Transactional / SoR (Spring Boot):** 회원·인증·인가(FR-1~2, FR-24~28), 캐릭터 CRUD·활성화(FR-3~7), 리포트 저장(FR-8), 요청 적재(FR-9), 점수 반영(FR-11), 결과 제공(FR-12), 능력치·전투력·진화·감정(FR-21~23), 랭킹·대시보드(FR-17~18), 공유·리뷰(FR-19~20).
 - **AI / Intelligence (FastAPI):** 일일 레포트 생성(FR-10), 추천 퀴즈(FR-13), **퀴즈 비동기 채점·피드백(FR-15)**, **스프라이트 이미지 생성(FR-3 내)**, Fallback 생성(FR-16).
 - **계약 모드 3종:**
   - **비동기 단방향(흐름 A):** 일일 리포트는 자정 SQS → FastAPI → 콜백(FR-9~12).
@@ -62,6 +68,7 @@ _혼자 CS를 공부하는 사람의 학습을 캐릭터 성장으로 바꾸는 
 - **데이터 정합성:** 활성 캐릭터는 항상 정확히 1개, 전투력 = 능력치 5종 합이 언제나 성립해야 한다(FR-7, FR-11, FR-21). → 트랜잭션·제약·멱등성 설계가 필수.
 - **AI 품질(증명 1순위, SM-1):** 채점·피드백·추천이 "그럴듯하고 유용"해야 한다. → 프롬프트·모델 선택을 FastAPI에 캡슐화하고 교체 가능하게 둔다.
 - **보안:** 비밀번호 해시, JWT 인증, Internal API는 외부 비노출(서버 간 인증).
+- **첫 번째 구현 증분:** Spring Boot 인증·인가만 종단 구현한다. 이 증분의 DB 변경은 `users`, `refresh_tokens`로 제한하고, 상세 계약과 구현 순서는 §12를 SSOT로 사용한다.
 
 ### 1.2 Scale & Complexity
 
@@ -196,6 +203,7 @@ flowchart TB
 | FR | 기능 | 컴포넌트 | 담당 |
 |----|------|----------|------|
 | FR-1,2 | 가입·로그인·JWT | 인증 모듈 | 김윤석 |
+| FR-24~28 | Refresh Token Rotation·로그아웃·Role 인가·검증 API·인증 오류 계약 | 인증 모듈 + Spring Security + 공통 오류 처리 | 김윤석 |
 | FR-3 | 캐릭터 생성(+동기 HTTP 스프라이트 이미지 생성, 흐름 C) | 캐릭터 모듈 → 이미지 HTTP 클라이언트 ↔ 이미지 생성 | 김윤석 ↔ 신동운 |
 | FR-4,5,6,7 | 캐릭터 조회·수정·삭제·활성화 | 캐릭터 모듈 | 김윤석 |
 | FR-8 | 학습 리포트 저장 | 리포트 모듈 | 김윤석 |
@@ -519,6 +527,7 @@ Content-Type: application/json
 
 ```mermaid
 erDiagram
+  USERS ||--o{ REFRESH_TOKENS : owns
   USERS ||--o{ CHARACTERS : owns
   USERS ||--o{ STUDY_LOGS : writes
   CHARACTERS ||--o{ QUIZZES : has
@@ -532,6 +541,15 @@ erDiagram
     bigint id PK
     string email UK
     string password_hash
+    string role "USER|ADMIN"
+    timestamptz created_at
+  }
+  REFRESH_TOKENS {
+    uuid id PK
+    bigint user_id FK
+    string token_hash UK
+    timestamptz expires_at
+    timestamptz revoked_at "nullable"
     timestamptz created_at
   }
   CHARACTERS {
@@ -611,6 +629,8 @@ erDiagram
   }
 ```
 
+> **인증 증분 경계:** 위 ER은 전체 MVP 목표 모델이다. 첫 번째 Flyway 증분은 §12.2의 `users`, `refresh_tokens`만 생성한다. 나머지 도메인 테이블은 이 증분에서 생성하지 않는다.
+
 ### 5.2 핵심 제약 — 활성 캐릭터 단일성 (FR-7)
 
 PostgreSQL **부분 유니크 인덱스**로 DB 레벨에서 보장한다. 애플리케이션 로직 실수와 무관하게 "사용자당 활성 1개"가 깨질 수 없다.
@@ -658,9 +678,11 @@ commitgotchi/
 │       ├── api/                   # Spring Boot REST 클라이언트, JWT 인터셉터
 │       └── components/
 │
-├── backend-spring/                # 김윤석 — System of Record
+├── springboot/                    # 김윤석 — System of Record (현재 실제 디렉터리)
 │   └── src/main/java/com/commitgotchi/
-│       ├── auth/                  # 가입·로그인·JWT (FR-1,2)
+│       ├── auth/                  # 가입·로그인·JWT·Refresh Token (FR-1,2,24,25)
+│       ├── user/                  # 사용자 조회·현재 사용자·Role (FR-26,27)
+│       ├── security/              # SecurityFilterChain·JWT 필터·EntryPoint·DeniedHandler
 │       ├── character/             # CRUD·활성 단일성·성장 반영·스프라이트 메타 (FR-3~7,21~23)
 │       │   └── image/             # 흐름 C: FastAPI 이미지 동기 HTTP 클라이언트
 │       ├── studylog/              # 학습 리포트 (FR-8)
@@ -672,6 +694,9 @@ commitgotchi/
 │       ├── ranking/               # 랭킹·대시보드 (FR-17,18)
 │       ├── board/                 # 공유 게시글·리뷰 (FR-19,20)
 │       └── common/                # 예외·트랜잭션·SQS(리포트)·HTTP 클라이언트·보안
+│   └── src/main/resources/db/migration/
+│       ├── V1__create_users.sql
+│       └── V2__create_refresh_tokens.sql
 │
 └── ai-fastapi/                    # 신동운 — Intelligence
     └── app/
@@ -899,13 +924,25 @@ sequenceDiagram
 | AD-12 | **캐릭터 이미지는 6프레임 2×3 스프라이트시트(진화 2×감정 3)** | 3번 요구, 진화·감정 프레임 전환 | 확정 `[RESOLVES Q6]` |
 | AD-13 | **MQ는 리포트 요청에만 사용, 퀴즈는 웹훅, 이미지는 동기 HTTP** | 흐름별 협업 계약을 단순화 | 확정 |
 | AD-14 | **캐릭터 상세는 리포트/퀴즈 독립 페이지네이션 2-리스트** | 1.3 요구 | 확정 `[§5.4]` |
+| AD-15 | **첫 구현 증분은 Spring Boot 인증·인가이며 `users`, `refresh_tokens`만 마이그레이션** | 인증 기반을 먼저 종단 검증, 범위 팽창 방지 | 확정 |
+| AD-16 | **Spring Security 무상태 Bearer JWT, 세션·Access Token 블랙리스트 미사용** | SPA/REST 구조와 PRD FR-2·25 일치 | 확정 |
+| AD-17 | **Access Token HS256 15분, 운영 키 최소 256-bit 랜덤 Secret** | 단일 발급·검증 서비스에 단순하며 로그아웃 잔여 위험 완화 | 확정 |
+| AD-18 | **Refresh Token 256-bit opaque random, 30일, SHA-256 해시 저장, Rotation** | DB 원문 유출 방지와 탈취 토큰 재사용 차단 | 확정 |
+| AD-19 | **폐기 Refresh Token 재사용 탐지 시 해당 사용자의 모든 활성 Refresh Token 폐기** | 현재 스키마에 token-family가 없으므로 가능한 보수적 대응 | 확정 |
+| AD-20 | **이메일은 애플리케이션에서 trim+lowercase 후 저장하고 DB CHECK+UNIQUE로 강제** | 대소문자·공백에 의한 중복 계정 방지 | 확정 |
+| AD-21 | **Role은 `varchar(20)` + CHECK(`USER`,`ADMIN`), 공개 가입은 항상 `USER`** | PostgreSQL enum 결합도를 피하면서 허용값 강제 | 확정 |
+| AD-22 | **초기 ADMIN은 Secret 기반 일회성 Flyway placeholder 마이그레이션이 아니라 운영 CLI/수동 SQL 절차로 프로비저닝** | 자격 증명과 해시를 Git/마이그레이션 이력에서 분리 | 확정 |
+| AD-23 | **공통 인증 오류 응답과 traceId를 EntryPoint·DeniedHandler·ControllerAdvice에서 동일 계약으로 제공** | 401/403/400/409 구분과 민감정보 비노출 | 확정 |
+| AD-24 | **BCrypt cost 12, 운영에서 기준 장비 성능 검증 후 상향 가능** | 안전한 기본값과 구현 단순성의 균형 | 확정 |
+| AD-25 | **인증 증분 DB 변경은 Flyway만 사용하고 Hibernate `ddl-auto=validate`** | 재현 가능한 실행 순서와 스키마 드리프트 방지 | 확정 |
 
 ---
 
 ## 10. 검증 — FR 커버리지
 
-PRD FR-1~23 전부가 컴포넌트·계약·데이터 모델에 매핑됨(§3.2). 본 개정으로 해소·변경된 항목:
+PRD FR-1~28 전부가 컴포넌트·계약·데이터 모델에 매핑됨(§3.2, §12). 본 개정으로 해소·변경된 항목:
 
+- **FR-1~2, FR-24~28 (인증·인가):** 스키마, Spring Security 컴포넌트, API/오류 계약, 7개 보안 시퀀스, 테스트 전략을 §12에 확정.
 - **FR-15 (퀴즈 채점):** 자정 배치/동기 응답 → **비동기 웹훅 채점**(흐름 B)으로 변경. PRD/Addendum 동기화 필요(§아래 핸드오프).
 - **Q6 (기본 이미지 세트):** 스프라이트시트 6프레임 2×3 레이아웃으로 확정(§7.6). 기본 세트도 동일 레이아웃으로 N개 준비 후 Fallback 랜덤 배정. `[ASSUMPTION: N개수]`
 - **점수 이중계상:** 흐름 A·B 출처 분리로 해소(AD-11, §4.5).
@@ -920,8 +957,577 @@ PRD FR-1~23 전부가 컴포넌트·계약·데이터 모델에 매핑됨(§3.2)
 
 ## 11. 다음 단계 (Handoff)
 
-1. **김윤석(Spring Boot):** §5 스키마(스프라이트·submission 멱등·퀴즈 필드별 배점 포함)로 엔티티·마이그레이션, §4.2 `POST /api/report`, §4.3 `grade-result` 웹훅 수신, §4.4 이미지 동기 HTTP 클라이언트, §4.6 멱등/DLQ, 자정 리포트 Producer, §5.4 리포트/퀴즈 페이지네이션 API 구현.
-2. **신동운(FastAPI):** §8.1 리포트 컨슈머, §8.2 비동기 채점 API(`/api/internal/quizzes/grade`) + Spring Boot 웹훅 호출, §8.3 `/api/ai/commitgotchi` 이미지 생성·S3 저장, §4 콜백, §7.2~7.3 감정·Fallback 구현.
-3. **공통:** §4의 4개 계약(JSON 스키마)을 양 팀 공유 단일 진실(SSOT)로 고정 — 변경 시 동시 합의. 프런트엔드는 §7.6 스프라이트 프레임 선택·bob 렌더, §5.4 2-리스트 페이지네이션, 퀴즈 `GRADING` 상태 조회 구현.
-4. **PRD/Addendum 동기화:** FR-15(웹훅 채점)·FR-3(스프라이트 동기 HTTP)·D1·D4 결정 변경을 상류 문서에 반영(본 개정과 함께 수정됨).
-5. **에픽/스토리:** 본 문서를 입력으로 `bmad-create-epics-and-stories` 진행 권장.
+1. **김윤석(Spring Boot) — 첫 구현 우선순위:** §12 인증 증분을 먼저 구현한다. `V1__create_users.sql` → `V2__create_refresh_tokens.sql` → SecurityFilterChain/JWT → 회원가입·로그인 → 재발급·로그아웃 → `/api/users/me`·`/api/admin/ping` → 통합 테스트 순서다.
+2. **김윤석(Spring Boot) — 인증 이후:** §5 나머지 도메인 스키마, §4.2 `POST /api/report`, §4.3 `grade-result` 웹훅 수신, §4.4 이미지 동기 HTTP 클라이언트, §4.6 멱등/DLQ, 자정 리포트 Producer, §5.4 리포트/퀴즈 페이지네이션 API 구현.
+3. **신동운(FastAPI):** §8.1 리포트 컨슈머, §8.2 비동기 채점 API(`/api/internal/quizzes/grade`) + Spring Boot 웹훅 호출, §8.3 `/api/ai/commitgotchi` 이미지 생성·S3 저장, §4 콜백, §7.2~7.3 감정·Fallback 구현.
+4. **공통:** §4의 4개 계약(JSON 스키마)을 양 팀 공유 단일 진실(SSOT)로 고정 — 변경 시 동시 합의. 프런트엔드는 §7.6 스프라이트 프레임 선택·bob 렌더, §5.4 2-리스트 페이지네이션, 퀴즈 `GRADING` 상태 조회 구현.
+5. **기존 문서 충돌 정리:** 최신 PRD/Addendum은 퀴즈 동기 채점·이미지 비동기 큐를 기술하지만 본 기존 아키텍처 §4·§8은 퀴즈 웹훅·이미지 동기 HTTP를 기술한다. 인증 증분과 무관하므로 이번 업데이트에서 임의 변경하지 않았으며, 인증 이후 별도 제품 결정으로 정합화해야 한다.
+6. **에픽/스토리:** 본 문서를 입력으로 인증 증분 스토리를 먼저 생성한다.
+
+---
+
+## 12. 첫 번째 구현 증분 — Spring Boot 인증·인가 아키텍처
+
+> **범위 SSOT:** 이 절은 FR-1~2, FR-24~28을 구현하기 위한 아키텍처 계약이다. 전체 MVP 아키텍처는 §0~11을 유지하지만, 첫 증분에서는 이 절에 명시된 `users`, `refresh_tokens`, 인증 API, 최소 검증 API만 구현한다. 캐릭터·리포트·퀴즈·게시판·Spring AI와 Access Token 블랙리스트는 제외한다.
+
+### 12.1 결정 요약과 구현 순서
+
+| 항목 | 결정 |
+|---|---|
+| 인증 모델 | Spring Security 기반 무상태 Bearer JWT |
+| Access Token | HS256, 15분, Claim: `sub`, `role`, `iat`, `exp` |
+| Refresh Token | 256-bit CSPRNG opaque token, 30일, DB에는 SHA-256 해시만 저장 |
+| Rotation | 재발급 트랜잭션에서 기존 토큰 폐기 후 새 토큰 생성 |
+| 재사용 탐지 | 폐기된 Refresh Token 재사용 시 해당 사용자의 모든 활성 Refresh Token 폐기 |
+| 비밀번호 | BCrypt cost 12 |
+| 이메일 | `trim` 후 `Locale.ROOT` 소문자 변환, 정규화된 값만 저장 |
+| Role | `USER`, `ADMIN`; 공개 회원가입은 항상 `USER` |
+| 세션/CSRF | `STATELESS`, 세션 미사용, Bearer 토큰 기반 API의 CSRF 비활성화 |
+| CORS | 환경변수 allowlist, 운영에서 wildcard 금지 |
+| 마이그레이션 | Flyway 전용, `V1 users` → `V2 refresh_tokens`, Hibernate `ddl-auto=validate` |
+
+**구현 순서:** Flyway/엔티티 → 공통 오류 계약 → SecurityFilterChain/JWT → 회원가입 → 로그인 → 재발급 Rotation → 로그아웃 → 현재 사용자/관리자 API → 통합 테스트.
+
+**필수 Spring 의존성 계약:** 기존 Web/JPA/PostgreSQL에 `spring-boot-starter-security`, `spring-boot-starter-validation`, `spring-security-oauth2-jose`(Spring Security의 `JwtEncoder`/`JwtDecoder` 사용), `flyway-core`, PostgreSQL용 Flyway 모듈을 추가한다. 테스트에는 `spring-security-test`, Testcontainers PostgreSQL을 사용한다. Spring Boot dependency management가 관리하는 버전을 사용하고 JWT 서명/파싱 암호 로직을 직접 구현하지 않는다.
+
+### 12.2 PostgreSQL 스키마 계약
+
+#### 12.2.1 `users`
+
+```sql
+CREATE TABLE users (
+    id            BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    email         VARCHAR(254) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role          VARCHAR(20) NOT NULL DEFAULT 'USER',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_users_email UNIQUE (email),
+    CONSTRAINT ck_users_email_normalized
+        CHECK (email = lower(btrim(email)) AND length(email) > 0),
+    CONSTRAINT ck_users_role
+        CHECK (role IN ('USER', 'ADMIN'))
+);
+```
+
+| 컬럼 | 결정과 근거 |
+|---|---|
+| `id` | `BIGINT IDENTITY` PK. 전체 MVP의 다른 도메인 FK와 일관된 사용자 식별자. |
+| `email` | `VARCHAR(254) NOT NULL UNIQUE`. 서비스 계정 식별자는 정규화된 이메일 하나만 저장한다. |
+| `password_hash` | `VARCHAR(255) NOT NULL`. BCrypt 60자보다 넉넉히 두어 향후 해시 알고리즘 전환을 허용한다. |
+| `role` | `VARCHAR(20)` + CHECK. PostgreSQL enum 대신 마이그레이션 결합도가 낮은 문자열 제약을 사용한다. |
+| `created_at` | `TIMESTAMPTZ`, DB 기본값 UTC 기준 현재 시각. API에서는 ISO-8601 UTC로 직렬화한다. |
+
+**이메일 정규화:** Controller DTO 검증 후 서비스 경계에서 `trim()` + 소문자 변환을 수행하고, 정규화된 값으로 중복 조회·저장한다. DB CHECK와 UNIQUE가 애플리케이션 실수를 최종 차단한다. 이메일 local-part의 대소문자를 구분하는 공급자는 MVP에서 지원하지 않는다.
+
+#### 12.2.2 `refresh_tokens`
+
+```sql
+CREATE TABLE refresh_tokens (
+    id         UUID PRIMARY KEY,
+    user_id    BIGINT NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_refresh_tokens_token_hash UNIQUE (token_hash),
+    CONSTRAINT fk_refresh_tokens_user
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT ck_refresh_tokens_expiry
+        CHECK (expires_at > created_at),
+    CONSTRAINT ck_refresh_tokens_revocation
+        CHECK (revoked_at IS NULL OR revoked_at >= created_at)
+);
+
+CREATE INDEX idx_refresh_tokens_user_active
+    ON refresh_tokens (user_id, expires_at)
+    WHERE revoked_at IS NULL;
+
+CREATE INDEX idx_refresh_tokens_cleanup
+    ON refresh_tokens (expires_at);
+```
+
+| 결정 | 계약 |
+|---|---|
+| 관계 | `USERS 1:N REFRESH_TOKENS`. 한 사용자의 기기/브라우저별 로그인을 독립 레코드로 관리한다. |
+| PK | 애플리케이션이 생성하는 UUID. 토큰 원문과 DB 식별자를 분리한다. |
+| 토큰 저장 | 원문은 응답 시 한 번만 전달하고, DB에는 SHA-256 결과를 lowercase hex 64자로 저장한다. |
+| FK 삭제 정책 | `ON DELETE CASCADE`. 사용자 삭제 시 재발급 권한도 함께 제거한다. |
+| 활성 토큰 조회 | `token_hash` unique 조회 후 `revoked_at IS NULL AND expires_at > now()`를 검사한다. |
+| 정리 전략 | 매일 1회 `expires_at < now() - interval '7 days'` 또는 `revoked_at < now() - interval '7 days'` 레코드를 배치 삭제한다. 7일 보존은 보안 이벤트 조사 창이다. `[ASSUMPTION]` |
+
+#### 12.2.3 Flyway 실행 순서
+
+1. `V1__create_users.sql`: `users` 테이블과 제약 생성.
+2. `V2__create_refresh_tokens.sql`: FK 대상인 `users` 이후 `refresh_tokens`와 인덱스 생성.
+3. 인증 증분에서는 `V3` 이상의 도메인 테이블을 만들지 않는다.
+4. 모든 환경에서 Flyway가 먼저 실행되고 JPA는 `ddl-auto=validate`로 매핑 불일치만 탐지한다.
+5. 운영 초기 ADMIN은 Flyway 파일에 자격 증명을 넣지 않는다(§12.10).
+
+### 12.3 Spring Security 컴포넌트 구조
+
+```mermaid
+flowchart LR
+  REQ[HTTP Request] --> SFC[SecurityFilterChain]
+  SFC --> JF[JwtAuthenticationFilter]
+  JF --> JP[JwtTokenProvider]
+  JF --> SC[SecurityContext]
+  SFC --> C[Controller]
+
+  AC[AuthController] --> AS[AuthService]
+  AS --> AM[AuthenticationManager]
+  AM --> UDS[AuthUserDetailsService]
+  UDS --> UR[UserRepository]
+  AM --> PE[PasswordEncoder]
+  AS --> JP
+  AS --> RTS[RefreshTokenService]
+  RTS --> RTR[RefreshTokenRepository]
+  RTS --> UR
+
+  SFC -->|미인증| EP[AuthenticationEntryPoint]
+  SFC -->|권한 부족| DH[AccessDeniedHandler]
+  EP --> ER[Common Error Response]
+  DH --> ER
+```
+
+| 컴포넌트 | 책임 | 의존/금지 |
+|---|---|---|
+| `SecurityFilterChain` | 공개/보호/관리자 경로 정책, stateless, CORS, CSRF, EntryPoint/DeniedHandler 연결 | 비즈니스 로직 금지 |
+| `JwtAuthenticationFilter` | `Authorization: Bearer` 파싱, JWT 검증 성공 시 `Authentication`을 `SecurityContext`에 설정 | 토큰 발급·DB 조회 금지; 요청당 1회 |
+| `AuthenticationManager` | 로그인 이메일·비밀번호 인증을 위임 | `DaoAuthenticationProvider` + 사용자 조회 + BCrypt |
+| `PasswordEncoder` | BCrypt cost 12 해싱·검증 | 평문 로그/저장 금지 |
+| `AuthUserDetailsService` | 정규화 이메일로 사용자 조회, Role을 `ROLE_USER`/`ROLE_ADMIN` authority로 변환 | 도메인 수정 금지 |
+| `JwtTokenProvider` | Access Token 발급, 서명·형식·만료·필수 Claim 검증 | 비밀키는 환경/Secret에서만 주입 |
+| `RefreshTokenService` | opaque 토큰 생성, 해시, 저장, Rotation, 폐기, 재사용 대응 | 원문 저장·로그 금지 |
+| `AuthenticationEntryPoint` | 인증 누락·잘못된 JWT를 공통 `401` 응답으로 변환 | 내부 예외 상세 노출 금지 |
+| `AccessDeniedHandler` | 인증됐으나 Role 부족을 공통 `403` 응답으로 변환 | 401과 혼용 금지 |
+| `AuthController` | 가입·로그인·재발급·로그아웃 DTO/API 계약 | Repository 직접 접근 금지 |
+| `AuthService` | 유스케이스 조정과 트랜잭션 경계 | SecurityContext 직접 조작 금지 |
+| `UserRepository` | 사용자 저장·정규화 이메일 조회 | 인증 정책 로직 금지 |
+| `RefreshTokenRepository` | 해시 조회, 행 잠금, 활성 토큰 폐기/정리 | 원문 토큰 인자/반환 금지 |
+
+**현재 인증 사용자 조회:** 보호 Controller는 `@AuthenticationPrincipal AuthPrincipal principal`을 사용한다. `AuthPrincipal`은 최소 `userId`, `email`, `role`만 가진 불변 객체다. Controller/Service가 JWT Claim을 다시 파싱하거나 이메일로 사용자를 재식별하지 않는다. DB 최신 Role이 반드시 필요한 관리자성 변경 작업은 Service에서 `userId`로 재조회한다.
+
+### 12.4 SecurityFilterChain 정책
+
+| 경로 | 정책 |
+|---|---|
+| `POST /api/auth/signup` | `permitAll` |
+| `POST /api/auth/login` | `permitAll` |
+| `POST /api/auth/refresh` | `permitAll`; Refresh Token 자체가 자격 증명 |
+| `POST /api/auth/logout` | `permitAll`; Access Token 만료 상태에서도 제출된 Refresh Token 폐기 가능 |
+| `GET /api/health`, Actuator health | 공개 범위는 배포 환경에서 명시적으로 제한 |
+| `GET /api/users/me` | `hasAnyRole("USER", "ADMIN")` |
+| `/api/admin/**` | `hasRole("ADMIN")`; 최소 검증 API는 `GET /api/admin/ping` |
+| 그 외 `/api/**` | 기본 `authenticated()` |
+| 기타 경로 | 명시적 허용이 없으면 deny 또는 인증 요구. 구현 시 정적 자원 정책을 별도 선언 |
+
+**보안 설정 계약**
+
+- 세션: `SessionCreationPolicy.STATELESS`; 서버 로그인 세션과 `JSESSIONID`를 사용하지 않는다.
+- CSRF: Authorization header의 Bearer Token을 사용하는 무상태 API이므로 비활성화한다. Refresh Token을 향후 HttpOnly cookie로 전환하면 CSRF 보호 결정을 재검토한다.
+- CORS: `CORS_ALLOWED_ORIGINS` 환경변수 allowlist. 운영은 정확한 HTTPS origin만 허용하고 `*`를 금지한다. 허용 메서드/헤더는 실제 API 계약으로 최소화한다.
+- JWT 필터는 `UsernamePasswordAuthenticationFilter` 앞에 배치한다.
+- 토큰 누락은 공개 경로에서는 무시하고, 보호 경로에서는 최종적으로 EntryPoint가 `401`을 반환한다.
+
+### 12.5 JWT 및 Refresh Token 보안 계약
+
+#### Access Token
+
+- 알고리즘: `HS256`.
+- 유효기간: 15분.
+- 필수 Claim:
+  - `sub`: `users.id`의 문자열 표현.
+  - `role`: `USER` 또는 `ADMIN`.
+  - `iat`: 발급 시각.
+  - `exp`: 만료 시각.
+- 권장 Claim: `iss=commitgotchi-springboot`, `typ=access`. 검증 시 issuer와 token type도 확인한다.
+- 운영 비밀키: CSPRNG로 생성한 최소 32바이트(256-bit) raw secret. Base64 인코딩 문자열로 환경변수/외부 Secret에 주입한다. 사람 문장·짧은 패스워드·Git 저장을 금지한다.
+- 보호 API 요청마다 서명, 구조, 알고리즘, issuer, type, 필수 Claim, 만료를 검증한다. `alg=none`과 예상 외 알고리즘을 거부한다.
+
+#### Refresh Token
+
+- 형식: JWT가 아닌 32바이트(256-bit) CSPRNG opaque value를 Base64url no-padding으로 인코딩.
+- 유효기간: 30일.
+- 저장: `SHA-256(rawRefreshToken)`의 lowercase hex만 저장. 고엔트로피 난수이므로 조회 가능한 결정적 해시를 사용하며 BCrypt는 사용하지 않는다.
+- 전송: 첫 로그인/재발급 응답에서 원문을 한 번만 반환한다. 응답·로그·DB 외의 영속 저장을 서버가 수행하지 않는다.
+- Rotation: `SELECT ... FOR UPDATE`로 제출 토큰 행을 잠근 동일 트랜잭션에서 검증 → 기존 `revoked_at` 설정 → 새 토큰 저장을 수행한다.
+- 재사용 탐지: 이미 폐기된 토큰이 재발급에 제출되면 해당 `user_id`의 모든 활성 Refresh Token을 폐기하고 `401 AUTH_REFRESH_TOKEN_REUSED`를 반환한다. token-family 컬럼이 없는 현재 스키마에서 선택한 보수적 대응이다.
+- 재사용 대응의 “활성 토큰 전체 폐기”는 `401` 예외 반환 때문에 롤백되면 안 된다. 별도 `REQUIRES_NEW` 트랜잭션 또는 명시적 no-rollback 정책으로 폐기를 먼저 커밋한 뒤 오류를 반환한다.
+- 동시 재발급: 같은 토큰의 동시 요청 중 하나만 성공한다. 후속 요청은 재사용으로 판정되어 사용자 전체 Refresh Token이 폐기될 수 있으므로 클라이언트는 재발급 요청을 단일화해야 한다.
+
+### 12.6 API 계약
+
+모든 JSON 필드는 `camelCase`, 모든 시각은 UTC ISO-8601 문자열을 사용한다. 성공 응답은 과도한 공통 wrapper 없이 유스케이스 DTO를 직접 반환하고, 오류만 §12.7 공통 형식을 사용한다.
+
+#### 회원가입
+
+```http
+POST /api/auth/signup
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "user@example.com",
+  "password": "correct horse battery staple"
+}
+```
+
+```http
+HTTP/1.1 201 Created
+```
+
+```json
+{
+  "id": 1,
+  "email": "user@example.com",
+  "role": "USER",
+  "createdAt": "2026-06-11T10:00:00Z"
+}
+```
+
+- 요청에 `role` 필드를 허용하지 않거나 무시하지 말고 unknown field 검증으로 `400` 처리한다.
+- 비밀번호 정책 `[ASSUMPTION]`: 12~64자이며 UTF-8 인코딩 기준 72바이트 이하. BCrypt 입력 한계를 넘는 값은 명시적으로 거부한다.
+
+#### 로그인
+
+```http
+POST /api/auth/login
+```
+
+```json
+{
+  "email": "user@example.com",
+  "password": "correct horse battery staple"
+}
+```
+
+```json
+{
+  "tokenType": "Bearer",
+  "accessToken": "<jwt>",
+  "accessTokenExpiresAt": "2026-06-11T10:15:00Z",
+  "refreshToken": "<opaque-token>",
+  "refreshTokenExpiresAt": "2026-07-11T10:00:00Z"
+}
+```
+
+- 이메일 없음과 비밀번호 불일치를 모두 `401 AUTH_INVALID_CREDENTIALS`로 반환한다.
+- 로그인 성공 시 Refresh Token 레코드를 새로 생성한다.
+
+#### 토큰 재발급
+
+```http
+POST /api/auth/refresh
+```
+
+```json
+{ "refreshToken": "<opaque-token>" }
+```
+
+성공 응답은 로그인과 동일한 token pair 형식이다. 기존 Refresh Token은 성공 응답 전에 DB에서 폐기되고, 새 Refresh Token 해시가 저장된다.
+
+#### 로그아웃
+
+```http
+POST /api/auth/logout
+```
+
+```json
+{ "refreshToken": "<opaque-token>" }
+```
+
+```http
+HTTP/1.1 204 No Content
+```
+
+- 유효하거나 이미 폐기된 토큰 제출은 멱등 `204`로 처리한다.
+- 존재하지 않거나 형식이 잘못된 토큰도 계정/토큰 존재 여부를 노출하지 않기 위해 `204`로 처리한다.
+- 로그아웃 후 Access Token은 최대 15분간 기술적으로 유효할 수 있다.
+
+#### 현재 사용자 및 관리자 검증
+
+```http
+GET /api/users/me
+Authorization: Bearer <access-token>
+```
+
+```json
+{ "id": 1, "email": "user@example.com", "role": "USER" }
+```
+
+```http
+GET /api/admin/ping
+Authorization: Bearer <admin-access-token>
+```
+
+```json
+{ "status": "ok" }
+```
+
+### 12.7 공통 오류 계약과 민감정보 처리
+
+```json
+{
+  "status": 401,
+  "code": "AUTH_ACCESS_TOKEN_EXPIRED",
+  "message": "인증이 필요합니다.",
+  "timestamp": "2026-06-11T10:00:00Z",
+  "traceId": "7b6f0d7c..."
+}
+```
+
+| 상황 | HTTP | 애플리케이션 코드 |
+|---|---:|---|
+| 잘못된 로그인 정보 | 401 | `AUTH_INVALID_CREDENTIALS` |
+| Access Token 누락 | 401 | `AUTH_ACCESS_TOKEN_MISSING` |
+| Access Token 변조/형식/알고리즘 오류 | 401 | `AUTH_ACCESS_TOKEN_INVALID` |
+| Access Token 만료 | 401 | `AUTH_ACCESS_TOKEN_EXPIRED` |
+| Refresh Token 만료/변조/미존재/폐기 | 401 | `AUTH_REFRESH_TOKEN_INVALID` |
+| 폐기 Refresh Token 재사용 탐지 | 401 | `AUTH_REFRESH_TOKEN_REUSED` |
+| 인증됐으나 Role 부족 | 403 | `AUTH_FORBIDDEN` |
+| 이메일 중복 | 409 | `USER_EMAIL_CONFLICT` |
+| DTO/필드 검증 실패 | 400 | `VALIDATION_FAILED` |
+
+**로그/응답 규칙**
+
+- 비밀번호, `password_hash`, JWT 원문, Refresh Token 원문, Authorization 헤더, Secret, 내부 stack trace를 응답에 포함하지 않는다.
+- 인증 로그는 `traceId`, 이벤트 종류, 결과, `userId`(알 수 있을 때), 클라이언트 IP의 정책상 허용된 축약/해시값만 기록한다.
+- 이메일은 필요 시 전체가 아닌 마스킹 값(예: `u***@example.com`)만 로그에 기록한다.
+- JWT 예외 메시지와 라이브러리 내부 예외 상세는 서버 내부에서도 DEBUG 기본 비활성화로 유지한다.
+- `AuthenticationEntryPoint`, `AccessDeniedHandler`, `@RestControllerAdvice` 모두 동일 `ErrorResponse` 직렬화 컴포넌트를 사용한다.
+
+### 12.8 인증·인가 시퀀스
+
+#### 12.8.1 회원가입
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant AC as AuthController
+  participant AS as AuthService
+  participant UR as UserRepository
+  participant PE as BCryptPasswordEncoder
+  participant DB as PostgreSQL
+
+  C->>AC: POST /api/auth/signup
+  AC->>AS: signup(normalized DTO)
+  AS->>UR: existsByNormalizedEmail
+  alt 이메일 중복
+    UR-->>AS: true
+    AS-->>C: 409 USER_EMAIL_CONFLICT
+  else 신규
+    AS->>PE: encode(password, cost=12)
+    AS->>DB: INSERT users(role=USER)
+    AS-->>C: 201 user response
+  end
+```
+
+#### 12.8.2 로그인과 Token Pair 발급
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant AC as AuthController
+  participant AM as AuthenticationManager
+  participant JP as JwtTokenProvider
+  participant RT as RefreshTokenService
+  participant DB as PostgreSQL
+
+  C->>AC: POST /api/auth/login
+  AC->>AM: authenticate(email, password)
+  alt 자격 증명 오류
+    AM-->>C: 401 AUTH_INVALID_CREDENTIALS
+  else 성공
+    AM-->>AC: AuthPrincipal
+    AC->>JP: issueAccessToken(userId, role)
+    AC->>RT: createRefreshToken(userId)
+    RT->>DB: INSERT token_hash, expires_at
+    AC-->>C: 200 Access + Refresh
+  end
+```
+
+#### 12.8.3 Access Token으로 보호 API 접근
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant F as JwtAuthenticationFilter
+  participant JP as JwtTokenProvider
+  participant SC as SecurityContext
+  participant API as Protected API
+
+  C->>F: GET /api/users/me + Bearer JWT
+  F->>JP: verify signature, format, claims, expiry
+  alt 검증 실패
+    F-->>C: 401 common error
+  else 검증 성공
+    F->>SC: set Authentication(userId, role)
+    SC->>API: authorized request
+    API-->>C: 200 current user
+  end
+```
+
+#### 12.8.4 Refresh Token Rotation 재발급
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant AC as AuthController
+  participant RT as RefreshTokenService
+  participant DB as PostgreSQL
+  participant JP as JwtTokenProvider
+
+  C->>AC: POST /api/auth/refresh {refreshToken}
+  AC->>RT: rotate(raw token)
+  RT->>RT: SHA-256(raw token)
+  RT->>DB: SELECT token_hash FOR UPDATE
+  RT->>DB: validate active + not expired
+  RT->>DB: UPDATE old revoked_at + INSERT new hash (same TX)
+  RT->>JP: issue new Access Token
+  RT-->>C: 200 new Access + new Refresh
+```
+
+#### 12.8.5 로그아웃
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant AC as AuthController
+  participant RT as RefreshTokenService
+  participant DB as PostgreSQL
+
+  C->>AC: POST /api/auth/logout {refreshToken}
+  AC->>RT: revokeIfPresent(raw token)
+  RT->>DB: UPDATE revoked_at WHERE token_hash AND revoked_at IS NULL
+  AC-->>C: 204 No Content
+  Note over C,DB: 기존 Access Token은 exp까지 기술적으로 유효
+```
+
+#### 12.8.6 폐기 Refresh Token 재사용
+
+```mermaid
+sequenceDiagram
+  participant A as Attacker/Old Client
+  participant RT as RefreshTokenService
+  participant DB as PostgreSQL
+
+  A->>RT: POST /api/auth/refresh {revoked old token}
+  RT->>DB: SELECT revoked token FOR UPDATE
+  RT->>DB: revoke all active refresh tokens for user
+  RT-->>A: 401 AUTH_REFRESH_TOKEN_REUSED
+```
+
+#### 12.8.7 USER의 관리자 API 접근 거부
+
+```mermaid
+sequenceDiagram
+  participant C as USER Client
+  participant F as JwtAuthenticationFilter
+  participant AZ as Spring Authorization
+  participant DH as AccessDeniedHandler
+
+  C->>F: GET /api/admin/ping + valid USER JWT
+  F->>AZ: authenticated ROLE_USER
+  AZ->>DH: ADMIN role insufficient
+  DH-->>C: 403 AUTH_FORBIDDEN
+```
+
+### 12.9 패키지·파일 구조와 경계
+
+현재 실제 Spring Boot 루트는 `springboot/`다. 구현 담당자는 아래 구조를 기준으로 추가한다.
+
+```text
+springboot/
+├── build.gradle
+├── src/main/java/com/commitgotchi/
+│   ├── auth/
+│   │   ├── api/
+│   │   │   ├── AuthController.java
+│   │   │   └── dto/
+│   │   ├── application/
+│   │   │   ├── AuthService.java
+│   │   │   └── RefreshTokenService.java
+│   │   └── domain/
+│   │       ├── RefreshToken.java
+│   │       └── RefreshTokenRepository.java
+│   ├── user/
+│   │   ├── api/UserController.java
+│   │   ├── domain/User.java
+│   │   ├── domain/UserRole.java
+│   │   └── domain/UserRepository.java
+│   ├── admin/api/AdminController.java
+│   ├── security/
+│   │   ├── SecurityConfig.java
+│   │   ├── JwtAuthenticationFilter.java
+│   │   ├── JwtTokenProvider.java
+│   │   ├── AuthPrincipal.java
+│   │   ├── AuthUserDetailsService.java
+│   │   ├── RestAuthenticationEntryPoint.java
+│   │   └── RestAccessDeniedHandler.java
+│   └── common/error/
+│       ├── ErrorCode.java
+│       ├── ErrorResponse.java
+│       └── GlobalExceptionHandler.java
+├── src/main/resources/
+│   ├── application.yml
+│   └── db/migration/
+│       ├── V1__create_users.sql
+│       └── V2__create_refresh_tokens.sql
+└── src/test/java/com/commitgotchi/
+    ├── auth/
+    ├── security/
+    ├── user/
+    └── support/
+```
+
+**의존 방향:** API → application → domain/repository. `security`는 사용자 읽기 어댑터와 공통 오류만 의존한다. Repository는 Controller에 노출하지 않는다. 인증 증분은 다른 도메인 패키지에 의존하지 않는다.
+
+### 12.10 운영 Secret과 초기 ADMIN
+
+- 환경/외부 Secret 최소 목록: `JWT_SECRET_BASE64`, `JWT_ISSUER`, `CORS_ALLOWED_ORIGINS`, DB 자격 증명.
+- `.env.example`에는 값의 형식만 문서화하고 실제 Secret을 넣지 않는다.
+- 초기 `ADMIN`은 공개 API로 생성하지 않는다.
+- **확정 방식:** 일반 회원가입으로 생성한 특정 사용자에 대해 운영자가 제한된 DB 접속 또는 운영 전용 CLI로 `role='ADMIN'`을 변경한다. 실행자는 배포 감사 로그에 대상 `userId`, 실행 시각, 실행자를 남긴다. 비밀번호/해시는 기록하지 않는다.
+- 운영 전용 CLI가 구현되기 전 로컬 개발에서는 테스트 fixture/프로필에서만 ADMIN 사용자를 만든다. 운영 Flyway 마이그레이션에 관리자 이메일·비밀번호·해시를 넣지 않는다.
+
+### 12.11 테스트 아키텍처
+
+| 테스트 층 | 검증 대상 |
+|---|---|
+| 단위 테스트 | 이메일 정규화, BCrypt match/non-match, JWT 발급·필수 Claim·파싱, Refresh Token 생성/해시, Rotation 상태 전이, 오류 코드 매핑 |
+| Repository/DB 테스트 | PostgreSQL Testcontainers + Flyway로 email unique/CHECK, role CHECK, token_hash unique, FK, cascade, 인덱스 기반 조회, 만료·폐기 쿼리 검증 |
+| Spring Security 통합 테스트 | 공개 경로 허용, 기본 보호 정책, 정상/누락/변조/만료 JWT의 200/401, USER/ADMIN의 200/403 |
+| 인증 API 통합 테스트 | 회원가입·중복·검증 실패, 로그인 성공/실패, token pair 응답, `/me`, 관리자 ping |
+| JWT 보안 테스트 | 예상 외 알고리즘, 서명 변경, malformed token, 누락 Claim, 잘못된 issuer/type, 경계 시각 만료 |
+| Rotation/재사용 테스트 | 기존 토큰 폐기 + 새 토큰 발급 원자성, 기존 토큰 재사용 401, 사용자 활성 토큰 전체 폐기, 동시 재발급 단일 성공 |
+| 로그아웃 테스트 | 토큰 폐기, 이후 재발급 실패, 반복 로그아웃 204, Access Token 잔여 유효성 문서 계약 확인 |
+| 민감정보 비노출 | Mock appender/캡처 응답으로 비밀번호·JWT·Refresh Token·Authorization·stack trace가 응답/로그에 없는지 검증 |
+
+**필수 종단 승인 시나리오**
+
+1. 회원가입 → 로그인 → `/api/users/me` 성공.
+2. 같은 이메일의 대소문자/공백 변형 재가입이 `409`.
+3. 공개 회원가입 요청으로 ADMIN 생성 불가.
+4. 유효/누락/변조/만료 Access Token 각각의 보호 API 결과가 계약과 일치.
+5. USER의 `/api/admin/ping`은 `403`, ADMIN은 `200`.
+6. Refresh Token 재발급 후 이전 토큰 재사용은 `401`이고 활성 Refresh Token이 폐기됨.
+7. 로그아웃 후 Refresh Token 재발급 실패, Access Token은 만료 전까지 기술적으로 유효.
+8. 모든 실패 응답·로그에서 민감정보 비노출.
+
+### 12.12 인증 증분 검증 결과와 Open Questions
+
+**구현 준비 상태:** 인증 증분은 스키마, 컴포넌트 경계, 경로 정책, 보안 기본값, API/오류 계약, 시퀀스, 테스트 전략이 결정되어 **구현 준비 완료**다.
+
+**기존 아키텍처와의 충돌**
+
+- 기존 §2는 인증을 단순히 “JWT (Spring Security)”로만 명시했으며 Refresh Token·Role·오류 계약이 없었다. §12가 이를 구체화하고 대체한다.
+- 기존 §5 전체 MVP ER의 `users`에는 `role`이 없고 `refresh_tokens`가 없었다. 이번 업데이트로 추가했다.
+- 기존 §6의 Spring Boot 경로는 `backend-spring/`이었지만 실제 저장소 경로는 `springboot/`다. 이번 업데이트로 실제 경로를 기준으로 정정했다.
+- 최신 PRD/Addendum과 기존 아키텍처 사이의 퀴즈/이미지 처리 방식 충돌은 인증 증분 밖이며 §11에 명시했다.
+
+**Open Questions**
+
+- `[ASSUMPTION]` Refresh Token 정리 시 폐기/만료 후 7일 보존. 운영 감사 요구가 생기면 보존 기간을 변경한다.
+- `[ASSUMPTION]` 비밀번호 길이 12~64자 및 UTF-8 72바이트 이하. 제품 UX 결정에서 조정 가능하나 BCrypt 72-byte 한계 처리는 반드시 유지한다.
+- 향후 “기기별 로그아웃/탈취된 한 세션만 폐기”가 필요하면 `refresh_tokens`에 `family_id`, `replaced_by_token_id`, `last_used_at`을 추가한다. 첫 증분에서는 제외한다.
