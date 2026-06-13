@@ -1,6 +1,6 @@
 ---
 title: Character Image 1 - Gemini Sprite Generation Core and Local Storage
-status: ready-for-dev
+status: done
 created: 2026-06-14
 owner: FastAPI AI 서버
 epic: character-image-generation-epic
@@ -17,7 +17,7 @@ source_docs:
 
 ## Status
 
-ready-for-dev
+done
 
 ## Story
 
@@ -191,7 +191,7 @@ Fallback result 예:
 
 ```bash
 cd fastapi
-python3 -m unittest tests.image.test_sprite_generation tests.image.test_sprite_storage
+python3 -m unittest tests.image.test_sprite_generation tests.image.test_png_validation tests.image.test_local_storage
 ```
 
 전체 회귀 확인:
@@ -214,17 +214,17 @@ python3 -m unittest discover -s tests
 
 ## Tasks / Subtasks
 
-- [ ] Gemini image generation env/config field 설계 (AC: 5, 6)
-- [ ] canonical prompt template 추가 (AC: 1)
-- [ ] `designKeyword` sanitizer와 loggable summary 구현 (AC: 2, 3, 4)
-- [ ] fake 주입 가능한 image generation client abstraction 구현 (AC: 7, 8)
-- [ ] production Gemini client wrapper 초안 구현 (AC: 5, 8, 9)
-- [ ] PNG bytes validation 구현 (AC: 10, 11, 12, 13, 14, 15)
-- [ ] local runtime storage 구현 (AC: 16, 17, 18, 19, 20)
-- [ ] core service success/fallback result model 구현 (AC: 19, 20, 21)
-- [ ] logging/error redaction guardrail 구현 (AC: 22)
-- [ ] fake image client/fake storage unit tests 작성 (AC: 23, 24, 25)
-- [ ] endpoint, Spring DB, report/quiz flow 미변경 확인 (AC: 26)
+- [x] Gemini image generation env/config field 설계 (AC: 5, 6)
+- [x] canonical prompt template 추가 (AC: 1)
+- [x] `designKeyword` sanitizer와 loggable summary 구현 (AC: 2, 3, 4)
+- [x] fake 주입 가능한 image generation client abstraction 구현 (AC: 7, 8)
+- [x] production Gemini client wrapper 초안 구현 (AC: 5, 8, 9)
+- [x] PNG bytes validation 구현 (AC: 10, 11, 12, 13, 14, 15)
+- [x] local runtime storage 구현 (AC: 16, 17, 18, 19, 20)
+- [x] core service success/fallback result model 구현 (AC: 19, 20, 21)
+- [x] logging/error redaction guardrail 구현 (AC: 22)
+- [x] fake image client/fake storage unit tests 작성 (AC: 23, 24, 25)
+- [x] endpoint, Spring DB, report/quiz flow 미변경 확인 (AC: 26)
 
 ## Dev Notes
 
@@ -293,16 +293,54 @@ frame map은 Spring Boot/Frontend가 사용하는 계약과 맞춰 고정한다.
 ### Debug Log
 
 - 2026-06-14: Story 문서 생성. 코드 구현 없음.
+- 2026-06-14: RED 단계에서 image 테스트를 먼저 추가했고 `app.image` 부재로 실패를 확인했다.
+- 2026-06-14: `./.venv/bin/python -m unittest tests.image.test_sprite_generation tests.image.test_png_validation tests.image.test_local_storage` 통과. 20 tests OK.
+- 2026-06-14: `./.venv/bin/python -m unittest discover -s tests` 통과. 168 tests OK. Starlette의 Python 3.14 deprecation warning만 출력됨.
+- 2026-06-14: `git diff --check` 통과.
+- 2026-06-14: Review fix로 PNG CRC/IDAT/decode 검증, frame-splittable dimension guard, Unicode format control 제거, stale test command 수정을 반영했다.
+- 2026-06-14: `./.venv/bin/python -m unittest tests.image.test_sprite_generation tests.image.test_png_validation tests.image.test_local_storage` 통과. 25 tests OK.
+- 2026-06-14: `./.venv/bin/python -m unittest discover -s tests` 통과. 173 tests OK. Starlette의 Python 3.14 deprecation warning만 출력됨.
+- 2026-06-14: `git diff --check` 통과.
+
+### Implementation Plan
+
+- FastAPI 전역 `Settings`에 Gemini image model, API key, timeout, retry, local storage root를 추가하고 image 전용 settings adapter에서 storage root를 `fastapi/runtime/data/character-images` 하위로 제한했다.
+- `app.image` 패키지를 새로 만들고 prompt builder/sanitizer, Gemini client protocol 및 production wrapper, PNG validator, local storage, core service/result model을 분리했다.
+- service 테스트는 fake image client/fake storage를 주입하고, PNG 검증 테스트는 테스트 코드에서 생성한 tiny PNG bytes만 사용했다.
 
 ### Completion Notes
 
-- 구현 시작 전 실제 Gemini model 이름은 배포 시점 문서 기준으로 config default를 확인한다.
-- unit/integration test는 fake 기반이어야 하며 실제 Gemini/S3 호출은 금지된다.
+- Gemini image model 기본값은 `GEMINI_IMAGE_MODEL` env/config의 default `gemini-2.5-flash-image`로 구현했다.
+- prompt template에는 sanitized `designKeyword`만 1회 주입하고, prompt/result repr 및 loggable summary에는 full prompt를 담지 않도록 했다.
+- invalid keyword, generation timeout/error/empty bytes, invalid PNG, missing alpha, local storage failure는 safe fallback result로 변환된다.
+- PNG validator는 dependency 추가 없이 PNG signature, chunk CRC, IDAT payload, IHDR dimensions, frame-splittable size, alpha channel 여부를 직접 확인한다.
+- design keyword sanitizer는 null/control/line break abuse와 zero-width/bidi format control을 제거하거나 정규화한다.
+- local storage는 `fastapi/runtime/data/character-images/` 하위로 제한되며 filename은 user input 원문 대신 hash/UUID 기반으로 생성된다.
+- generated image runtime directory는 `fastapi/.gitignore`에서 보호한다.
+- 이번 story에서는 FastAPI endpoint, Spring Boot DB 접근, report/quiz/integration flow를 변경하지 않았다.
 
 ## File List
 
+- `fastapi/.gitignore`
+- `fastapi/app/config.py`
+- `fastapi/app/image/__init__.py`
+- `fastapi/app/image/config.py`
+- `fastapi/app/image/gemini_client.py`
+- `fastapi/app/image/local_storage.py`
+- `fastapi/app/image/png_validation.py`
+- `fastapi/app/image/prompts.py`
+- `fastapi/app/image/schemas.py`
+- `fastapi/app/image/sprite_service.py`
+- `fastapi/tests/image/__init__.py`
+- `fastapi/tests/image/png_fixtures.py`
+- `fastapi/tests/image/test_local_storage.py`
+- `fastapi/tests/image/test_png_validation.py`
+- `fastapi/tests/image/test_sprite_generation.py`
+- `fastapi/docs/character-image/character-image-generation-sprint-status.yaml`
 - `fastapi/docs/character-image/stories/character-image-1-gemini-sprite-generation-local-storage.md`
 
 ## Change Log
 
 - 2026-06-14: Story 1 생성. Core generation, PNG validation, local storage MVP 범위로 제한했다.
+- 2026-06-14: Story 1 구현 완료. Gemini image config, prompt/sanitizer, image client abstraction, production Gemini wrapper, PNG validation, local storage, fallback result model, fake 기반 테스트를 추가했다.
+- 2026-06-14: Review findings를 반영해 malformed PNG와 frame-splitting 불가 dimensions가 저장되지 않도록 validation을 강화하고 Story 1을 done으로 닫았다.

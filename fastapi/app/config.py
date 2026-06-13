@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     report_request_queue_url: str | None = None
     report_request_dlq_url: str | None = None
 
+    gemini_api_key: SecretStr | None = None
+    gemini_image_model: str = "gemini-2.5-flash-image"
+    gemini_image_timeout_seconds: float = 30.0
+    gemini_image_retry_limit: int = 1
+    character_image_storage_root: str = "runtime/data/character-images"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @field_validator("spring_boot_internal_base_url")
@@ -96,6 +102,38 @@ class Settings(BaseSettings):
             raise ValueError("AWS_REGION is required")
         return stripped
 
+    @field_validator("gemini_image_model")
+    @classmethod
+    def _validate_gemini_image_model(cls, value: str) -> str:
+        stripped = str(value).strip()
+        if not stripped:
+            raise ValueError("GEMINI_IMAGE_MODEL is required")
+        return stripped
+
+    @field_validator("gemini_image_timeout_seconds")
+    @classmethod
+    def _validate_gemini_image_timeout_seconds(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("GEMINI_IMAGE_TIMEOUT_SECONDS must be greater than 0")
+        return value
+
+    @field_validator("gemini_image_retry_limit")
+    @classmethod
+    def _validate_gemini_image_retry_limit(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("GEMINI_IMAGE_RETRY_LIMIT must be non-negative")
+        return value
+
+    @field_validator("character_image_storage_root")
+    @classmethod
+    def _validate_character_image_storage_root(cls, value: str) -> str:
+        stripped = str(value).strip()
+        if not stripped:
+            raise ValueError("CHARACTER_IMAGE_STORAGE_ROOT is required")
+        if "\x00" in stripped:
+            raise ValueError("CHARACTER_IMAGE_STORAGE_ROOT must not contain null bytes")
+        return stripped
+
     @field_validator(
         "aws_sqs_endpoint",
         "aws_access_key_id",
@@ -110,7 +148,12 @@ class Settings(BaseSettings):
         stripped = str(value).strip()
         return stripped or None
 
-    @field_validator("spring_internal_api_secret", "aws_secret_access_key", mode="before")
+    @field_validator(
+        "spring_internal_api_secret",
+        "aws_secret_access_key",
+        "gemini_api_key",
+        mode="before",
+    )
     @classmethod
     def _blank_secret_to_none(cls, value: SecretStr | str | None) -> SecretStr | str | None:
         if value is None:
