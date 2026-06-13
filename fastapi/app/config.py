@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     spring_quiz_grade_result_path: str = "/api/internal/quizzes/grade-result"
     spring_callback_timeout_seconds: float = 10.0
 
+    aws_region: str = "ap-northeast-2"
+    aws_sqs_endpoint: str | None = None
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: SecretStr | None = None
+    report_request_queue_url: str | None = None
+    report_request_dlq_url: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @field_validator("spring_boot_internal_base_url")
@@ -81,7 +88,29 @@ class Settings(BaseSettings):
             raise ValueError("SPRING_CALLBACK_TIMEOUT_SECONDS must be greater than 0")
         return value
 
-    @field_validator("spring_internal_api_secret", mode="before")
+    @field_validator("aws_region")
+    @classmethod
+    def _validate_aws_region(cls, value: str) -> str:
+        stripped = str(value).strip()
+        if not stripped:
+            raise ValueError("AWS_REGION is required")
+        return stripped
+
+    @field_validator(
+        "aws_sqs_endpoint",
+        "aws_access_key_id",
+        "report_request_queue_url",
+        "report_request_dlq_url",
+        mode="before",
+    )
+    @classmethod
+    def _blank_optional_text_to_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = str(value).strip()
+        return stripped or None
+
+    @field_validator("spring_internal_api_secret", "aws_secret_access_key", mode="before")
     @classmethod
     def _blank_secret_to_none(cls, value: SecretStr | str | None) -> SecretStr | str | None:
         if value is None:

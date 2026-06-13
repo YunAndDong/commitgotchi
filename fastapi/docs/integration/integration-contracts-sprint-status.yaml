@@ -24,7 +24,7 @@ development_status:
   integration-contracts-epic: in-progress
   integration-1-spring-callback-client-config: done
   integration-2-quiz-grading-endpoint-webhook: done
-  integration-3-report-sqs-consumer-callback: backlog
+  integration-3-report-sqs-consumer-callback: done
   integration-contracts-retrospective: optional
 
 notes:
