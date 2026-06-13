@@ -148,6 +148,114 @@ class ConceptChunkRecord:
 
 
 @dataclass(frozen=True)
+class ConceptEmbeddingRecord:
+    chunk_id: str
+    content_hash: str
+    model: str
+    output_dimensionality: int
+    source_path: str
+    heading_path: tuple[str, ...]
+    embedding: tuple[float, ...]
+
+    def to_json_dict(self) -> dict[str, Any]:
+        return {
+            "chunkId": self.chunk_id,
+            "contentHash": self.content_hash,
+            "model": self.model,
+            "outputDimensionality": self.output_dimensionality,
+            "sourcePath": self.source_path,
+            "headingPath": list(self.heading_path),
+            "embedding": list(self.embedding),
+        }
+
+
+@dataclass(frozen=True)
+class ConceptSearchHit:
+    chunk: ConceptChunkRecord
+    score: float
+    search_mode: str
+    matched_terms: tuple[str, ...] = field(default_factory=tuple)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "chunkId": self.chunk.chunk_id,
+            "score": round(self.score, 3),
+            "searchMode": self.search_mode,
+            "matchedTerms": list(self.matched_terms),
+            "sourcePath": self.chunk.source_path,
+            "headingPath": list(self.chunk.heading_path),
+            "text": self.chunk.text,
+            "fieldHints": list(self.chunk.field_hints),
+        }
+
+
+@dataclass(frozen=True)
+class EvidenceMatch:
+    chunk_id: str
+    score: float
+    search_mode: str
+    matched_terms: tuple[str, ...]
+    source_path: str
+    heading_path: tuple[str, ...]
+    text: str
+    field_hints: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "chunkId": self.chunk_id,
+            "score": round(self.score, 3),
+            "searchMode": self.search_mode,
+            "matchedTerms": list(self.matched_terms),
+            "sourcePath": self.source_path,
+            "headingPath": list(self.heading_path),
+            "fieldHints": list(self.field_hints),
+            "text": self.text,
+        }
+
+
+@dataclass(frozen=True)
+class NeighborhoodEvidence:
+    reason: str
+    chunk_id: str
+    source_path: str
+    heading_path: tuple[str, ...]
+    text: str
+    field_hints: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "reason": self.reason,
+            "chunkId": self.chunk_id,
+            "sourcePath": self.source_path,
+            "headingPath": list(self.heading_path),
+            "fieldHints": list(self.field_hints),
+            "text": self.text,
+        }
+
+
+@dataclass(frozen=True)
+class ReportEvidenceBundle:
+    report_chunk_id: str
+    query_text: str
+    topic_hints: tuple[str, ...]
+    field_hints: tuple[str, ...]
+    matches: tuple[EvidenceMatch, ...] = field(default_factory=tuple)
+    neighborhood: tuple[NeighborhoodEvidence, ...] = field(default_factory=tuple)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "reportChunkId": self.report_chunk_id,
+            "query": {
+                "text": self.query_text,
+                "topicHints": list(self.topic_hints),
+                "fieldHints": list(self.field_hints),
+            },
+            "matches": [match.to_dict() for match in self.matches],
+            "neighborhood": [item.to_dict() for item in self.neighborhood],
+        }
+
+
+@dataclass(frozen=True)
 class SearchHit:
     item: KnowledgeChunk | ProblemCandidate
     score: float

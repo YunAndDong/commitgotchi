@@ -24,7 +24,7 @@ development_status:
   report-generation-epic: backlog
   report-1-concept-chunk-catalog: done
   report-2-report-chunking-topic-field-hints: done
-  report-3-rag-search-and-source-neighborhood: backlog
+  report-3-rag-search-and-source-neighborhood: done
   report-4-gemini-report-analysis-score-delta: backlog
   report-5-report-result-assembly-quiz-recommender: backlog
   report-generation-retrospective: optional
