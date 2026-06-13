@@ -115,6 +115,56 @@ class ReportAnalysis:
         }
 
 
+@dataclass(frozen=True)
+class RecommendedQuizSnapshot:
+    """리포트 결과에 붙일 기존 문제 은행 추천 퀴즈 스냅샷이다."""
+
+    problem_id: int
+    question: str
+    model_answer: str
+    score_allocation: ScoreVector
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "problemId": self.problem_id,
+            "question": self.question,
+            "modelAnswer": self.model_answer,
+            "scoreAllocation": {
+                field_name: int(self.score_allocation.get(field_name, 0))
+                for field_name in SCORE_FIELDS
+            },
+        }
+
+
+@dataclass(frozen=True)
+class DailyReportResult:
+    """후속 API/SQS 계층이 wrapper만 얹을 수 있는 리포트 핵심 결과다."""
+
+    status: ReportAnalysisStatus
+    score_delta: ScoreVector
+    emotion: str
+    status_message: str
+    daily_report: DailyReportAnalysis
+    next_recommendation: NextRecommendation
+    recommended_quizzes: tuple[RecommendedQuizSnapshot, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "scoreDelta": {
+                field_name: int(self.score_delta.get(field_name, 0))
+                for field_name in SCORE_FIELDS
+            },
+            "emotion": self.emotion,
+            "statusMessage": self.status_message,
+            "dailyReport": self.daily_report.to_dict(),
+            "nextRecommendation": self.next_recommendation.to_dict(),
+            "recommendedQuizzes": [
+                quiz.to_dict() for quiz in self.recommended_quizzes
+            ],
+        }
+
+
 def score_field_names() -> tuple[str, ...]:
     return tuple(SCORE_FIELDS)
 

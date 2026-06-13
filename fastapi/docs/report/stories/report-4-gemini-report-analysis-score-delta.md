@@ -1,6 +1,6 @@
 ---
 title: Report 4 - Gemini Report Analysis and Score Delta
-status: review
+status: done
 created: 2026-06-13
 owner: FastAPI AI 서버
 epic: report-generation
@@ -20,7 +20,7 @@ source_docs:
 
 ## Status
 
-review
+done
 
 ## Story
 

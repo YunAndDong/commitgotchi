@@ -15,11 +15,13 @@ from .quiz_grader import (
 )
 from .schemas import (
     DailyReportAnalysis,
+    DailyReportResult,
     NextRecommendation,
     QuizGradingResult,
     QuizGradingStatus,
     ReportAnalysis,
     ReportAnalysisStatus,
+    RecommendedQuizSnapshot,
 )
 
 _REPORT_ANALYZER_EXPORTS = {
@@ -29,11 +31,15 @@ _REPORT_ANALYZER_EXPORTS = {
     "ReportAnalysisModelClient",
     "analyze_daily_report",
 }
+_DAILY_REPORT_SERVICE_EXPORTS = {
+    "generate_daily_report_result",
+}
 
 __all__ = [
     "DEFAULT_GEMINI_QUIZ_GRADER_MODEL",
     "DEFAULT_GEMINI_REPORT_ANALYZER_MODEL",
     "DailyReportAnalysis",
+    "DailyReportResult",
     "GeminiReportAnalysisModelClient",
     "GeminiReportAnalyzer",
     "GeminiGradingModelClient",
@@ -44,6 +50,7 @@ __all__ = [
     "ReportAnalysis",
     "ReportAnalysisModelClient",
     "ReportAnalysisStatus",
+    "RecommendedQuizSnapshot",
     "SCORE_FIELDS",
     "active_score_fields",
     "analyze_daily_report",
@@ -51,6 +58,7 @@ __all__ = [
     "clamp_report_score_delta",
     "clamp_score_delta",
     "grade_quiz_answer",
+    "generate_daily_report_result",
     "sanitize_score_allocation",
     "zero_score_vector",
 ]
@@ -61,4 +69,8 @@ def __getattr__(name: str):
         from . import report_analyzer
 
         return getattr(report_analyzer, name)
+    if name in _DAILY_REPORT_SERVICE_EXPORTS:
+        from . import daily_report_service
+
+        return getattr(daily_report_service, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
