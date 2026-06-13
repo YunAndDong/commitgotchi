@@ -8,7 +8,7 @@ source_root: /Users/tlsdla1235/study/md파일들
 primary_output: fastapi/data/rag/catalog/problems.jsonl
 related_docs:
   - fastapi/docs/rag-implementation-plan.md
-  - fastapi/docs/report-quiz-scoring-plan.md
+  - fastapi/docs/report/report-quiz-scoring-plan.md
 ---
 
 # FastAPI 문제 은행 생성 Epic
@@ -159,7 +159,7 @@ FastAPI 내부에서 사용할 정적 문제 은행 생성 파이프라인을 �
 
 - `fastapi/app/rag/schemas.py`
 - `fastapi/app/scoring/policy.py`
-- `fastapi/docs/problem-bank-epic.md`
+- `fastapi/docs/quiz-bank/problem-bank-epic.md`
 - `fastapi/tests/rag/test_problem_schema.py`
 - `fastapi/tests/fixtures/rag/schema/`
 
