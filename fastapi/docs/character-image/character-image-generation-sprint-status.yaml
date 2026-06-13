@@ -1,0 +1,36 @@
+generated: 2026-06-14
+last_updated: 2026-06-14
+project: Commitgotchi FastAPI AI server
+tracking_system: file-system
+epic: character-image-generation-epic
+epic_file: fastapi/docs/character-image/character-image-generation-epic.md
+
+status_definitions:
+  epic:
+    - backlog
+    - in-progress
+    - done
+  story:
+    - backlog
+    - ready-for-dev
+    - in-progress
+    - review
+    - done
+  retrospective:
+    - optional
+    - done
+
+development_status:
+  character-image-generation-epic: in-progress
+  character-image-1-gemini-sprite-generation-local-storage: ready-for-dev
+  character-image-2-commitgotchi-image-endpoint-local-result: backlog
+  character-image-3-storage-adapter-s3-ready-contract: backlog
+  character-image-generation-retrospective: optional
+
+notes:
+  - S3 bucket is not available yet. Start with local runtime storage.
+  - Real Gemini calls are not allowed in unit/integration tests.
+  - Real S3 calls are not allowed in unit/integration tests.
+  - FastAPI must not directly access Spring Boot database tables.
+  - Character creation remains owned by Spring Boot.
+  - Report SQS consumer and quiz grading endpoint/callback are out of this epic.
