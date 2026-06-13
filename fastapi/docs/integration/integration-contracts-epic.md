@@ -1,7 +1,8 @@
 ---
 title: FastAPI Integration Contracts Epic
-status: planned
+status: done
 created: 2026-06-14
+updated: 2026-06-14
 owner: FastAPI AI 서버
 scope: FastAPI/Spring Boot/SQS 통합 계약 계층, 내부 AI 함수 재구현 제외, 캐릭터 생성 제외
 aliases:
@@ -40,7 +41,7 @@ FastAPI 내부에 이미 구현된 report/quiz 함수들을 Spring Boot/FastAPI/
 - `fastapi/app/scoring/daily_report_service.py`의 `generate_daily_report_result()`
 - `fastapi/app/rag/quiz_recommender.py`의 `build_recommended_quizzes()` / `recommend_quizzes()`
 
-아직 통합 계층으로 구현하지 않은 것으로 보는 것:
+이번 epic에서 구현 완료된 통합 계층:
 
 - Spring Boot internal callback client
 - Spring Boot base URL/path/internal auth/timeout env config

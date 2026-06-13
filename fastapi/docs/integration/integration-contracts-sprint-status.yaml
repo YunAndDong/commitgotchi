@@ -21,7 +21,7 @@ status_definitions:
     - done
 
 development_status:
-  integration-contracts-epic: in-progress
+  integration-contracts-epic: done
   integration-1-spring-callback-client-config: done
   integration-2-quiz-grading-endpoint-webhook: done
   integration-3-report-sqs-consumer-callback: done
