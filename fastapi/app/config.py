@@ -1,3 +1,6 @@
+from urllib.parse import urlsplit, urlunsplit
+
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,7 +17,79 @@ class Settings(BaseSettings):
     db_password: str = "commitgotchi"
     fastapi_db_name: str = "commitgotchi_ai"
 
+    spring_boot_internal_base_url: str = "http://localhost:8080"
+    spring_internal_api_secret: SecretStr | None = None
+    spring_report_callback_path: str = "/api/report"
+    spring_quiz_grade_result_path: str = "/api/internal/quizzes/grade-result"
+    spring_callback_timeout_seconds: float = 10.0
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("spring_boot_internal_base_url")
+    @classmethod
+    def _validate_spring_boot_internal_base_url(cls, value: str) -> str:
+        stripped = str(value).strip()
+        if not stripped:
+            raise ValueError("SPRING_BOOT_INTERNAL_BASE_URL is required")
+
+        parts = urlsplit(stripped)
+        if parts.scheme not in {"http", "https"} or not parts.netloc:
+            raise ValueError(
+                "SPRING_BOOT_INTERNAL_BASE_URL must be an http(s) origin"
+            )
+        if parts.username or parts.password:
+            raise ValueError(
+                "SPRING_BOOT_INTERNAL_BASE_URL must not include user info"
+            )
+        try:
+            parts.port
+        except ValueError as exc:
+            raise ValueError(
+                "SPRING_BOOT_INTERNAL_BASE_URL has an invalid port"
+            ) from exc
+        if parts.path not in {"", "/"} or parts.query or parts.fragment:
+            raise ValueError(
+                "SPRING_BOOT_INTERNAL_BASE_URL must not include path, query, or fragment"
+            )
+        return urlunsplit((parts.scheme, parts.netloc, "", "", ""))
+
+    @field_validator("spring_report_callback_path", "spring_quiz_grade_result_path")
+    @classmethod
+    def _validate_spring_callback_path(cls, value: str) -> str:
+        stripped = str(value).strip()
+        if not stripped:
+            raise ValueError("Spring callback path is required")
+
+        parts = urlsplit(stripped)
+        if parts.scheme or parts.netloc:
+            raise ValueError("Spring callback path must not be an absolute URL")
+        if parts.query or parts.fragment:
+            raise ValueError(
+                "Spring callback path must not include query or fragment"
+            )
+
+        path = "/" + stripped.lstrip("/")
+        segments = [segment for segment in path.split("/") if segment]
+        if not segments:
+            raise ValueError("Spring callback path must not be empty")
+        return "/" + "/".join(segments)
+
+    @field_validator("spring_callback_timeout_seconds")
+    @classmethod
+    def _validate_spring_callback_timeout_seconds(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("SPRING_CALLBACK_TIMEOUT_SECONDS must be greater than 0")
+        return value
+
+    @field_validator("spring_internal_api_secret", mode="before")
+    @classmethod
+    def _blank_secret_to_none(cls, value: SecretStr | str | None) -> SecretStr | str | None:
+        if value is None:
+            return None
+        if isinstance(value, SecretStr):
+            return value if value.get_secret_value().strip() else None
+        stripped = str(value).strip()
+        return stripped or None
 
     @property
     def database_url(self) -> str:

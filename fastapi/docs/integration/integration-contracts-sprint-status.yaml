@@ -22,7 +22,7 @@ status_definitions:
 
 development_status:
   integration-contracts-epic: backlog
-  integration-1-spring-callback-client-config: ready-for-dev
+  integration-1-spring-callback-client-config: done
   integration-2-quiz-grading-endpoint-webhook: backlog
   integration-3-report-sqs-consumer-callback: backlog
   integration-contracts-retrospective: optional
