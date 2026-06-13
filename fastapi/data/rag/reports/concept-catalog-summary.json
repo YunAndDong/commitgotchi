@@ -1,0 +1,16 @@
+{
+  "candidateFileCount": 92,
+  "discoveredFileCount": 92,
+  "dryRun": false,
+  "outputDir": "/Users/tlsdla1235/study/관통프로젝트/commitgotchi/fastapi/data/rag",
+  "parsedChunkDraftCount": 870,
+  "rejectedByReason": {},
+  "rejectedCount": 0,
+  "skippedByReason": {
+    "chunk_too_short": 1951
+  },
+  "skippedCount": 1951,
+  "skippedFileCount": 0,
+  "sourceRoot": "/Users/tlsdla1235/study/md파일들/computer-science-interview-KR",
+  "storedChunkCount": 870
+}
