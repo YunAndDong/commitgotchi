@@ -1,16 +1,30 @@
 ---
 title: Integration 2 - Quiz Grading Endpoint and Webhook
-status: backlog
+status: done
 created: 2026-06-14
+updated: 2026-06-14
 owner: FastAPI AI 서버
 epic: integration-contracts
 story_key: integration-2-quiz-grading-endpoint-webhook
+depends_on:
+  - integration-1-spring-callback-client-config
 source_docs:
   - ../integration-contracts-epic.md
   - ../integration-contracts-sprint-status.yaml
   - ./integration-1-spring-callback-client-config.md
-  - ../../report/report-generation-epic.md
+  - ../../../app/config.py
+  - ../../../app/main.py
+  - ../../../app/integration/spring_client.py
+  - ../../../app/integration/spring_payloads.py
+  - ../../../app/integration/schemas.py
+  - ../../../app/scoring/quiz_grader.py
+  - ../../../app/scoring/policy.py
+  - ../../../tests/integration/test_spring_client.py
+  - ../../../tests/integration/test_spring_payloads.py
+  - ../../report/report-quiz-scoring-plan.md
+  - ../../quiz-bank/quiz-grading-service-plan.md
   - _bmad-output/planning-artifacts/architecture/architecture-commitgotchi-2026-06-07/architecture.md#4.3
+  - _bmad-output/planning-artifacts/architecture/architecture-commitgotchi-2026-06-07/architecture.md#4.5
   - _bmad-output/planning-artifacts/architecture/architecture-commitgotchi-2026-06-07/architecture.md#8.2
 ---
 
@@ -18,147 +32,171 @@ source_docs:
 
 ## Status
 
-backlog
+done
 
 ## Story
 
 As a FastAPI AI 서버 개발자,
-I want Spring Boot quiz grading requests to be accepted through `POST /api/internal/quizzes/grade` and completed through a Spring Boot grade-result callback,
-so that quiz submission storage remains in Spring Boot while FastAPI owns AI grading and feedback.
+I want Spring Boot quiz grading requests to be accepted through `POST /api/internal/quizzes/grade` and completed through the configured Spring Boot grade-result callback,
+so that Spring Boot remains the system of record while FastAPI owns AI grading, feedback, and safe callback orchestration.
 
-## 목표
+## Goal
 
-Spring Boot가 quiz submission을 `GRADING` 상태로 저장한 뒤 FastAPI에 보낸 grading request를 수락하고, FastAPI 내부 `grade_quiz_answer()` 결과를 Spring Boot `POST /api/internal/quizzes/grade-result` callback으로 전송한다.
+Spring Boot가 quiz submission을 `GRADING` 상태로 저장한 뒤 FastAPI에 보내는 채점 요청을 `202 Accepted`로 수락한다. FastAPI는 endpoint response path에서 LLM 채점을 기다리지 않고 background/orchestration 경로에서 `grade_quiz_answer()`를 호출한 뒤, Story 1에서 만든 Spring callback config/client/payload helper를 재사용해 Spring Boot `POST /api/internal/quizzes/grade-result`로 결과를 보낸다.
 
-요청 수락 시 FastAPI는 `202 Accepted`를 즉시 반환한다. 채점은 background 또는 비동기 작업으로 수행한다.
+이번 story는 FastAPI internal quiz grading endpoint와 quiz grade-result webhook sender 연결만 다룬다. report SQS consumer, report callback, `POST /api/report`, Spring Boot DB 접근, 캐릭터 생성 endpoint는 만들지 않는다.
 
-채점 실패, LLM timeout, validation 후 내부 처리 실패가 발생하면 Spring Boot에는 `UNGRADED`, `scoreDelta=0` callback을 보낸다.
+## Integration Context
 
-캐릭터 생성 endpoint는 이번 story에서 제외한다.
+Architecture의 흐름 B는 비동기 웹훅이다.
 
-## 배경
-
-Architecture의 흐름 B는 비동기 webhook이다.
-
-1. 사용자가 Spring Boot public API에 quiz 답안을 제출한다.
+1. Vue가 Spring Boot public API에 quiz answer를 제출한다.
 2. Spring Boot가 submission을 저장하고 FastAPI `POST /api/internal/quizzes/grade`를 호출한다.
-3. FastAPI는 요청을 수락한 뒤 AI 채점을 수행한다.
-4. FastAPI가 Spring Boot `POST /api/internal/quizzes/grade-result`로 결과를 callback한다.
-5. Spring Boot가 submission 상태, 점수, 캐릭터 stat, 감정/상태 메시지를 트랜잭션으로 반영한다.
+3. FastAPI는 valid request를 `202 Accepted`로 수락한다.
+4. FastAPI background/orchestration 경로가 `grade_quiz_answer()`를 호출한다.
+5. FastAPI가 Spring Boot `POST /api/internal/quizzes/grade-result` callback으로 `GRADED` 또는 `UNGRADED` 결과를 보낸다.
+6. Spring Boot가 submission 상태, score delta, character stat, emotion/status message를 트랜잭션으로 반영한다.
 
-기존 내부 함수 `grade_quiz_answer()`는 `submissionId`, `scoreAllocation`, `scoreDelta`, `feedback`, `confidence`를 포함한 camelCase 결과를 반환한다. 이 story는 그 내부 함수를 HTTP endpoint와 Spring Boot callback sender에 연결한다.
+Core ownership:
 
-중요한 계약:
-
-- FastAPI가 새로 만드는 endpoint는 `POST /api/internal/quizzes/grade`다.
-- Spring Boot가 받는 callback endpoint는 `POST /api/internal/quizzes/grade-result`다.
-- request body의 `callbackUrl`은 MVP에서 destination source of truth가 아니다.
-- 실제 callback destination은 Story 1 config인 `SPRING_BOOT_INTERNAL_BASE_URL + SPRING_QUIZ_GRADE_RESULT_PATH`로 만든다.
-- request body `callbackUrl`은 협업 계약 확인용으로 받을 수 있지만, SSRF를 피하기 위해 그대로 호출하지 않는다.
+- Spring Boot는 System of Record다.
 - FastAPI는 Spring Boot DB에 직접 접근하지 않는다.
-- 캐릭터 생성 `POST /api/ai/commitgotchi`는 제외한다.
+- FastAPI는 입력을 HTTP request로 받고, 출력은 HTTP response와 Spring Boot Internal API callback으로만 전달한다.
+- `submissionId`는 흐름 B의 멱등 키다. FastAPI는 같은 `submissionId`로 callback payload를 만든다.
+- report score와 quiz score는 서로 다른 출처다. quiz callback의 `scoreDelta`는 해당 quiz answer grading 결과만 반영한다.
 
-## 구현 범위
+## Previous Story Intelligence
 
-이번 story에서 구현할 것은 quiz grading 수락 endpoint와 grade-result callback orchestration이다.
+Story 1은 최근 커밋 `8f5d504 feat(fastapi): add spring callback client config`에서 완료됐다. Story 2 구현자는 아래를 새로 만들지 말고 재사용해야 한다.
 
-1. FastAPI router
-   - `POST /api/internal/quizzes/grade`를 추가한다.
-   - 권장 파일: `fastapi/app/api/quiz_grading.py` 또는 기존 app 구조에 맞는 router 파일.
-   - `fastapi/app/main.py`에 router를 include한다.
-   - endpoint는 valid request를 받으면 `202 Accepted`를 반환한다.
+- `fastapi/app/config.py`
+  - `SPRING_BOOT_INTERNAL_BASE_URL`
+  - `SPRING_INTERNAL_API_SECRET`
+  - `SPRING_REPORT_CALLBACK_PATH`
+  - `SPRING_QUIZ_GRADE_RESULT_PATH`
+  - `SPRING_CALLBACK_TIMEOUT_SECONDS`
+- `fastapi/app/integration/spring_client.py`
+  - `SpringCallbackClient`
+  - `SpringCallbackClient.post_quiz_grade_result()`
+  - `SpringCallbackClient.send_quiz_grade_result()`
+  - `build_spring_callback_url()`
+  - `build_internal_auth_headers()`
+  - fake/mock transport가 가능한 `SpringCallbackTransport`
+- `fastapi/app/integration/spring_payloads.py`
+  - `build_quiz_grade_result_callback_payload()`
+  - `DEFAULT_*` adapter fallback constants
+  - `UNGRADED` 또는 `failed_reason`이 있으면 5필드 zero vector를 강제하는 payload guardrail
+- `fastapi/app/integration/schemas.py`
+  - `SpringCallbackResponse`
+  - `SpringCallbackResult`
+- `fastapi/tests/integration/test_spring_client.py`
+  - fake transport pattern
+  - configured destination만 사용하는 callback sender test
+  - secret leak 방지 test pattern
+- `fastapi/tests/integration/test_spring_payloads.py`
+  - quiz callback payload shape, clamp, `UNGRADED` zero vector test pattern
 
-2. Request schema validation
-   - required field:
-     - `submissionId`
-     - `userId`
-     - `characterId`
-     - `quizId`
-     - `question`
-     - `modelAnswer`
-     - `userAnswer`
-     - `scoreAllocation`
-   - optional field:
-     - `problemId`
-     - `characterMetadata`
-     - `callbackUrl`
-   - `scoreAllocation`은 `db`, `algorithm`, `cs`, `network`, `framework` 5개 field를 `0..10` 범위로 sanitize한다.
+Do not duplicate Story 1 config, URL building, auth header construction, Spring transport, or quiz callback payload adapter in the endpoint layer.
 
-3. Immediate response
-   - valid request는 `202 Accepted`와 아래 body를 반환한다.
+## Existing Code State
+
+- `fastapi/app/main.py` currently exposes only `GET /api/health`; no `app/api` package exists yet.
+- `fastapi/app/scoring/quiz_grader.py` exposes `grade_quiz_answer()` with injectable model client support. It accepts both Pythonic and Spring-style parameter names and returns a Spring-facing camelCase dict:
+  - `submissionId`
+  - `status`
+  - `scoreAllocation`
+  - `scoreDelta`
+  - `feedback`
+  - `confidence`
+- `grade_quiz_answer()` catches model/parsing failures and returns `status="UNGRADED"` with `zero_score_vector()`.
+- `fastapi/app/scoring/policy.py` owns the 5 score fields through `SCORE_FIELDS` and provides:
+  - `sanitize_score_allocation()`
+  - `clamp_score_delta()`
+  - `zero_score_vector()`
+- `build_quiz_grade_result_callback_payload()` adds `userId`, `quizId`, `emotion`, `statusMessage`, optional `failedReason`, clamps `GRADED` score delta, removes request-only fields, and forces `UNGRADED`/failure score delta to:
 
 ```json
 {
-  "accepted": true,
-  "submissionId": "quiz-submission-uuid"
+  "db": 0,
+  "algorithm": 0,
+  "cs": 0,
+  "network": 0,
+  "framework": 0
 }
 ```
 
-4. Background grading orchestration
-   - endpoint thread에서 실제 LLM/API 호출을 기다리지 않는다.
-   - FastAPI `BackgroundTasks`, internal task runner, or async service로 분리한다.
-   - orchestration 함수는 `grade_quiz_answer()`를 호출한다.
-   - tests에서는 fake grader와 fake callback sender를 주입할 수 있어야 한다.
+## Scope
 
-5. Success callback
-   - `grade_quiz_answer()`가 `GRADED`를 반환하면 Spring Boot grade-result callback을 보낸다.
-   - `scoreDelta[field]`는 `0..scoreAllocation[field]` 범위를 넘지 않아야 한다. 내부 함수의 clamp 결과를 신뢰하되 adapter에서 shape를 보존한다.
-   - callback payload는 `submissionId`, `userId`, `quizId`, `status`, `scoreAllocation`, `scoreDelta`, `feedback`, `emotion`, `statusMessage`를 포함한다.
+Implement:
 
-6. Failure callback
-   - `grade_quiz_answer()`가 `UNGRADED`를 반환하거나 orchestration이 예외를 만나면 callback payload는 `status="UNGRADED"`다.
-   - `scoreDelta`는 전 필드 0이다.
-   - `feedback`은 null 또는 내부 함수의 failure feedback을 사용할 수 있다.
-   - `emotion`은 null을 허용한다.
-   - `statusMessage`는 사용자에게 저장은 되었지만 채점은 실패했음을 설명하는 보수적 메시지다.
-   - `failedReason`은 enum/string으로 제한한다. 예: `LLM_TIMEOUT`, `GRADER_ERROR`, `CALLBACK_ERROR`.
+- FastAPI `POST /api/internal/quizzes/grade`.
+- Request/response schema validation for the quiz grading request.
+- Internal auth guard for the incoming FastAPI endpoint when `SPRING_INTERNAL_API_SECRET` is configured.
+- Immediate `202 Accepted` response with `{ "accepted": true, "submissionId": "..." }`.
+- Background/orchestration path that calls `grade_quiz_answer()`.
+- Spring Boot grade-result callback using Story 1 `SpringCallbackClient` and `build_quiz_grade_result_callback_payload()`.
+- `GRADED` success callback mapping.
+- `UNGRADED` fallback callback mapping for grader failure, grader `UNGRADED`, and orchestration exception.
+- `callbackUrl` validation/ignore policy with observable mismatch signal.
+- Fake/mock based endpoint/orchestration tests.
 
-7. `callbackUrl` 정책
-   - MVP destination은 env/config가 source of truth다.
-   - request body의 `callbackUrl`은 그대로 호출하지 않는다.
-   - `callbackUrl`이 있으면 configured grade-result URL과 scheme/host/path가 일치하는지 검증할 수 있다.
-   - mismatch가 있어도 MVP에서는 request를 202로 수락하고 configured destination으로 callback한다. mismatch는 warning/metric으로 남긴다.
-   - strict reject가 필요하면 후속 config flag로 분리한다.
+Do not implement:
 
-8. Callback retry policy
-   - Story 1 sender가 retryable/non-retryable classification을 제공한다.
-   - MVP endpoint는 callback 전송 실패 시 적어도 log/metric을 남긴다.
-   - durable retry queue는 이번 story 범위 밖이다.
+- FastAPI `POST /api/report`.
+- report SQS consumer, SQS delete/retry/DLQ handling, or report callback orchestration. Those are Integration Story 3.
+- Spring Boot public quiz submission API.
+- Spring Boot DB access, ORM model, repository, or query.
+- New quiz generation/recommendation behavior.
+- `generate_daily_report_result()` call path.
+- Character generation `POST /api/ai/commitgotchi`.
+- Real Spring Boot server calls in unit/integration tests.
+- Real Gemini API calls in endpoint/webhook tests.
+- Duplicate Spring callback config/client/payload helper code.
 
-## 주요 파일 경로
+## Recommended File Structure
 
-구현 후보:
+Preferred implementation files:
 
-- `fastapi/app/main.py`
-- `fastapi/app/api/__init__.py`
+- `fastapi/app/api/__init__.py` (new if package is needed)
 - `fastapi/app/api/quiz_grading.py`
+- `fastapi/app/main.py`
+
+Optional extraction if `quiz_grading.py` grows too large:
+
+- `fastapi/app/integration/quiz_grading_workflow.py`
+
+Reuse without replacing:
+
+- `fastapi/app/config.py`
 - `fastapi/app/integration/spring_client.py`
+- `fastapi/app/integration/spring_payloads.py`
 - `fastapi/app/integration/schemas.py`
 - `fastapi/app/scoring/quiz_grader.py`
-- `fastapi/app/scoring/schemas.py`
+- `fastapi/app/scoring/policy.py`
 
-테스트 후보:
+Preferred tests:
 
 - `fastapi/tests/integration/test_quiz_grading_endpoint.py`
 - `fastapi/tests/integration/test_quiz_grading_webhook.py`
 
-재사용 대상:
+Keep Story 1 regression tests:
 
-- `fastapi/app/scoring/quiz_grader.py`의 `grade_quiz_answer()`
-- Story 1의 `SpringCallbackClient.post_quiz_grade_result()`
-- Story 1의 Spring callback config
+- `fastapi/tests/integration/test_spring_client.py`
+- `fastapi/tests/integration/test_spring_payloads.py`
 
-수정하지 않아야 할 흐름:
+## API Contract
 
-- `fastapi/app/scoring/daily_report_service.py`
-- report SQS consumer
-- report callback sender
-- character generation endpoint/client
-- Spring Boot DB 직접 접근
+### Incoming Request
 
-## 권장 Public API 또는 Schema
+FastAPI receives:
 
-요청:
+```http
+POST /api/internal/quizzes/grade
+Authorization: Internal <SPRING_INTERNAL_API_SECRET>
+Content-Type: application/json
+```
+
+Request body:
 
 ```json
 {
@@ -179,13 +217,54 @@ Architecture의 흐름 B는 비동기 webhook이다.
   },
   "characterMetadata": {
     "personality": "칭찬을 많이 하지만 틀린 부분은 명확하게 지적하는 성격",
-    "currentStats": { "db": 120, "algorithm": 200, "cs": 80, "network": 60, "framework": 140 }
+    "currentStats": {
+      "db": 120,
+      "algorithm": 200,
+      "cs": 80,
+      "network": 60,
+      "framework": 140
+    }
   },
   "callbackUrl": "https://spring.example.com/api/internal/quizzes/grade-result"
 }
 ```
 
-수락 응답:
+Required fields:
+
+- `submissionId`
+- `userId`
+- `characterId`
+- `quizId`
+- `question`
+- `modelAnswer`
+- `userAnswer`
+- `scoreAllocation`
+
+Optional fields:
+
+- `problemId`
+- `characterMetadata`
+- `callbackUrl`
+- `difficulty`
+- `sourcePath`
+- `rubric`
+
+Validation rules:
+
+- `submissionId`, `question`, `modelAnswer`, and `userAnswer` are strings. Empty `userAnswer` is valid and should still be graded by `grade_quiz_answer()`, which returns `GRADED` with zero score.
+- `userId`, `characterId`, and `quizId` are positive integers.
+- `scoreAllocation` is sanitized to exactly the 5 fields `db`, `algorithm`, `cs`, `network`, `framework`.
+- Each score allocation field is clamped or validated to `0..10` using the existing scoring policy. Prefer reusing `sanitize_score_allocation()` rather than duplicating score field logic.
+- Unknown extra request fields should either be ignored or rejected consistently with the chosen Pydantic model policy; do not forward unknown fields into the Spring callback payload.
+
+### Accepted Response
+
+Valid request response:
+
+```http
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+```
 
 ```json
 {
@@ -194,7 +273,22 @@ Architecture의 흐름 B는 비동기 webhook이다.
 }
 ```
 
-성공 callback:
+Invalid request response:
+
+- Use FastAPI/Pydantic project-standard validation behavior, normally `422`.
+- Auth failure, when secret is configured, should return a generic `401` or `403` without echoing expected token, received token, or full Authorization header.
+
+### Success Callback
+
+FastAPI sends to configured Story 1 destination:
+
+```http
+POST {SPRING_BOOT_INTERNAL_BASE_URL}{SPRING_QUIZ_GRADE_RESULT_PATH}
+Authorization: Internal <SPRING_INTERNAL_API_SECRET>
+Content-Type: application/json
+```
+
+Example payload:
 
 ```json
 {
@@ -222,7 +316,9 @@ Architecture의 흐름 B는 비동기 webhook이다.
 }
 ```
 
-실패 callback:
+### Failure Callback
+
+For `grade_quiz_answer()` returning `UNGRADED`, grader exception, orchestration exception, or other internal failure before grading result assembly:
 
 ```json
 {
@@ -244,21 +340,67 @@ Architecture의 흐름 B는 비동기 webhook이다.
     "network": 0,
     "framework": 0
   },
-  "feedback": null,
-  "emotion": null,
-  "statusMessage": "AI가 잠깐 쉬는 중입니다. 답안은 저장됐고, 잠시 후 다시 채점할 수 있어요.",
+  "feedback": "Gemini 호출 또는 구조화 출력 변환에 실패하여 채점하지 않았습니다.",
+  "emotion": "SAD",
+  "statusMessage": "AI가 잠깐 쉬는 중이에요. 답안은 저장됐어요.",
   "failedReason": "GRADER_ERROR"
 }
 ```
 
-권장 orchestration helper:
+Required failure invariant:
+
+- `status="UNGRADED"` or any failure fallback must always use the 5-field zero vector for `scoreDelta`.
+- Do not send partial score on failure.
+- Do not include exception text, secret values, full request bodies, or Authorization headers in `failedReason`, callback payload, logs, test snapshots, or repr output.
+
+## Callback URL Policy
+
+The request body may contain `callbackUrl` for Spring/FastAPI contract visibility, but it is not the source of truth.
+
+Required behavior:
+
+- Never call request body `callbackUrl`.
+- Always send callback through Story 1 config path:
+  - `SPRING_BOOT_INTERNAL_BASE_URL`
+  - `SPRING_QUIZ_GRADE_RESULT_PATH`
+- If `callbackUrl` is present, compare it to the configured destination if doing so is cheap and deterministic.
+- If mismatch occurs, still accept the request and still use the configured destination.
+- Record an observable warning/metric that includes `submissionId` and mismatch category, but not secrets or full request body.
+- Do not add a strict reject mode in this story unless it is a small config flag with tests and defaults to permissive configured-destination behavior.
+
+Reason:
+
+- Calling arbitrary request body URLs creates SSRF risk.
+- Story 1 already guarantees callback path cannot be an absolute URL and destination host comes from env-backed config.
+
+## Internal Auth Guardrail
+
+Use the same internal contract Story 1 established:
+
+```http
+Authorization: Internal <SPRING_INTERNAL_API_SECRET>
+```
+
+Required behavior:
+
+- If `settings.spring_internal_api_secret` is configured, `POST /api/internal/quizzes/grade` must require a matching header.
+- If the secret is blank/None, local/dev may allow the request without auth, matching Story 1's local-dev behavior.
+- Use constant-time comparison such as `hmac.compare_digest()` when comparing configured and received token values.
+- Auth error messages must be generic.
+- Never log or return the expected secret, received token, full Authorization header, or `SecretStr.get_secret_value()`.
+- Tests must include a wrong-token case and assert the token value is absent from response body, exception text, repr output, and any captured log/snapshot used by the test.
+
+## Orchestration Design
+
+Recommended public helpers:
 
 ```python
 def accept_quiz_grading_request(
     request: QuizGradingRequest,
     *,
+    background_tasks: BackgroundTasks,
     grader: Callable[..., Mapping[str, Any]] = grade_quiz_answer,
-    callback_client: SpringCallbackClient,
+    callback_client: SpringCallbackClient | None = None,
 ) -> QuizGradingAccepted:
     ...
 
@@ -268,124 +410,217 @@ def process_quiz_grading_request(
     *,
     grader: Callable[..., Mapping[str, Any]],
     callback_client: SpringCallbackClient,
-) -> None:
+) -> SpringCallbackResult:
     ...
 ```
 
+Implementation requirements:
+
+- The route handler schedules work and returns `202`; it must not perform Gemini/LLM work inline before returning.
+- Keep the orchestration function pure enough to unit test directly with fake grader and fake callback client.
+- Pass these fields to `grade_quiz_answer()`:
+  - `submissionId`
+  - `problemId`
+  - `question`
+  - `modelAnswer`
+  - `userAnswer`
+  - `scoreAllocation`
+  - optional `difficulty`
+  - optional `sourcePath`
+  - optional `rubric`
+- Do not pass `userId`, `characterId`, `quizId`, `callbackUrl`, or auth header into `grade_quiz_answer()` unless the scoring function later explicitly supports them.
+- Use `SpringCallbackClient.send_quiz_grade_result()` or `post_quiz_grade_result()` plus `build_quiz_grade_result_callback_payload()`. Prefer `send_quiz_grade_result()` unless tests need lower-level payload control.
+- Do not manually rebuild callback destination URL in the endpoint layer.
+- Do not copy Story 1 fallback constants into the endpoint layer.
+- If `SpringCallbackResult.ok` is false, log/metric a generic callback failure with `submissionId`, `status_code`, `retryable`, and safe error category. Do not alter the already returned `202`.
+- Durable retry queue is outside this story. A small bounded in-process retry may be added only if it stays fake-transport testable and does not introduce SQS or DB state.
+
+Note on `BackgroundTasks` tests:
+
+- FastAPI/Starlette `TestClient` may execute background tasks before returning control to the test process. Do not use that behavior as proof that production waits for grading.
+- Prove non-inline behavior with dependency injection/spies where the route schedules work instead of directly invoking the grader in the response path, and unit test `process_quiz_grading_request()` separately.
+
 ## Acceptance Criteria
 
-1. FastAPI에 `POST /api/internal/quizzes/grade` endpoint가 추가된다.
-2. valid request는 `202 Accepted`를 반환한다.
-3. accepted response body는 `accepted=true`와 동일 `submissionId`를 포함한다.
-4. endpoint는 request validation 실패 시 `422` 또는 project-standard validation error를 반환한다.
-5. endpoint는 request를 수락한 뒤 endpoint response path에서 LLM 채점을 기다리지 않는다.
-6. background/orchestration 경로는 `grade_quiz_answer()`를 호출한다.
-7. `grade_quiz_answer()` 호출에는 `submissionId`, `problemId`, `question`, `modelAnswer`, `userAnswer`, `scoreAllocation`이 전달된다.
-8. `scoreAllocation`은 5개 score field를 유지한다.
-9. grading 성공 시 Spring Boot grade-result callback이 전송된다.
-10. grading 성공 callback status는 `GRADED`다.
-11. grading 성공 callback의 `scoreDelta[field]`는 `0..scoreAllocation[field]` 범위다.
-12. grading 실패 또는 exception 시 Spring Boot callback이 전송된다.
-13. grading 실패 callback status는 `UNGRADED`다.
-14. grading 실패 callback `scoreDelta`는 전 필드 0이다.
-15. callback payload에는 `submissionId`, `userId`, `quizId`, `status`, `scoreAllocation`, `scoreDelta`가 포함된다.
-16. request body의 `callbackUrl`은 callback destination으로 직접 사용하지 않는다.
-17. callback destination은 Story 1 config `SPRING_BOOT_INTERNAL_BASE_URL + SPRING_QUIZ_GRADE_RESULT_PATH`다.
-18. `callbackUrl`이 configured destination과 불일치해도 MVP에서는 configured destination을 사용한다.
-19. `callbackUrl` mismatch는 warning/metric 또는 equivalent observable signal로 남긴다.
-20. endpoint와 callback orchestration은 Spring Boot DB에 직접 접근하지 않는다.
-21. report SQS consumer나 report callback sender를 만들지 않는다.
-22. 캐릭터 생성 `POST /api/ai/commitgotchi` endpoint를 만들거나 수정하지 않는다.
-23. unit test는 fake grader와 fake callback sender를 사용해 real Gemini/Spring Boot 호출 없이 통과한다.
-24. callback sender failure는 endpoint accepted response를 되돌리지 않는다.
+1. FastAPI exposes `POST /api/internal/quizzes/grade`.
+2. `fastapi/app/main.py` includes the quiz grading router without breaking `GET /api/health`.
+3. Valid request returns HTTP `202 Accepted`.
+4. Accepted response body contains `accepted=true` and the same `submissionId`.
+5. Invalid request schema returns FastAPI/Pydantic validation error, normally `422`.
+6. If `SPRING_INTERNAL_API_SECRET` is configured, missing or invalid `Authorization: Internal <token>` is rejected with generic `401` or `403`.
+7. Auth failure response/log/test output does not include the configured secret, received token, or full Authorization header.
+8. If `SPRING_INTERNAL_API_SECRET` is blank/None, local/dev requests can be accepted without auth.
+9. Endpoint response path does not wait for Gemini/LLM grading.
+10. Background/orchestration path calls `grade_quiz_answer()`.
+11. Grader call includes `submissionId`, `problemId`, `question`, `modelAnswer`, `userAnswer`, and sanitized `scoreAllocation`.
+12. `scoreAllocation` is normalized to exactly `db`, `algorithm`, `cs`, `network`, `framework`.
+13. `scoreAllocation` fields are constrained to `0..10`.
+14. Successful `GRADED` result sends Spring Boot grade-result callback.
+15. Success callback status is `GRADED`.
+16. Success callback `scoreDelta[field]` is clamped to `0..scoreAllocation[field]`.
+17. Callback payload includes `submissionId`, `userId`, `quizId`, `status`, `scoreAllocation`, `scoreDelta`, `feedback`, `emotion`, and `statusMessage`.
+18. `grade_quiz_answer()` returning `UNGRADED` sends Spring Boot callback.
+19. Grader/orchestration exception sends Spring Boot callback when enough request metadata exists to do so.
+20. `UNGRADED` callback status is `UNGRADED`.
+21. `UNGRADED` callback `scoreDelta` is exactly the 5-field zero vector.
+22. Any failure fallback callback `scoreDelta` is exactly the 5-field zero vector.
+23. Failure payload may include `failedReason`, but it must be a safe category string, not raw exception text.
+24. Request body `callbackUrl` is never used as callback destination.
+25. Callback destination always comes from Story 1 config: `SPRING_BOOT_INTERNAL_BASE_URL + SPRING_QUIZ_GRADE_RESULT_PATH`.
+26. Mismatched `callbackUrl` does not reject MVP request and does not change destination.
+27. Mismatched `callbackUrl` produces an observable warning/metric without secret or full request body leakage.
+28. Callback sender tests use fake/mock transport or fake callback client; unit tests never call a real Spring Boot server.
+29. Endpoint/webhook tests use fake grader/model client; unit tests never call real Gemini.
+30. Callback sender failure after accepted request does not roll back or alter the accepted response.
+31. Callback failure handling does not expose secret/token, full Authorization header, or raw request body in logs/errors.
+32. FastAPI does not access Spring Boot DB, tables, repositories, or ORM models.
+33. FastAPI does not create `POST /api/report`.
+34. FastAPI does not create report SQS consumer or report callback orchestration.
+35. FastAPI does not create or modify character generation `POST /api/ai/commitgotchi`.
+36. Existing Story 1 tests continue to pass.
+37. Existing `tests.scoring.test_quiz_grader` continues to pass.
 
-## 테스트 기준
+## Tasks / Subtasks
 
-필수 테스트:
+- [x] Create quiz grading request/response schemas in the API layer (AC: 3, 4, 5, 11, 12, 13)
+- [x] Add internal auth dependency/helper for `Authorization: Internal <secret>` with no secret leakage (AC: 6, 7, 8, 31)
+- [x] Add `POST /api/internal/quizzes/grade` router (AC: 1)
+- [x] Include router in `fastapi/app/main.py` while preserving health endpoint (AC: 2)
+- [x] Implement accepted response path with `202 Accepted` and background scheduling (AC: 3, 4, 9)
+- [x] Implement testable `process_quiz_grading_request()` orchestration with injected grader and callback client (AC: 10, 11, 28, 29)
+- [x] Map `GRADED` results through Story 1 callback sender/payload helper (AC: 14, 15, 16, 17, 25)
+- [x] Map `UNGRADED` grader results through Story 1 callback sender/payload helper (AC: 18, 20, 21)
+- [x] Map orchestration exceptions to safe `UNGRADED` callback payloads when metadata is available (AC: 19, 22, 23)
+- [x] Implement `callbackUrl` configured-destination policy and safe mismatch signal (AC: 24, 25, 26, 27)
+- [x] Handle `SpringCallbackResult.ok == False` without mutating accepted response or leaking secrets (AC: 30, 31)
+- [x] Add fake/mock endpoint and webhook orchestration tests (AC: 1-31)
+- [x] Run Story 1 and quiz grader regression tests (AC: 36, 37)
+- [x] Guardrail check with `rg`: no FastAPI `POST /api/report`, no report SQS consumer, no Spring DB access, no character generation changes (AC: 32, 33, 34, 35)
 
-- valid request가 `202 Accepted`와 `{accepted: true, submissionId}`를 반환하는지 검증한다.
-- invalid request가 validation error를 반환하는지 검증한다.
-- endpoint response가 fake grader 완료를 기다리지 않는 구조인지 검증한다.
-- fake grader가 `GRADED`를 반환하면 fake callback sender가 성공 payload를 받는지 검증한다.
-- fake grader가 `UNGRADED`를 반환하면 fake callback sender가 `UNGRADED`, 전 필드 0 `scoreDelta` payload를 받는지 검증한다.
-- fake grader가 exception을 던져도 fake callback sender가 `UNGRADED` fallback payload를 받는지 검증한다.
-- callback payload의 `scoreDelta`가 `scoreAllocation`을 넘지 않는지 검증한다.
-- request body의 `callbackUrl`이 악성 외부 URL이어도 sender destination으로 사용되지 않는지 검증한다.
-- configured destination과 `callbackUrl` mismatch가 observable warning/metric으로 남는지 검증한다.
-- Spring Boot DB 접근 import 또는 repository 호출이 없는지 확인한다.
-- report SQS/report callback/character generation 파일이 생성 또는 수정되지 않았는지 확인한다.
+## Test Requirements
 
-권장 테스트 명령:
+Required tests:
+
+- Valid request returns `202` and `{ "accepted": true, "submissionId": ... }`.
+- Invalid request returns validation error.
+- Missing/invalid internal auth is rejected when secret is configured.
+- Blank/None internal secret allows local/dev request if that policy is implemented.
+- Auth failure output does not include the expected secret, received token, or Authorization header.
+- Route schedules background/orchestration work instead of calling the grader inline.
+- `process_quiz_grading_request()` passes the expected fields to fake grader.
+- Fake grader `GRADED` result produces fake callback payload with `GRADED`, same `submissionId`, `userId`, `quizId`, sanitized `scoreAllocation`, clamped `scoreDelta`, `feedback`, `emotion`, `statusMessage`.
+- Fake grader `UNGRADED` result produces callback payload with `UNGRADED` and exact 5-field zero vector.
+- Fake grader exception produces callback payload with `UNGRADED`, exact 5-field zero vector, and safe `failedReason`.
+- Malicious or mismatched request `callbackUrl` is not used as sender destination.
+- `callbackUrl` mismatch emits safe warning/metric.
+- Callback client failure does not change already accepted response behavior and does not leak secret/token.
+- No test calls real Spring Boot.
+- No endpoint/webhook test calls real Gemini.
+- Existing Story 1 fake transport tests still pass.
+- Existing quiz grader tests still pass.
+
+Recommended commands:
 
 ```bash
 cd fastapi
-python3 -m unittest tests.integration.test_quiz_grading_endpoint tests.integration.test_quiz_grading_webhook
+.venv/bin/python -m unittest \
+  tests.integration.test_quiz_grading_endpoint \
+  tests.integration.test_quiz_grading_webhook \
+  tests.integration.test_spring_client \
+  tests.integration.test_spring_payloads \
+  tests.scoring.test_quiz_grader
 ```
 
-관련 회귀 확인:
+Fallback if `.venv` is not available:
 
 ```bash
 cd fastapi
-python3 -m unittest tests.scoring.test_quiz_grader tests.integration.test_spring_client
+python3 -m unittest \
+  tests.integration.test_quiz_grading_endpoint \
+  tests.integration.test_quiz_grading_webhook \
+  tests.integration.test_spring_client \
+  tests.integration.test_spring_payloads \
+  tests.scoring.test_quiz_grader
 ```
 
-## 제외 범위
+Guardrail verification:
 
-이번 story에서 하지 않는다.
+```bash
+rg -n "post\\(['\"]/?api/report|/api/report|report_consumer|ReceiveMessage|boto3|sqlalchemy|quiz_submissions|POST /api/ai/commitgotchi|callbackUrl" fastapi/app fastapi/tests
+```
 
-- Spring Boot public quiz submission API 구현
-- Spring Boot DB 접근
-- durable callback retry queue 구현
-- report SQS consumer
-- Spring Boot `POST /api/report` callback
-- `generate_daily_report_result()` 호출
-- 신규 quiz 생성 또는 추천
-- 캐릭터 생성 `POST /api/ai/commitgotchi`
-- 실제 Spring Boot 서버 호출 테스트
-- 실제 Gemini API 호출을 endpoint unit test에서 수행
+Interpretation:
 
-## Dev Notes
+- `/api/report` should appear only as Story 1 callback config/path usage, not as a FastAPI route.
+- `callbackUrl` may appear in request schema/tests, but sender destination must remain config-based.
+- SQLAlchemy imports in existing `app/main.py`/`app/db.py` health DB code are pre-existing and not Spring Boot DB access. New quiz grading code must not import DB/repository modules.
 
-- `grade_quiz_answer()`는 이미 Spring-facing camelCase dict를 반환한다. endpoint layer는 이 결과를 Spring Boot grade-result callback shape로 보강하는 adapter 역할을 한다.
-- `grade_quiz_answer()` fallback은 `status="UNGRADED"`와 zero score vector를 반환한다. orchestration exception도 같은 contract로 맞춘다.
-- `characterMetadata`는 현재 `grade_quiz_answer()` 입력에 직접 쓰이지 않을 수 있다. request schema에는 보존하고, 향후 prompt/context 확장 여지를 둔다.
-- `callbackUrl`을 그대로 호출하면 SSRF 위험이 있다. MVP에서는 env/config destination만 사용한다.
-- `BackgroundTasks`는 process restart 시 durable하지 않다. MVP 수락 가능 여부는 팀 합의가 필요하다. durable retry/worker가 필요하면 후속 story로 분리한다.
-- callback sender failure를 어떻게 재시도할지는 Story 1 result classification 위에 후속 정책을 얹는다. 이번 story는 accepted response 후 callback attempt와 failure visibility까지를 기본 범위로 둔다.
-- FastAPI `POST /api/report`를 만들면 architecture 계약 위반이다.
+## Dev Agent Guardrails
 
-## Tasks/Subtasks
+- Reuse Story 1. Do not write a second callback client.
+- Reuse scoring policy. Do not hardcode a second score field list unless it imports from the existing policy/schema source.
+- Keep `grade_quiz_answer()` focused on grading. Do not put callback URL, auth, or Spring transport concerns into `fastapi/app/scoring/quiz_grader.py`.
+- Keep the API layer thin: validate, auth-check, schedule, return accepted.
+- Keep callback payload assembly in Story 1 helper or a tiny wrapper around it.
+- Do not log raw request bodies. `userAnswer` can contain user-written content and auth header can contain a secret.
+- Use safe error categories such as `GRADER_ERROR`, `GRADER_UNGRADED`, `CALLBACK_RETRYABLE_FAILURE`, `CALLBACK_NON_RETRYABLE_FAILURE`. Do not serialize exception messages into API responses or callback payload.
+- If callback fails, expose operational signal only with safe metadata: `submissionId`, `status_code`, `retryable`, and sanitized category.
+- Do not add SQS, DB persistence, or durable retry state in this story.
+- Do not update report flow files unless required by import path/package setup, and then keep changes mechanical.
 
-- [ ] quiz grading request/response schema 구현 (AC: 2, 3, 4, 8)
-- [ ] `POST /api/internal/quizzes/grade` router 추가 (AC: 1)
-- [ ] `main.py`에 router include (AC: 1)
-- [ ] accepted response `202` 처리 구현 (AC: 2, 3, 5)
-- [ ] background/orchestration service 구현 (AC: 5, 6, 7)
-- [ ] `grade_quiz_answer()` 성공 결과 callback mapping 구현 (AC: 9, 10, 11, 15)
-- [ ] `UNGRADED` fallback callback mapping 구현 (AC: 12, 13, 14, 15)
-- [ ] env/config destination 사용 연결 (AC: 16, 17, 18)
-- [ ] callbackUrl validation/ignore warning 구현 (AC: 18, 19)
-- [ ] fake grader/fake callback sender endpoint tests 작성 (AC: 23, 24)
-- [ ] Spring DB/report/character generation 범위 침범이 없는지 확인 (AC: 20, 21, 22)
+## Completion Definition
+
+This story is ready for review when:
+
+- The endpoint exists and returns `202` for valid requests.
+- The endpoint schedules grading/callback work without inline Gemini work.
+- `GRADED` and `UNGRADED` callbacks are sent through Story 1 config/client/helper.
+- `callbackUrl` cannot redirect the callback destination.
+- `UNGRADED` and all failure fallbacks use exact 5-field zero score delta.
+- Secret/token values do not appear in errors, reprs, logs, callback payloads, or test snapshots.
+- Tests cover fake grader, fake/mock callback transport/client, auth guard, callback URL guardrail, and Story 1 regressions.
+- Guardrail search confirms no FastAPI `POST /api/report`, no report SQS consumer, no Spring Boot DB access, and no character generation endpoint changes.
 
 ## Dev Agent Record
 
 ### Agent Model Used
 
-TBD
+GPT-5 Codex
+
+### Implementation Plan
+
+- RED: endpoint/webhook 테스트를 먼저 추가해 `app.api.quiz_grading` 부재 실패를 확인했다.
+- GREEN: `app/api/quiz_grading.py`에 Pydantic request/accepted response schema, internal auth dependency, router, background scheduling helper, `process_quiz_grading_request()` orchestration을 구현했다.
+- REFACTOR: callback URL mismatch warning은 safe metadata만 남기고, callback failure logging도 `submissionId`, `status_code`, `retryable`, safe category만 남기도록 정리했다.
 
 ### Debug Log References
 
-TBD
+- `.venv/bin/python -m unittest tests.integration.test_quiz_grading_endpoint tests.integration.test_quiz_grading_webhook` - 최초 RED: `app.api` 없음으로 실패, 구현 후 13 tests OK.
+- `.venv/bin/python -m unittest tests.integration.test_quiz_grading_endpoint tests.integration.test_quiz_grading_webhook tests.integration.test_spring_client tests.integration.test_spring_payloads tests.scoring.test_quiz_grader` - 39 tests OK.
+- `.venv/bin/python -m unittest discover` - 132 tests OK.
+- `rg -n "post\\(['\"]/?api/report|/api/report|report_consumer|ReceiveMessage|boto3|sqlalchemy|quiz_submissions|POST /api/ai/commitgotchi|callbackUrl" fastapi/app fastapi/tests` - 허용된 Story 1 config/test `/api/report`, 기존 health DB import, callbackUrl schema/tests만 확인.
 
 ### Completion Notes List
 
-TBD
+- FastAPI `POST /api/internal/quizzes/grade` endpoint가 valid request에 `202 Accepted`와 `{accepted: true, submissionId}`를 반환한다.
+- endpoint response path는 grader를 inline 호출하지 않고 `BackgroundTasks`에 orchestration을 등록한다.
+- orchestration은 fake 주입 가능한 `process_quiz_grading_request()`로 분리했고, `grade_quiz_answer()`에 request metadata/auth/callbackUrl 없이 grading 필드만 전달한다.
+- `GRADED`, `UNGRADED`, grader exception fallback 모두 Story 1 `send_quiz_grade_result()`/payload helper를 통해 Spring callback payload로 매핑한다.
+- request `callbackUrl`은 destination으로 쓰지 않고 config destination과 비교해 safe mismatch warning만 남긴다.
+- callback failure는 accepted response를 변경하지 않으며 secret/token/raw body를 로그나 payload에 싣지 않는다.
 
 ### File List
 
-TBD
+- fastapi/app/api/__init__.py
+- fastapi/app/api/quiz_grading.py
+- fastapi/app/main.py
+- fastapi/tests/integration/test_quiz_grading_endpoint.py
+- fastapi/tests/integration/test_quiz_grading_webhook.py
+- fastapi/docs/integration/integration-contracts-sprint-status.yaml
+- fastapi/docs/integration/stories/integration-2-quiz-grading-endpoint-webhook.md
 
 ## Change Log
 
 - 2026-06-14: Story context document created and left in backlog.
+- 2026-06-14: BMAD create-story refinement applied; Story 1 reuse, FastAPI internal endpoint/webhook scope, auth/secret guardrails, callbackUrl policy, zero-vector failure invariant, fake/mock test requirements, and explicit out-of-scope report/SQS/DB/character work added. Status set to ready-for-dev.
+- 2026-06-14: Implemented FastAPI quiz grading endpoint, internal auth guard, background orchestration, Story 1 callback reuse, callbackUrl guardrail, failure zero-vector mapping, fake endpoint/webhook tests, and regression/guardrail verification. Status set to review.
