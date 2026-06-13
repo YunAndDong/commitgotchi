@@ -8,6 +8,9 @@ from app.rag.schemas import SCORE_FIELDS
 
 MIN_SCORE = 0
 MAX_FIELD_SCORE = 10
+LOW_CONFIDENCE_FALLBACK_THRESHOLD = 0.35
+LOW_CONFIDENCE_SCORE_CAP_THRESHOLD = 0.55
+LOW_CONFIDENCE_SCORE_CAP = 3
 
 
 def zero_score_vector() -> dict[str, int]:
@@ -46,6 +49,40 @@ def clamp_score_delta(
             safe_allocation[field_name],
         )
     return delta
+
+
+def clamp_report_score_delta(
+    raw_delta: Mapping[str, Any] | None,
+    *,
+    max_field_score: int = MAX_FIELD_SCORE,
+) -> dict[str, int]:
+    delta = zero_score_vector()
+    if raw_delta is None:
+        return delta
+
+    upper_bound = _clamp_int(max_field_score, MIN_SCORE, MAX_FIELD_SCORE)
+    for field_name in SCORE_FIELDS:
+        delta[field_name] = _clamp_int(
+            raw_delta.get(field_name),
+            MIN_SCORE,
+            upper_bound,
+        )
+    return delta
+
+
+def apply_report_confidence_policy(
+    raw_delta: Mapping[str, Any] | None,
+    confidence: Any,
+) -> dict[str, int]:
+    safe_confidence = clamp_confidence(confidence)
+    if safe_confidence < LOW_CONFIDENCE_FALLBACK_THRESHOLD:
+        return zero_score_vector()
+    if safe_confidence < LOW_CONFIDENCE_SCORE_CAP_THRESHOLD:
+        return clamp_report_score_delta(
+            raw_delta,
+            max_field_score=LOW_CONFIDENCE_SCORE_CAP,
+        )
+    return clamp_report_score_delta(raw_delta)
 
 
 def active_score_fields(allocation: Mapping[str, Any] | None) -> list[str]:

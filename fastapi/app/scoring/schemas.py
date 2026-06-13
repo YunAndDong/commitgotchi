@@ -7,6 +7,7 @@ from app.rag.schemas import SCORE_FIELDS
 
 
 QuizGradingStatus = Literal["GRADED", "UNGRADED"]
+ReportAnalysisStatus = Literal["SUCCESS", "FALLBACK"]
 ScoreVector = dict[str, int]
 
 
@@ -47,6 +48,70 @@ class QuizGradingResult:
             "scoreDelta": dict(self.score_delta),
             "feedback": self.feedback,
             "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True)
+class DailyReportAnalysis:
+    text: str
+    feedback: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "text": self.text,
+            "feedback": self.feedback,
+        }
+
+
+@dataclass(frozen=True)
+class NextRecommendation:
+    topics: tuple[str, ...]
+    rationale: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "topics": list(self.topics),
+            "rationale": self.rationale,
+        }
+
+
+@dataclass(frozen=True)
+class ReportAnalysis:
+    status: ReportAnalysisStatus
+    topics: tuple[str, ...]
+    field_evidence: dict[str, str]
+    score_delta: ScoreVector
+    confidence: float
+    emotion: str
+    status_message: str
+    daily_report: DailyReportAnalysis | None
+    next_recommendation: NextRecommendation | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "topics": list(self.topics),
+            "fieldEvidence": {
+                field_name: self.field_evidence.get(field_name, "")
+                for field_name in SCORE_FIELDS
+            },
+            "scoreDelta": {
+                field_name: int(self.score_delta.get(field_name, 0))
+                for field_name in SCORE_FIELDS
+            },
+            "confidence": self.confidence,
+            "emotion": self.emotion,
+            "statusMessage": self.status_message,
+            "dailyReport": (
+                self.daily_report.to_dict()
+                if self.daily_report is not None
+                else None
+            ),
+            "nextRecommendation": (
+                self.next_recommendation.to_dict()
+                if self.next_recommendation is not None
+                else None
+            ),
         }
 
 

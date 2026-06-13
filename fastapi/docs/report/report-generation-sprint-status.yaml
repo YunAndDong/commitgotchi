@@ -25,7 +25,7 @@ development_status:
   report-1-concept-chunk-catalog: done
   report-2-report-chunking-topic-field-hints: done
   report-3-rag-search-and-source-neighborhood: done
-  report-4-gemini-report-analysis-score-delta: backlog
+  report-4-gemini-report-analysis-score-delta: review
   report-5-report-result-assembly-quiz-recommender: backlog
   report-generation-retrospective: optional
 
