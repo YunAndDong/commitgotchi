@@ -1,0 +1,35 @@
+generated: 2026-06-14
+last_updated: 2026-06-14
+project: Commitgotchi FastAPI AI server
+tracking_system: file-system
+epic: integration-contracts
+epic_file: fastapi/docs/integration/integration-contracts-epic.md
+
+status_definitions:
+  epic:
+    - backlog
+    - in-progress
+    - done
+  story:
+    - backlog
+    - ready-for-dev
+    - in-progress
+    - review
+    - done
+  retrospective:
+    - optional
+    - done
+
+development_status:
+  integration-contracts-epic: backlog
+  integration-1-spring-callback-client-config: ready-for-dev
+  integration-2-quiz-grading-endpoint-webhook: backlog
+  integration-3-report-sqs-consumer-callback: backlog
+  integration-contracts-retrospective: optional
+
+notes:
+  - This epic covers FastAPI/Spring Boot/SQS integration contracts only.
+  - Existing report and quiz internal functions are treated as implemented inputs.
+  - FastAPI must not directly access Spring Boot database tables.
+  - Spring Boot owns POST /api/report; FastAPI must not implement that endpoint.
+  - Character generation POST /api/ai/commitgotchi is excluded.
