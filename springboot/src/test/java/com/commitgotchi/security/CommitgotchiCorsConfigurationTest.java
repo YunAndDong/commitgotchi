@@ -41,12 +41,43 @@ class CommitgotchiCorsConfigurationTest {
     }
 
     @Test
+    void acceptsChromeExtensionOriginAlongsideWebOriginsInEveryProfile() {
+        assertThat(CommitgotchiCorsConfiguration.parseAllowedOrigins(
+                "http://localhost:5173,chrome-extension://llnclajenonklpnohgleabfmpaijbgie", false
+        )).containsExactly("http://localhost:5173", "chrome-extension://llnclajenonklpnohgleabfmpaijbgie");
+
+        assertThat(CommitgotchiCorsConfiguration.parseAllowedOrigins(
+                "https://app.example.com,chrome-extension://llnclajenonklpnohgleabfmpaijbgie", true
+        )).containsExactly("https://app.example.com", "chrome-extension://llnclajenonklpnohgleabfmpaijbgie");
+    }
+
+    @Test
+    void rejectsMalformedChromeExtensionOrigins() {
+        for (String invalid : List.of(
+                "chrome-extension://",
+                "chrome-extension://llnclajenonklpnohgleabfmpaijbgie:8080",
+                "chrome-extension://llnclajenonklpnohgleabfmpaijbgie/popup.html",
+                "chrome-extension://*",
+                "chrome-extension://not-a-valid-extension-id",
+                "chrome-extension://llnclajenonklpnohgleabfmpaijbgie?x=1",
+                "chrome-extension://llnclajenonklpnohgleabfmpaijbgie#frag"
+        )) {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> CommitgotchiCorsConfiguration.parseAllowedOrigins(invalid, false));
+        }
+    }
+
+    @Test
     void productionRequiresAtLeastOneHttpsOrigin() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> CommitgotchiCorsConfiguration.parseAllowedOrigins("", true));
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> CommitgotchiCorsConfiguration.parseAllowedOrigins(
                         "http://localhost:5173", true
+                ));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> CommitgotchiCorsConfiguration.parseAllowedOrigins(
+                        "chrome-extension://llnclajenonklpnohgleabfmpaijbgie", true
                 ));
         assertThat(CommitgotchiCorsConfiguration.parseAllowedOrigins(
                 "https://app.example.com", true

@@ -5,6 +5,9 @@ import vue from '@vitejs/plugin-vue'
 // env var (see .env.example). In production the static build is served by nginx
 // inside the container; the reverse proxy in front is configured later on the server.
 export default defineConfig({
+  // Relative base so built asset URLs resolve both when served at site root
+  // (nginx) and when loaded from chrome-extension://<id>/index.html.
+  base: './',
   plugins: [vue()],
   server: {
     host: true,

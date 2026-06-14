@@ -22,7 +22,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/api/auth/signup",
             "/api/auth/login",
             "/api/auth/refresh",
-            "/api/auth/logout"
+            "/api/auth/refresh-cookie",
+            "/api/auth/logout",
+            "/api/auth/logout-cookie"
     );
 
     private final JwtTokenProvider tokenProvider;

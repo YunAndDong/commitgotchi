@@ -3,4 +3,5 @@ dist
 .env
 .env.local
 *.log
+vite.config.js.timestamp-*.mjs
 .DS_Store

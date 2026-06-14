@@ -1,0 +1,125 @@
+# Commit-Gotchi — 크롬 확장으로 띄우기
+
+이 Vue SPA를 크롬 확장 프로그램으로 감쌌다. **아이콘을 누르면 툴바 아래에 드롭다운 팝업으로 앱이 뜬다.**
+
+## 빌드 & 로드 (3단계)
+
+```bash
+cd vue
+npm install
+npm run build        # → vue/dist/  (이 폴더가 곧 압축 안 푼 확장 프로그램)
+```
+
+1. 크롬에서 `chrome://extensions` 접속
+2. 오른쪽 위 **개발자 모드** 켜기
+3. **압축해제된 확장 프로그램을 로드** 클릭 → `vue/dist` 폴더 선택
+
+이제 툴바의 Commit-Gotchi 아이콘을 누르면 **780×600 드롭다운 팝업**으로 앱이 열린다.
+코드를 고친 뒤에는 `npm run build` 다시 → 확장 카드의 새로고침(↻) 한 번이면 반영된다.
+
+> 크롬 드롭다운 팝업은 최대 ~800×600으로 제한된다. 그래서 780×600 고정 크기로 맞췄고,
+> 데스크톱 레이아웃(1180px)은 이 폭에서 자동으로 단일 컬럼으로 접힌다(반응형 브레이크포인트).
+
+## 어떻게 동작하나
+
+| 파일 | 역할 |
+|---|---|
+| `public/manifest.json` | MV3 매니페스트. `action.default_popup: "index.html"` → 아이콘 클릭 시 드롭다운 팝업으로 SPA를 띄움. |
+| `public/ext-popup.js` | `chrome-extension:` 프로토콜일 때 `html.is-ext-popup` 클래스 부여. **외부 파일이어야 함**(아래 CSP 트러블슈팅 참고). |
+| `index.html` | head 인라인 `<style>`로 팝업 780×600 고정 + `ext-popup.js`를 외부 `<script src>`로 로드. |
+| `styles/base.css` | `.is-ext-popup`일 때 780×600 보조 규칙. |
+| `vite.config.js` | `base: './'` — 빌드된 에셋 경로가 `chrome-extension://<id>/` 아래에서도 풀린다. |
+| `router/index.js` | `createWebHashHistory()` — 확장 페이지(`index.html#/...`)에서 라우팅이 404 없이 동작. |
+| `public/background.js` | (현재 미사용) 별도 팝업 **창**으로 열고 싶을 때 쓰는 서비스워커. 아래 참고. |
+
+`public/` 안의 파일은 빌드 시 `dist/` 루트로 그대로 복사된다.
+
+## 로그인은 데모 모드로
+
+확장 페이지의 origin은 `chrome-extension://<id>`인데, 백엔드 CORS는 `http://localhost:5173`만
+허용한다(백엔드는 수정 금지 영역). 그래서 확장에서 실제 로그인은 CORS로 막힌다.
+
+→ 로그인 화면의 **“🎮 백엔드 없이 둘러보기 (데모)”** 버튼을 누르면 인증을 우회하고 바로 대시보드로 들어간다.
+캐릭터·리포트·퀴즈·랭킹·게시판 데이터는 어차피 mock이라 전 화면을 그대로 체험할 수 있다.
+실제 인증까지 확장에서 쓰려면 백엔드 `CORS_ALLOWED_ORIGINS`에 확장 origin을 추가해야 한다(백엔드 담당 영역).
+
+## (대안) 작은 드롭다운 대신 별도 팝업 "창"으로 열기
+
+폭이 더 넓은 창이 필요하면 드롭다운 대신 독립 팝업 창(1240×860)으로 열 수 있다.
+`public/background.js`에 그 코드가 이미 들어 있다. 매니페스트만 바꾸면 된다:
+
+```json
+"action": { "default_title": "Commit-Gotchi 열기" },
+"background": { "service_worker": "background.js" }
+```
+
+즉 `default_popup`을 빼고 `background`를 다시 넣으면 된다. (단, 주소창 없는 별도 창이라
+"새 브라우저가 열리는" 느낌이 든다.)
+
+## 아이콘 추가(선택)
+
+16/48/128px PNG를 `public/`에 넣고 manifest에 추가:
+
+```json
+"icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
+"action": {
+  "default_title": "Commit-Gotchi 열기",
+  "default_popup": "index.html",
+  "default_icon": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" }
+}
+```
+
+## 트러블슈팅 — CSP로 인라인 스크립트 차단 (해결됨)
+
+### 증상
+확장 팝업을 여는 순간 콘솔/오류에 다음이 찍히고, 팝업이 좁게 뜨거나 빈 화면처럼 보였다.
+
+```
+Refused to execute inline script because it violates the following Content
+Security Policy directive: "script-src 'self'". Either the 'unsafe-inline'
+keyword, a hash (sha256-...), or a nonce is required to enable inline execution.
+```
+
+### 원인
+Manifest V3 확장 페이지의 **기본 CSP는 `script-src 'self'`** 다. 즉 HTML에 직접 박힌
+`<script> ...코드... </script>` (인라인 스크립트)와 `onclick="..."` 같은 인라인 이벤트
+핸들러를 전부 차단한다. 초기 구현에서 팝업 크기 훅을 `index.html` `<head>`의 **인라인
+`<script>`** 로 넣었는데, 이게 CSP에 막혀 실행되지 않았다. 그 결과 `.is-ext-popup`
+클래스가 안 붙어 780×600 고정 크기가 적용되지 못하고 팝업이 좁게/비어 보였다.
+
+> 참고: 인라인 `<style>` 과 외부에서 import 되는 JS 번들(`/assets/*.js`, `main.js`)은
+> `script-src 'self'` 에 부합하므로 차단되지 않는다. 문제는 오직 **인라인 `<script>`** 였다.
+
+### 해결
+인라인 스크립트를 **외부 파일로 분리**했다 (MV3 정석).
+
+- 추가: `public/ext-popup.js` — `location.protocol === 'chrome-extension:'` 검사 후
+  `html.is-ext-popup` 클래스를 붙인다.
+- `index.html`: 인라인 `<script>{...}</script>` → `<script src="/ext-popup.js"></script>` 로 교체.
+- 크기 지정 `<style>` 은 인라인 그대로 둬도 된다(스타일은 `script-src` 대상이 아님).
+
+```html
+<!-- before (차단됨) -->
+<script>
+  if (location.protocol === 'chrome-extension:')
+    document.documentElement.classList.add('is-ext-popup')
+</script>
+
+<!-- after (허용됨) -->
+<script src="/ext-popup.js"></script>
+```
+
+`ext-popup.js` 는 `public/` 에 있어 빌드 시 `dist/` 루트로 복사되고, `<head>` 에서 동기
+실행되어 첫 페인트 전에 클래스를 붙이므로 팝업 크기 측정에 제때 반영된다.
+
+> 인라인 핸들러(`onclick` 등)도 같은 이유로 금지다 — 이 앱의 버튼은 모두 Vue의
+> `@click`(= `addEventListener` 바인딩)을 쓰므로 추가 작업은 없다.
+> 해시(`sha256-...`)를 CSP에 등록하는 우회법도 있으나 MV3에선 외부 파일 분리가 권장이다.
+
+### 적용
+`npm run build` → `chrome://extensions` 에서 해당 확장 새로고침(↻) → 아이콘 다시 클릭.
+
+## 폰트 메모
+
+Galmuri·Gasoek One은 CDN에서 로드한다. 오프라인/사내망에서 폰트가 막히면 폰트 파일을
+`public/`에 동봉하고 `index.html`의 `<link>`를 로컬 경로로 바꾸면 된다.

@@ -1,0 +1,126 @@
+/*
+ * Commit-Gotchi — design tokens
+ * Distilled from _bmad-output/.../ux-designs/DESIGN.md (SSOT: docs mockup).
+ * Three themes share the same semantic slots; switch via <html data-theme="...">.
+ */
+
+:root {
+  /* spacing — 8px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* radii */
+  --r: 9px;          /* overridden per theme */
+  --r-gauge: 7px;
+  --r-pill: 999px;
+
+  /* fonts */
+  --font-display: 'Gasoek One', 'Galmuri14', 'Gothic A1', sans-serif;
+  --font-head: 'Galmuri11', 'Gothic A1', sans-serif;
+  --font-body: 'Galmuri11', 'Gothic A1', sans-serif;
+  --font-mono: 'GalmuriMono11', 'Galmuri11', monospace;
+
+  /* emotion colors — semantics fixed across themes */
+  --emo-joy: #54b878;
+  --emo-sad: #5f97d6;
+  --emo-angry: #e0705a;
+
+  /* badges */
+  --badge-warn-bg: #fff4cf; --badge-warn-fg: #9a7012; --badge-warn-edge: #e8c34a;
+  --badge-ok-bg: #dff3df;   --badge-ok-fg: #3c8a4e;   --badge-ok-edge: #7fc78c;
+  --badge-fire-bg: #ffe2cf; --badge-fire-fg: #d2581f; --badge-fire-edge: #ef7a3a;
+}
+
+/* === THEME A · cozy — 민트+크림 (Stardew) · 기본 === */
+:root,
+[data-theme='cozy'] {
+  --bg-page: #e7dcc4;
+  --popup-bg: #fbf3e0;
+  --popup-edge: #3f3328;
+  --ink: #3c2f24;
+  --ink-soft: #7a6550;
+  --ink-faint: #a4917a;
+  --surface: #fffdf5;
+  --surface-2: #f3ead4;
+  --surface-edge: #d8c7a6;
+  --screen: #fffdf5;
+  --primary: #54b878;
+  --primary-d: #3c9a5e;
+  --on-primary: #ffffff;
+  --accent: #e08658;
+  --accent-d: #c66a3e;
+  --accent2: #eab43f;
+  --joy: #54b878;
+  --sad: #5f97d6;
+  --angry: #e0705a;
+  --fire: #ef7a3a;
+  --gold: #eab43f;
+  --track: #e7dcc4;
+  --shadow-hard: rgba(63, 51, 40, .22);
+  --glow: none;
+  --r: 9px;
+}
+
+/* === THEME B · device — 회색 셸 + 민트 LCD (다마고치) === */
+[data-theme='device'] {
+  --bg-page: #dfe3e8;
+  --popup-bg: #c2c7cf;
+  --popup-edge: #71767f;
+  --ink: #2c4537;
+  --ink-soft: #4a6353;
+  --ink-faint: #7d978a;
+  --surface: #d4ecd9;
+  --surface-2: #c7e2cd;
+  --surface-edge: #9fbcab;
+  --screen: #cfe8d5;
+  --primary: #4a9e6b;
+  --primary-d: #36784f;
+  --on-primary: #ffffff;
+  --accent: #e8746a;
+  --accent-d: #c4564d;
+  --accent2: #5c8fd6;
+  --joy: #4a9e6b;
+  --sad: #5c8fd6;
+  --angry: #e8746a;
+  --fire: #e8746a;
+  --gold: #cf9a3a;
+  --track: #b6cdbd;
+  --shadow-hard: rgba(60, 70, 75, .28);
+  --glow: none;
+  --r: 7px;
+}
+
+/* === THEME C · cli — 블랙 + 네온 (git 터미널) === */
+[data-theme='cli'] {
+  --bg-page: #0a0c10;
+  --popup-bg: #0e1217;
+  --popup-edge: #26303d;
+  --ink: #d6e6da;
+  --ink-soft: #7c8a93;
+  --ink-faint: #55636b;
+  --surface: #141a21;
+  --surface-2: #1a222b;
+  --surface-edge: #26303d;
+  --screen: #0c1015;
+  --primary: #3ddc84;
+  --primary-d: #2aa863;
+  --on-primary: #06120b;
+  --accent: #37e1c4;
+  --accent-d: #25b39a;
+  --accent2: #c9a8ff;
+  --joy: #3ddc84;
+  --sad: #5fb0ff;
+  --angry: #ff6b6b;
+  --fire: #ffd24a;
+  --gold: #ffd24a;
+  --track: #1a222b;
+  --shadow-hard: rgba(0, 0, 0, .5);
+  --glow: 0 0 28px rgba(61, 220, 132, .06);
+  --r: 5px;
+  --font-head: 'GalmuriMono11', 'Galmuri11', 'Gothic A1', monospace;
+  --font-body: 'GalmuriMono11', 'Galmuri11', 'Gothic A1', monospace;
+}

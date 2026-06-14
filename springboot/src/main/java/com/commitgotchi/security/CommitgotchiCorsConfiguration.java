@@ -19,6 +19,8 @@ import java.util.List;
 public class CommitgotchiCorsConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(CommitgotchiCorsConfiguration.class);
+    private static final String TRUSTED_CHROME_EXTENSION_ORIGIN =
+            "chrome-extension://llnclajenonklpnohgleabfmpaijbgie";
 
     private final List<String> allowedOrigins;
 
@@ -27,10 +29,11 @@ public class CommitgotchiCorsConfiguration {
             Environment environment
     ) {
         boolean production = Arrays.asList(environment.getActiveProfiles()).contains("prod");
-        this.allowedOrigins = parseAllowedOrigins(allowedOrigins, production);
-        if (!production && this.allowedOrigins.isEmpty()) {
+        this.allowedOrigins = parseAllowedOrigins(allowedOrigins + "," + TRUSTED_CHROME_EXTENSION_ORIGIN, production);
+        if (!production && allowedOrigins.isBlank()) {
             log.warn("CORS allowlist is empty (CORS_ALLOWED_ORIGINS unset); "
-                    + "all cross-origin browser requests to /api/** will be rejected without CORS headers. "
+                    + "all browser requests to /api/** except the trusted Chrome extension will be rejected "
+                    + "without CORS headers. "
                     + "Set CORS_ALLOWED_ORIGINS to an explicit origin (e.g. http://localhost:5173) for browser clients.");
         }
     }
@@ -41,7 +44,7 @@ public class CommitgotchiCorsConfiguration {
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        configuration.setAllowCredentials(false);
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", configuration);
@@ -55,11 +58,19 @@ public class CommitgotchiCorsConfiguration {
                 .distinct()
                 .toList();
 
-        if (production && origins.isEmpty()) {
+        if (production && origins.stream().noneMatch(CommitgotchiCorsConfiguration::isHttpsOrigin)) {
             throw new IllegalArgumentException("Production CORS allowlist must contain an HTTPS origin");
         }
         origins.forEach(origin -> validateOrigin(origin, production));
         return origins;
+    }
+
+    private static boolean isHttpsOrigin(String origin) {
+        try {
+            return "https".equalsIgnoreCase(new URI(origin).getScheme());
+        } catch (URISyntaxException exception) {
+            return false;
+        }
     }
 
     private static void validateOrigin(String origin, boolean production) {
@@ -71,6 +82,16 @@ public class CommitgotchiCorsConfiguration {
         }
 
         String scheme = uri.getScheme();
+
+        // Chrome extensions present an opaque origin of the form
+        // chrome-extension://<extension-id> (no port, path, query or fragment).
+        // The origin is not network-addressable and is treated as a secure context
+        // by the browser, so it is permitted in every profile (including prod).
+        if ("chrome-extension".equalsIgnoreCase(scheme)) {
+            validateExtensionOrigin(origin, uri);
+            return;
+        }
+
         boolean webScheme = "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
         boolean exactOrigin = webScheme
                 && uri.getHost() != null
@@ -85,6 +106,22 @@ public class CommitgotchiCorsConfiguration {
                 || "localhost".equalsIgnoreCase(uri.getHost())
                 || "127.0.0.1".equals(uri.getHost());
         if (!exactOrigin || !safeHttp || (production && !"https".equalsIgnoreCase(scheme))) {
+            throw new IllegalArgumentException("CORS allowlist must contain exact permitted origins");
+        }
+    }
+
+    private static void validateExtensionOrigin(String origin, URI uri) {
+        String host = uri.getHost();
+        boolean exactOrigin = host != null
+                && host.matches("[a-p]{32}")
+                && uri.getPort() == -1
+                && uri.getUserInfo() == null
+                && (uri.getPath() == null || uri.getPath().isEmpty())
+                && uri.getQuery() == null
+                && uri.getFragment() == null
+                && !origin.endsWith(":")
+                && !origin.contains("*");
+        if (!exactOrigin) {
             throw new IllegalArgumentException("CORS allowlist must contain exact permitted origins");
         }
     }

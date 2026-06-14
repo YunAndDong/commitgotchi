@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Commit-Gotchi",
+  "version": "0.1.0",
+  "description": "혼자 하는 CS 공부를 픽셀 분신의 성장으로. 아이콘을 누르면 팝업 창으로 열립니다.",
+  "action": {
+    "default_title": "Commit-Gotchi 열기",
+    "default_popup": "index.html"
+  },
+  "host_permissions": [
+    "http://localhost:8080/*"
+  ]
+}

@@ -37,12 +37,23 @@ management:
         include: health,info
 
 commitgotchi:
+  auth:
+    refresh-cookie-secure: ${REFRESH_COOKIE_SECURE:false}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   jwt:
     secret-base64: ${JWT_SECRET_BASE64}
     issuer: ${JWT_ISSUER:commitgotchi-springboot}
     access-token-ttl: PT15M
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "prod"
+commitgotchi:
+  auth:
+    refresh-cookie-secure: true
 
 ---
 spring:
