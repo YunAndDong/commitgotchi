@@ -2,6 +2,10 @@
 
 작성일: 2026-06-12
 
+> 2026-06-14 메모: 신뢰 확장 ID는 `llnclajenonklpnohgleabfmpaijbgie`이며, 이는 개발자 기기에서
+> `vue/dist`를 압축해제 로드했을 때 생성되는 ID다. 로그인 시 "네트워크 오류"가 보일 때의 진단
+> 절차는 [`troubleshooting-login-network-error.md`](./troubleshooting-login-network-error.md) 참고.
+
 ## 배경
 
 기존 백엔드 CORS 정책은 `commitgotchi.cors.allowed-origins`(환경변수 `CORS_ALLOWED_ORIGINS`)에 등록된 origin만
