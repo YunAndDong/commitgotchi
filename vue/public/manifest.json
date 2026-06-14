@@ -7,7 +7,22 @@
     "default_title": "Commit-Gotchi 열기",
     "default_popup": "index.html"
   },
+  "permissions": [
+    "storage"
+  ],
   "host_permissions": [
     "http://localhost:8080/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content-script.js"
+      ],
+      "run_at": "document_idle"
+    }
   ]
 }

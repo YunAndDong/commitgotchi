@@ -5,7 +5,12 @@
  */
 import { reactive, readonly } from 'vue'
 import { auth, users, loadTokens, saveTokens, clearAuthSession, onTokensChanged, ApiError } from '../api/client.js'
-import { resetGameState } from './game.js'
+import { activeCharacter, resetGameState } from './game.js'
+import {
+  clearActiveGotchi,
+  publishActiveGotchi,
+  setActiveGotchiPublishingEnabled,
+} from '../extension/activeGotchi.js'
 
 const state = reactive({
   user: null,          // { id, email, role }
@@ -19,11 +24,23 @@ const DEMO_USER = { id: 0, email: 'demo@commitgotchi.local', role: 'USER' }
 const isDemo = () => { try { return localStorage.getItem(DEMO_KEY) === '1' } catch { return false } }
 
 export const isAuthenticated = () => !!state.tokens
-onTokensChanged(tokens => { state.tokens = tokens })
+onTokensChanged(tokens => {
+  state.tokens = tokens
+  if (!tokens) {
+    setActiveGotchiPublishingEnabled(false)
+    void clearActiveGotchi()
+  }
+})
 
 async function fetchMe() {
   state.user = await users.me()
   return state.user
+}
+
+function publishAuthenticatedGotchi() {
+  setActiveGotchiPublishingEnabled(true)
+  if (activeCharacter.value) void publishActiveGotchi(activeCharacter.value)
+  else void clearActiveGotchi()
 }
 
 export async function bootstrap() {
@@ -31,17 +48,26 @@ export async function bootstrap() {
     state.user = DEMO_USER
     if (!state.tokens) state.tokens = { tokenType: 'Bearer', accessToken: 'demo', refreshToken: 'demo' }
     state.status = 'ready'
+    publishAuthenticatedGotchi()
     return
   }
-  if (!state.tokens) { state.status = 'ready'; return }
+  if (!state.tokens) {
+    state.status = 'ready'
+    setActiveGotchiPublishingEnabled(false)
+    void clearActiveGotchi()
+    return
+  }
   state.status = 'loading'
   try {
     await fetchMe()
+    publishAuthenticatedGotchi()
   } catch (e) {
     // refresh already attempted inside client; treat as logged out
     clearAuthSession()
     state.user = null
     resetGameState()
+    setActiveGotchiPublishingEnabled(false)
+    void clearActiveGotchi()
   } finally {
     state.status = 'ready'
   }
@@ -53,9 +79,12 @@ export async function login(email, password) {
   saveTokens(tokens)
   try {
     await fetchMe()
+    publishAuthenticatedGotchi()
   } catch (e) {
     clearAuthSession()
     state.user = null
+    setActiveGotchiPublishingEnabled(false)
+    void clearActiveGotchi()
     throw e
   }
   return state.user
@@ -81,10 +110,13 @@ export function demoLogin() {
   state.tokens = fake
   state.user = DEMO_USER
   state.status = 'ready'
+  publishAuthenticatedGotchi()
   return state.user
 }
 
 export async function logout() {
+  setActiveGotchiPublishingEnabled(false)
+  void clearActiveGotchi()
   if (!isDemo()) {
     try { await auth.logout() } catch { /* idempotent 204 anyway */ }
   }

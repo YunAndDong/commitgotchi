@@ -1,7 +1,7 @@
 <script setup>
 /*
  * Screen #3 — 도감 / 보관함 (Codex).
- * 커버플로우. 컬러=수집 / 회색=미획득. 하단 새싹이 배회(App Mascot).
+ * 커버플로우. 컬러=수집 / 회색=미획득.
  */
 import { ref, computed } from 'vue'
 import { codex } from '../stores/game.js'

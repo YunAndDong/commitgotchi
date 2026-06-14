@@ -7,7 +7,7 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
-    "test": "node _tests/fe1-5-stores.mjs && node _tests/fe6-9-stores.mjs && node _tests/auth-client.mjs && node _tests/fe10-states.mjs"
+    "test": "node _tests/fe1-5-stores.mjs && node _tests/fe6-9-stores.mjs && node _tests/auth-client.mjs && node _tests/fe10-states.mjs && node _tests/extension-storage.mjs"
   },
   "dependencies": {
     "vue": "^3.4.0",

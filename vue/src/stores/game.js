@@ -13,6 +13,7 @@
  *   감정(emotion): joy | sad | angry
  */
 import { reactive, computed } from 'vue'
+import { clearActiveGotchi, publishActiveGotchi } from '../extension/activeGotchi.js'
 
 export const STAT_KEYS = ['algo', 'cs', 'db', 'net', 'fw']
 export const STAT_LABELS = { algo: '알고리즘', cs: 'CS', db: 'DB', net: '네트워크', fw: '프레임워크' }
@@ -117,6 +118,12 @@ export const activeQuizzes = computed(() => state.quizzes.filter(
 export const pendingReport = computed(() => state.reports
   .filter(r => r.status === 'analyzing')
   .sort((a, b) => a.date.localeCompare(b.date))[0] || null)
+
+function syncActiveGotchi() {
+  const character = activeCharacter.value
+  if (character) void publishActiveGotchi(character)
+  else void clearActiveGotchi()
+}
 
 /* ---- ranking (mock leaderboard, 육아점수 desc) ---- */
 export function ranking() {
@@ -244,6 +251,7 @@ export function createCharacter({ name, keyword, personality }, { failImage = fa
   state.characters.forEach(o => (o.active = false))
   c.active = true
   state.characters.push(c)
+  syncActiveGotchi()
   // mock async image generation (Flow C): PENDING → READY, 또는 실패 시 FAILED.
   // FE-10 AC4: 실패해도 캐릭터(생성/상세/대시보드)는 정상 동작 — 상태값만 FAILED 로 둔다.
   setTimeout(() => { c.imageStatus = failImage ? 'FAILED' : 'READY' }, 2200)
@@ -262,6 +270,7 @@ export function setActive(id) {
   const target = state.characters.find(c => String(c.id) === String(id))
   if (!target) return false
   state.characters.forEach(c => (c.active = c === target))
+  syncActiveGotchi()
   return true
 }
 
@@ -271,6 +280,7 @@ export function deleteCharacter(id) {
   const wasActive = state.characters[idx].active
   state.characters.splice(idx, 1)
   if (wasActive && state.characters.length) state.characters[0].active = true
+  if (wasActive) syncActiveGotchi()
 }
 
 export function updateCharacter(id, changes) {
@@ -283,6 +293,7 @@ export function updateCharacter(id, changes) {
     keyword: changes.keyword?.trim() || '',
     personality: changes.personality?.trim() || '',
   })
+  if (c.active) syncActiveGotchi()
   return true
 }
 
@@ -304,6 +315,7 @@ export function saveReport({ mood, title, content, tags }) {
   }
   c.emotion = mood
   c.message = reactionFor(mood)
+  syncActiveGotchi()
   state.notice = '리포트 저장됨 — 자정에 분석돼요. 내일 오전 9시 도착.'
   return todayReport.value
 }
@@ -354,6 +366,7 @@ export function submitQuiz(quizId, selected, { fail = false } = {}) {
         c.emotion = correct ? 'joy' : 'sad'
         c.message = correct ? '오 정답! 똑똑한데?' : '괜찮아, 틀리면서 크는 거지.'
         q._evolvedNow = !prev && c.isEvolved
+        if (c.active) syncActiveGotchi()
       }
       resolve(q)
     }, 1100)
@@ -412,6 +425,7 @@ export function deliverDailyReport({ fail = false } = {}) {
     evolvedNow = !wasEvolved && c.isEvolved
     c.emotion = 'joy'
     c.message = '어제 공부가 몸에 스며들었어! 레이더가 차오르는 게 느껴져.'
+    if (c.active) syncActiveGotchi()
   }
   report.status = 'reflected'
   report.scoreApplied = true

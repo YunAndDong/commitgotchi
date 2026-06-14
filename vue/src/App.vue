@@ -3,7 +3,6 @@ import { useRoute } from 'vue-router'
 import { authState } from './stores/auth.js'
 import { gameState, clearNotice } from './stores/game.js'
 import AppNav from './components/AppNav.vue'
-import Mascot from './components/Mascot.vue'
 
 const route = useRoute()
 </script>
@@ -19,8 +18,6 @@ const route = useRoute()
         </Transition>
       </RouterView>
     </main>
-
-    <Mascot v-if="!route.meta.public && authState.user" />
 
     <Transition name="fade">
       <div v-if="gameState.notice" class="toast cg-card row between" @click="clearNotice">
