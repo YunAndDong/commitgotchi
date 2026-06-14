@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Commit-Gotchi",
   "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyZlyoEL69utcXQSbPftdnj9E9n275XXafdt70DaUmYw0ypLDT38vHKwcjwrgCKq0UbcLNsXF5bzFKCBNx2eC6cbwAdWNLRO628pDc7K71nBhynsTEO/E/85RbH2NmXQMmVtVlGSIPH9U10b7GcsHKdXS3xPc6mWZn0n5woOU0mEf1SPGc0tTsZEbhnHS8UgE35pbFi0VwUZZi+6qQN9LbOQczEg2XsANt4oW4frwLEsqPKgqHJu4G3rubGua3wA5ylUwQAsnl6RISTNOM8uAh/OlSXgB+NC3dGtoD3D4MLHSyhC9Lq+Ky+VbO+qzbt4eZKhUwnd/0jroaWX+3n1wqwIDAQAB",
   "description": "혼자 하는 CS 공부를 픽셀 분신의 성장으로. 아이콘을 누르면 팝업 창으로 열립니다.",
   "action": {
     "default_title": "Commit-Gotchi 열기",

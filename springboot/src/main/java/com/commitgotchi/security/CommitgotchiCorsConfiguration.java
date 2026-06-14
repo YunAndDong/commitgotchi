@@ -20,7 +20,7 @@ public class CommitgotchiCorsConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(CommitgotchiCorsConfiguration.class);
     private static final String TRUSTED_CHROME_EXTENSION_ORIGIN =
-            "chrome-extension://llnclajenonklpnohgleabfmpaijbgie";
+            "chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn";
 
     private final List<String> allowedOrigins;
 

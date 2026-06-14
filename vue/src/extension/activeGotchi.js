@@ -1,4 +1,5 @@
 export const ACTIVE_GOTCHI_STORAGE_KEY = 'commitgotchi.activeGotchi'
+export const GOTCHI_VISIBILITY_STORAGE_KEY = 'commitgotchi.gotchiVisible'
 
 let publishingEnabled = false
 let storageQueue = Promise.resolve()
@@ -37,4 +38,21 @@ export function publishActiveGotchi(character) {
 
 export function clearActiveGotchi() {
   return enqueueStorage(storage => storage.remove(ACTIVE_GOTCHI_STORAGE_KEY))
+}
+
+export async function readGotchiVisibility() {
+  const storage = extensionStorage()
+  if (!storage) return true
+  try {
+    const result = await storage.get(GOTCHI_VISIBILITY_STORAGE_KEY)
+    return result[GOTCHI_VISIBILITY_STORAGE_KEY] !== false
+  } catch {
+    return true
+  }
+}
+
+export function setGotchiVisibility(visible) {
+  return enqueueStorage(storage => storage.set({
+    [GOTCHI_VISIBILITY_STORAGE_KEY]: !!visible,
+  }))
 }

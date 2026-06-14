@@ -4,11 +4,18 @@
  */
 (() => {
   const STORAGE_KEY = 'commitgotchi.activeGotchi'
+  const VISIBILITY_STORAGE_KEY = 'commitgotchi.gotchiVisible'
+  const WALK_CYCLE_MS = 24_000
   let host = null
   let shadow = null
   let hostObserver = null
   let currentGotchi = null
-  let changeRevision = 0
+  let walker = null
+  let sprite = null
+  let positionFrame = null
+  let gotchiVisible = true
+  let activeRevision = 0
+  let visibilityRevision = 0
 
   function validGotchi(value) {
     return value && (typeof value.id === 'string' || typeof value.id === 'number')
@@ -17,13 +24,21 @@
       && typeof value.isEvolved === 'boolean'
   }
 
-  function removeGotchi() {
-    currentGotchi = null
+  function removeHost() {
+    if (positionFrame !== null) globalThis.cancelAnimationFrame?.(positionFrame)
     hostObserver?.disconnect()
     host?.remove()
     host = null
     shadow = null
     hostObserver = null
+    walker = null
+    sprite = null
+    positionFrame = null
+  }
+
+  function removeGotchi() {
+    currentGotchi = null
+    removeHost()
   }
 
   function ensureHost() {
@@ -98,6 +113,38 @@
     `
   }
 
+  function sharedMotion(now) {
+    const phase = (now % WALK_CYCLE_MS) / WALK_CYCLE_MS
+    if (phase < 0.49) return { progress: phase / 0.49, direction: 1 }
+    if (phase < 0.5) return { progress: 1, direction: 1 }
+    if (phase < 0.99) return { progress: 1 - ((phase - 0.5) / 0.49), direction: -1 }
+    return { progress: 0, direction: -1 }
+  }
+
+  function syncSharedPosition() {
+    if (!currentGotchi || !walker || !sprite) {
+      positionFrame = null
+      return
+    }
+
+    if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      walker.style.transform = 'translateX(0px)'
+      sprite.style.transform = 'scaleX(1)'
+    } else {
+      const { progress, direction } = sharedMotion(Date.now())
+      const travelDistance = Math.max(0, globalThis.innerWidth - 24)
+      walker.style.transform = `translateX(${-88 + (travelDistance * progress)}px)`
+      sprite.style.transform = `scaleX(${direction})`
+    }
+
+    positionFrame = globalThis.requestAnimationFrame?.(syncSharedPosition) ?? null
+  }
+
+  function startPositionSync() {
+    if (positionFrame !== null) globalThis.cancelAnimationFrame?.(positionFrame)
+    syncSharedPosition()
+  }
+
   function renderGotchi(gotchi) {
     if (!validGotchi(gotchi)) {
       removeGotchi()
@@ -105,6 +152,11 @@
     }
 
     currentGotchi = gotchi
+    if (!gotchiVisible) {
+      removeHost()
+      return
+    }
+
     ensureHost()
     shadow.replaceChildren()
 
@@ -129,14 +181,13 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        animation: commitgotchi-stroll 24s linear infinite;
         will-change: transform;
       }
       .sprite {
         width: 72px;
         height: 72px;
         transform-origin: center bottom;
-        animation: commitgotchi-face 24s steps(1, end) infinite;
+        will-change: transform;
       }
       svg { display: block; width: 72px; height: 72px; filter: drop-shadow(0 2px 1px rgba(24, 32, 24, .25)); }
       .ground { width: 48px; height: 7px; margin-top: -4px; border-radius: 50%; background: rgba(24, 32, 24, .35); filter: blur(1px); }
@@ -154,27 +205,11 @@
         white-space: nowrap;
         box-shadow: 0 1px 3px rgba(24, 32, 24, .15);
       }
-      @keyframes commitgotchi-stroll {
-        0% { transform: translateX(-88px); }
-        49% { transform: translateX(calc(100vw - 112px)); }
-        50% { transform: translateX(calc(100vw - 112px)); }
-        99% { transform: translateX(-88px); }
-        100% { transform: translateX(-88px); }
-      }
-      @keyframes commitgotchi-face {
-        0%, 49% { transform: scaleX(1); }
-        50%, 99% { transform: scaleX(-1); }
-        100% { transform: scaleX(1); }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .walker { animation: none; transform: none; }
-        .sprite { animation: none; transform: none; }
-      }
     `
 
-    const walker = document.createElement('div')
+    walker = document.createElement('div')
     walker.className = 'walker'
-    const sprite = document.createElement('div')
+    sprite = document.createElement('div')
     sprite.className = 'sprite'
     sprite.innerHTML = spriteMarkup(gotchi)
     const ground = document.createElement('div')
@@ -184,21 +219,34 @@
     name.textContent = gotchi.name
     walker.append(sprite, ground, name)
     shadow.append(style, walker)
+    startPositionSync()
   }
 
-  const initialRevision = changeRevision
-  chrome.storage.local.get(STORAGE_KEY)
+  const initialActiveRevision = activeRevision
+  const initialVisibilityRevision = visibilityRevision
+  chrome.storage.local.get([STORAGE_KEY, VISIBILITY_STORAGE_KEY])
     .then(result => {
-      if (changeRevision === initialRevision) renderGotchi(result[STORAGE_KEY])
+      if (visibilityRevision === initialVisibilityRevision) {
+        gotchiVisible = result[VISIBILITY_STORAGE_KEY] !== false
+      }
+      if (activeRevision === initialActiveRevision) {
+        renderGotchi(result[STORAGE_KEY])
+      }
     })
     .catch(() => {
-      if (changeRevision === initialRevision) removeGotchi()
+      if (activeRevision === initialActiveRevision) removeGotchi()
     })
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && Object.prototype.hasOwnProperty.call(changes, STORAGE_KEY)) {
-      changeRevision++
+      activeRevision++
       renderGotchi(changes[STORAGE_KEY].newValue)
+    }
+    if (areaName === 'local' && Object.prototype.hasOwnProperty.call(changes, VISIBILITY_STORAGE_KEY)) {
+      visibilityRevision++
+      gotchiVisible = changes[VISIBILITY_STORAGE_KEY].newValue !== false
+      if (gotchiVisible) renderGotchi(currentGotchi)
+      else removeHost()
     }
   })
 })()

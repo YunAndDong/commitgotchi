@@ -2,8 +2,8 @@
 
 작성일: 2026-06-12
 
-> 2026-06-14 메모: 신뢰 확장 ID는 `llnclajenonklpnohgleabfmpaijbgie`이며, 이는 개발자 기기에서
-> `vue/dist`를 압축해제 로드했을 때 생성되는 ID다. 로그인 시 "네트워크 오류"가 보일 때의 진단
+> 2026-06-14 메모: `vue/public/manifest.json`의 공개키가 신뢰 확장 ID를
+> `daijhhcaecladkkpcjdlfgcokohehhmn`으로 고정한다. 로그인 시 "네트워크 오류"가 보일 때의 진단
 > 절차는 [`troubleshooting-login-network-error.md`](./troubleshooting-login-network-error.md) 참고.
 
 ## 배경
@@ -11,13 +11,13 @@
 기존 백엔드 CORS 정책은 `commitgotchi.cors.allowed-origins`(환경변수 `CORS_ALLOWED_ORIGINS`)에 등록된 origin만
 `/api/**` 경로에 대해 허용했고, 운영상 `http://localhost:5173`(Vite dev 서버)만 사용 중이었다.
 
-요구사항: Chrome 확장 프로그램(ID `llnclajenonklpnohgleabfmpaijbgie`)이 백엔드 API에 접근할 수 있도록 허용한다.
+요구사항: Chrome 확장 프로그램(ID `daijhhcaecladkkpcjdlfgcokohehhmn`)이 백엔드 API에 접근할 수 있도록 허용한다.
 
 Chrome 확장 프로그램은 브라우저 요청 시 `Origin: chrome-extension://<extension-id>` 헤더를 보낸다.
 즉 허용해야 할 origin은 다음과 같다.
 
 ```
-chrome-extension://llnclajenonklpnohgleabfmpaijbgie
+chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn
 ```
 
 ## 문제점
@@ -34,7 +34,7 @@ IllegalArgumentException: CORS allowlist must contain exact permitted origins
 
 ## 수정 내용
 
-수정 가능 범위(`/springboot`)에 한해 아래 3개 코드/테스트 파일과 이 문서만 변경했다.
+백엔드 CORS 설정과 테스트를 아래와 같이 변경했다.
 
 ### 1. `src/main/java/com/commitgotchi/security/CommitgotchiCorsConfiguration.java`
 
@@ -92,7 +92,7 @@ origin을 추가로 허용한다. prod에서는 기존 정책대로 `CORS_ALLOWE
 
 ## 동작 확인 포인트
 
-- 허용된 CORS 응답: `Access-Control-Allow-Origin: chrome-extension://llnclajenonklpnohgleabfmpaijbgie`
+- 허용된 CORS 응답: `Access-Control-Allow-Origin: chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn`
 - 허용 메서드: `GET, POST, OPTIONS` / 허용 헤더: `Authorization, Content-Type`
 - `Access-Control-Allow-Credentials: true`를 반환해 HttpOnly refresh cookie 흐름을 허용한다.
 - 운영(`prod`) refresh cookie는 `Secure; SameSite=None`으로 발급되어 확장 프로그램의 cross-site fetch에

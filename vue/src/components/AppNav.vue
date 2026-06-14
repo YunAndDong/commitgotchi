@@ -3,9 +3,10 @@
 import { RouterLink, useRouter } from 'vue-router'
 import { authState, logout } from '../stores/auth.js'
 import { activeCharacter } from '../stores/game.js'
-import ThemeSwitcher from './ThemeSwitcher.vue'
+import GotchiVisibilityToggle from './GotchiVisibilityToggle.vue'
 
 const router = useRouter()
+const isExtensionPopup = document.documentElement.classList.contains('is-ext-popup')
 const links = [
   { to: '/', label: '홈', icon: '🏠' },
   { to: '/quiz', label: '퀴즈', icon: '🧩' },
@@ -35,7 +36,7 @@ async function onLogout() {
       </nav>
 
       <div class="row" style="gap: var(--sp-3)">
-        <ThemeSwitcher />
+        <GotchiVisibilityToggle v-if="isExtensionPopup" />
         <div class="acct row" v-if="authState.user">
           <span class="tiny muted">{{ activeCharacter?.name || '캐릭터 없음' }} · {{ authState.user.email }}</span>
           <button class="cg-btn cg-btn--sm cg-btn--ghost" @click="onLogout">로그아웃</button>

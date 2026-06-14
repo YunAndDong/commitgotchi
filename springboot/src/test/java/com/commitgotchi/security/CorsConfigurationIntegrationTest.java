@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CorsConfigurationIntegrationTest extends PostgresIntegrationTest {
 
     private static final String CHROME_EXTENSION_ORIGIN =
-            "chrome-extension://llnclajenonklpnohgleabfmpaijbgie";
+            "chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn";
 
     @Autowired
     private MockMvc mockMvc;
