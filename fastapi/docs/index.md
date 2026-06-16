@@ -7,9 +7,20 @@ owner: FastAPI AI 서버
 
 # FastAPI AI 서버 문서 인덱스
 
-이 폴더는 FastAPI AI 서버의 문제 은행, 퀴즈 추천, 퀴즈 채점, RAG 관련 문서를 관리한다.
+이 폴더는 FastAPI AI 서버의 문제 은행, 퀴즈 추천, 퀴즈 채점, 리포트/SQS 통합, RAG 관련 문서를 관리한다.
 
 ## 1. 현재 구현 기준 문서
+
+### 1.0 FastAPI 통합 구현 README
+
+- 문서: `fastapi/docs/README.md`
+- 상태: active
+- 내용:
+  - Spring Boot callback config/client
+  - `POST /api/internal/quizzes/grade`
+  - report SQS consumer
+  - FastAPI-only preview script 기반 계약 테스트 방법
+- PR 설명이나 FastAPI 안에서 통합 흐름을 확인할 때 가장 먼저 읽는다.
 
 ### 1.1 문제 은행 구현 현황
 
@@ -100,13 +111,14 @@ owner: FastAPI AI 서버
 - 문제 은행 런타임 로드/search
 - 일일 리포트 기반 추천 퀴즈 내부 함수
 - 추천 결과 스냅샷 생성
+- FastAPI quiz grading 수락 endpoint
+- Spring Boot callback client/config
+- report SQS consumer
+- FastAPI-only 통합 preview script
 
 미완료:
 
-- 퀴즈 답안 채점 함수
-- FastAPI API 엔드포인트
-- Spring Boot 콜백/SQS 연결
-- LLM 기반 리포트 분석
 - RAG embedding
 - pgvector 저장
 - 벡터 검색
+- 캐릭터 이미지 생성 HTTP endpoint
