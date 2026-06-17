@@ -22,7 +22,7 @@ status_definitions:
 
 development_status:
   rag-enhancement-epic: backlog
-  rag-enhancement-1-diversity-eval-baseline: backlog
+  rag-enhancement-1-diversity-eval-baseline: ready-for-dev
   rag-enhancement-2-concept-search-mmr-source-cap: backlog
   rag-enhancement-3-source-neighborhood-rebalance: backlog
   rag-enhancement-4-field-multiquery-quota-merge: backlog

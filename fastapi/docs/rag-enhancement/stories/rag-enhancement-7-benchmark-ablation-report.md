@@ -61,6 +61,14 @@ backlog
 - fake embedder로 지표/게이트/통계 단위 테스트가 실제 API 호출 없이 통과한다.
 - 검색·추천·카탈로그 로직을 수정하지 않는다(측정만).
 
+## Tasks/Subtasks
+
+- [ ] `eval_metrics.py`에 관련성/다양성/통계/게이트 순수 함수를 구현한다.
+- [ ] Story 1 하니스를 재사용해 B0, +S2, +S3, +S4, +S5/6 ablation runner를 구현한다.
+- [ ] baseline vs final, ablation, case study, 메타데이터를 포함한 `.md`/`.json` 리포트를 생성한다.
+- [ ] 합격 게이트와 악화 질의 요약을 자동 판정해 리포트에 남긴다.
+- [ ] 손계산 fixture 기반 metric/stat/gate/report 테스트를 추가한다.
+
 ## 테스트 기준
 
 - 손계산 가능한 소형 fixture에서 nDCG@k, Recall@k, MRR, Precision@k가 기대값과 일치하는지 검증한다.
@@ -83,3 +91,27 @@ backlog
 - case study가 포트폴리오에서 가장 강력하다. "html-css 한 파일 4/5 도배 → 4개 파일·3개 필드로 분산, 핵심은 여전히 1위"처럼 **구체 문서명과 함께** 보여준다.
 - ablation 토글이 깔끔하지 않으면 Story 2~6 구현 시 옵션 인자(기본 on, 테스트에서 off)로 설계하도록 역으로 요구한다. 평가 가능성을 구현 단계에서 확보하는 게 핵심.
 - `eval_metrics.py`를 순수 함수로 분리하면 단위 테스트가 쉽고, 리포트 스크립트는 얇게 유지된다.
+
+## Dev Notes
+
+- Story 2~6 구현이 완료되고 토글 가능한 옵션이 있어야 제대로 실행된다.
+- 이 story는 측정/리포트만 담당하며 검색·추천 로직을 변경하지 않는다.
+- case study는 포트폴리오 증거로 읽히도록 실제 source/heading을 나란히 보여준다.
+
+## Dev Agent Record
+
+### Debug Log
+
+- TBD
+
+### Completion Notes
+
+- TBD
+
+## File List
+
+- TBD
+
+## Change Log
+
+- 2026-06-18: Added lightweight BMAD dev-story sections.

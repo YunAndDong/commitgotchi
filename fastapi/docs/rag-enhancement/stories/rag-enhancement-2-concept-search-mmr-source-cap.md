@@ -63,6 +63,14 @@ MMR은 "쿼리 관련성"과 "이미 선택된 결과와의 비유사성(novelty
 - `ConceptSearchHit` shape와 `to_dict()` key는 변경하지 않는다.
 - §4 계약, `daily_report_recommender`·문제 뱅크 검색 contract 불변.
 
+## Tasks/Subtasks
+
+- [ ] `search_concept_chunks()`와 `ConceptCatalogSearcher.search()`에 다양성 옵션 인자를 추가한다.
+- [ ] embedding 검색 경로에 candidate pool, MMR 재정렬, per-source 상한을 적용한다.
+- [ ] keyword fallback 경로에도 per-source 상한과 deterministic tie-break를 적용한다.
+- [ ] `build_report_evidence_bundle()` 호출부에 새 옵션을 연결하되 출력 shape는 유지한다.
+- [ ] source 분산, fallback, 결정성, 회귀 테스트를 추가/갱신한다.
+
 ## 테스트 기준
 
 - fixture catalog에서 같은 source에 강한 청크가 몰려 있어도 결과 source가 2개 이상으로 분산되는지 검증한다.
@@ -84,3 +92,27 @@ MMR은 "쿼리 관련성"과 "이미 선택된 결과와의 비유사성(novelty
 
 - MMR penalty 계산을 위해 후보 청크 임베딩을 candidate_pool 범위에서만 들고 와 O(pool²) 비용으로 제한한다(pool이 작아 충분).
 - 기본값은 "다양성 켜짐"으로 두되, 회귀 테스트가 깨지면 테스트에서 명시 인자로 기존 동작을 재현할 수 있게 인자를 노출한다.
+
+## Dev Notes
+
+- Story 1 baseline을 먼저 실행한 뒤 before/after 수치를 비교한다.
+- 기존 `ConceptSearchHit`와 evidence bundle 직렬화 contract는 변경하지 않는다.
+- MMR/cap은 관련성 회귀가 보이면 인자 조정이 가능하도록 구현한다.
+
+## Dev Agent Record
+
+### Debug Log
+
+- TBD
+
+### Completion Notes
+
+- TBD
+
+## File List
+
+- TBD
+
+## Change Log
+
+- 2026-06-18: Added lightweight BMAD dev-story sections.

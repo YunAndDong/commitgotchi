@@ -64,6 +64,14 @@ backlog
 - `problems.jsonl` 생성 흐름과 `search_problem_bank()`/`recommend_quizzes()` contract를 변경하지 않는다.
 - §4 계약 불변.
 
+## Tasks/Subtasks
+
+- [ ] 문제 임베딩 입력 텍스트 구성 helper와 content hash 기준을 정의한다.
+- [ ] `problem-embeddings.jsonl` 생성 CLI와 manifest/summary 리포트를 추가한다.
+- [ ] 문제 뱅크와 sidecar를 join하는 in-memory embedding store를 구현한다.
+- [ ] missing/stale/model/dimension mismatch issue 수집과 재사용 경로를 구현한다.
+- [ ] fake embedder 기반 생성, stale 판정, 빈/누락 파일 테스트를 추가한다.
+
 ## 테스트 기준
 
 - fake embedder로 problem-embeddings.jsonl을 생성하고 record 필드를 검증한다.
@@ -85,3 +93,27 @@ backlog
 - 실제 빌드는 798문제 전수 임베딩이라 API 호출이 발생한다. rate limit 대비 chunk 단위 실패 기록·재개 가능하게 둔다(개념 빌드와 동일).
 - `problemId`가 정수라 stale/누락 판정 키로 충분하지만, source_key도 함께 기록해 디버깅을 돕는다.
 - 임베딩 입력에 rubric을 넣으면 "무엇을 묻는 문제인지"가 강화돼 의미 검색 품질이 오른다. 다만 `must_not_confuse`처럼 혼동 방지용 텍스트는 신호를 흐릴 수 있어 포함 여부를 실험으로 결정한다.
+
+## Dev Notes
+
+- 이 story는 임베딩 빌드/저장/로드만 담당하고 검색 ranking은 Story 6에서 변경한다.
+- 개념 임베딩의 model/dimension/env 패턴을 재사용한다.
+- 단위 테스트는 fake embedder로 API 호출 없이 통과해야 한다.
+
+## Dev Agent Record
+
+### Debug Log
+
+- TBD
+
+### Completion Notes
+
+- TBD
+
+## File List
+
+- TBD
+
+## Change Log
+
+- 2026-06-18: Added lightweight BMAD dev-story sections.

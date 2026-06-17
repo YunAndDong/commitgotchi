@@ -58,6 +58,14 @@ previous_chunk, next_chunk, parent_heading, sibling_heading, same_source_nearby,
 - 관련성 grounding이 무너지지 않는다(약한 신호의 타 문서를 억지로 넣지 않는다).
 - §4 계약, `NeighborhoodEvidence`/evidence bundle shape 불변.
 
+## Tasks/Subtasks
+
+- [ ] `build_source_neighborhood()`에 same-source cap과 cross-source quota 옵션을 추가한다.
+- [ ] 같은-source 후보와 cross-source 후보를 분리해 cap/쿼터 기준으로 병합한다.
+- [ ] 관련 신호가 약한 cross-source 후보를 제외하는 임계 로직을 유지/보강한다.
+- [ ] 중복 제거, matches 제외, char cap, reason/to_dict shape를 보존한다.
+- [ ] same-source 비율 감소, 후보 부족 fallback, 결정성 테스트를 추가/갱신한다.
+
 ## 테스트 기준
 
 - 같은-source 후보가 많아도 cap에서 잘리고 타 문서가 들어오는지 검증한다.
@@ -78,3 +86,27 @@ previous_chunk, next_chunk, parent_heading, sibling_heading, same_source_nearby,
 
 - Story 2가 matches를 분산시키고 Story 3이 neighborhood를 분산시켜야 evidence bundle 전체의 문서 폭이 넓어진다. 두 story는 짝이다.
 - cross-source 후보의 신호 임계는 기존 `_has_related_signal`을 재사용/강화한다. `framework`·`cs`처럼 흔한 필드는 신호에서 제외하는 현행 로직을 유지한다.
+
+## Dev Notes
+
+- Story 2 이후 적용하면 evidence bundle 전체의 분산 효과를 확인하기 쉽다.
+- cross-source 쿼터는 관련성이 있는 후보가 있을 때만 채운다.
+- evidence bundle의 크기 제한과 직렬화 contract는 변경하지 않는다.
+
+## Dev Agent Record
+
+### Debug Log
+
+- TBD
+
+### Completion Notes
+
+- TBD
+
+## File List
+
+- TBD
+
+## Change Log
+
+- 2026-06-18: Added lightweight BMAD dev-story sections.

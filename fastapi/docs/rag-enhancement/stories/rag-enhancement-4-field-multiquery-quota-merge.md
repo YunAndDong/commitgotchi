@@ -58,6 +58,14 @@ backlog
 - 관련성 회귀 없음(평가 하니스의 기대 주제 적중 유지).
 - evidence bundle shape·§4 계약·문제 뱅크 검색 contract 불변.
 
+## Tasks/Subtasks
+
+- [ ] `ReportChunk`의 `field_hints`/`topic_hints` 기반 sub-query 생성 로직을 추가한다.
+- [ ] sub-query 개수 상한과 단일 쿼리 fallback을 구현한다.
+- [ ] 각 sub-query 검색 결과를 quota/round-robin 방식으로 병합하고 중복을 제거한다.
+- [ ] 병합 후 전역 per-source 상한과 deterministic tie-break를 유지한다.
+- [ ] 다중 필드, 실패 sub-query, 호출 수 상한, 회귀 테스트를 추가/갱신한다.
+
 ## 테스트 기준
 
 - `db`+`framework` 두 필드를 가진 chunk가 두 필드의 청크를 모두 포함하는지 검증한다.
@@ -79,3 +87,27 @@ backlog
 
 - 사용자의 실제 리포트는 짧은 편이라 sub-query는 2~3개면 충분하다. 과한 분해는 noise이므로 신호 임계를 둔다.
 - `infer_fields()`가 신호 없을 때 `["cs"]`로 폴백하는 점을 주의 — 약한 cs sub-query가 자리를 차지하지 않도록 실제 keyword evidence 우선(report-3 개발 메모와 동일 원칙).
+
+## Dev Notes
+
+- Story 2의 검색 다양성 옵션과 Story 3의 neighborhood 재균형을 재사용한다.
+- sub-query 호출 수가 늘어나는 만큼 실패/비용/결정성을 명시적으로 테스트한다.
+- 출력 evidence bundle shape와 Spring Boot 계약은 변경하지 않는다.
+
+## Dev Agent Record
+
+### Debug Log
+
+- TBD
+
+### Completion Notes
+
+- TBD
+
+## File List
+
+- TBD
+
+## Change Log
+
+- 2026-06-18: Added lightweight BMAD dev-story sections.

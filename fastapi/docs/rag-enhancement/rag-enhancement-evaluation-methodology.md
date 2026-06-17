@@ -34,13 +34,21 @@ related_docs:
 
 ---
 
-## 2. 골든 평가셋 (Ground Truth)
+## 2. 평가셋 구성 (3-tier)
 
-정형 측정의 전제는 **라벨이 있는 질의 세트**다.
+이 프로젝트의 핵심 주장은 "**문서 다양성**(특정 문서만 반복되지 않고 많은 문서를 골고루)"이다. 따라서 평가셋도 문서 커버리지를 중심에 두고 3개 tier로 나눈다. 각 tier는 역할이 달라 상호 대체 관계가 아니다.
 
-- 위치: `fastapi/tests/fixtures/rag/eval/queries.jsonl`
-- 규모: 최소 20~30개 질의. 5개 필드(db·algorithm·cs·network·framework)를 균형 있게 커버.
-- 각 질의 record:
+| Tier | 구성 | 규모 | 라벨 | 역할 (주 지표) |
+| --- | --- | --- | --- | --- |
+| **A. source coverage golden set** | **문서당 1질의**(distinct source 91개 각각 앵커) | **91** | 수작업 | **모든 문서가 검색에 닿나** — 문서 도달 회귀 가드. 주 지표 `Recall@k`·`Hit@k`·`MRR`·source coverage |
+| **C. 비라벨 다양성 스윕** | source heading 자동 생성 | 150~300 | 자동(불필요) | **실제 질의 분포에서 다양성이 무너지지 않나** — `Distinct-Source`·`HHI`·`Catalog Coverage` 운영 감시 |
+| **B. 자연질의 라벨셋** (선택·후속) | 현실적 사용자 질의, 필드/시나리오 균형 | 30~50 | 수작업 | **순위 품질** — `nDCG`·`Recall` 보강. A의 Recall/MRR로 1차 가드는 충족되므로 여력 시 추가 |
+
+- **A는 필수**(수작업), **C는 사실상 필수지만 자동 생성이라 라벨링 부담 0**(Story 1 하니스에 포함). **B는 선택**(없어도 설계 성립, 포트폴리오 신뢰도 보강용).
+- A는 "전체 평가셋"이 아니라 **문서 도달 점검용 셋**이다. A로 nDCG(순위 품질)까지 전부 증명하려 하지 말고, 그 부분은 B로 보강한다.
+- A의 라벨 작성 표준은 [labeling/label-set-spec.md](./labeling/label-set-spec.md)를 SSOT로 따른다(문서당 1질의, source tier 태그, self-retrieval 방지 규칙 포함).
+
+**공통 record 스키마** (위치: 1차 산출 `fastapi/docs/rag-enhancement/labeling/queries.*.jsonl` → 머지 후 `fastapi/tests/fixtures/rag/eval/queries.jsonl`):
 
 ```json
 {
