@@ -8,7 +8,15 @@
  * (단, 드롭다운은 최대 ~800x600 이라 데스크톱 레이아웃은 좁아진다).
  */
 const POPUP = { width: 1240, height: 860 }
+const STORAGE_KEY = 'commitgotchi.activeGotchi'
 let popupWindowId = null
+
+async function popupUrl() {
+  const result = await chrome.storage.local.get(STORAGE_KEY)
+  const id = result?.[STORAGE_KEY]?.id
+  const path = id == null ? 'index.html' : `index.html#/character/${encodeURIComponent(String(id))}`
+  return chrome.runtime.getURL(path)
+}
 
 chrome.action.onClicked.addListener(async () => {
   // 이미 열린 창이 있으면 포커스
@@ -21,7 +29,7 @@ chrome.action.onClicked.addListener(async () => {
     }
   }
   const win = await chrome.windows.create({
-    url: chrome.runtime.getURL('index.html'),
+    url: await popupUrl(),
     type: 'popup',
     width: POPUP.width,
     height: POPUP.height,

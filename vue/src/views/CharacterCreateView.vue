@@ -20,11 +20,11 @@ function addChip(ch) {
   form.keyword = form.keyword ? `${form.keyword} + ${ch}` : ch
 }
 
-function submit() {
+async function submit() {
   error.value = ''
   if (!form.name.trim()) { error.value = '이름을 입력해 주세요.'; return }
   try {
-    const c = createCharacter({
+    const c = await createCharacter({
       name: form.name.trim(),
       keyword: form.keyword.trim(),
       personality: form.personality.trim() || '칭찬은 많이, 틀린 건 명확히 짚어주는',

@@ -1,11 +1,11 @@
 /*
  * Auth store — reactive singleton (no Pinia dependency).
- * Wires the real Spring Boot auth API. The gotchi/quiz/report data is mocked
- * separately in stores/game.js until those backend endpoints exist.
+ * Wires the real Spring Boot auth API and loads the Spring-backed game state
+ * after the user session is confirmed.
  */
 import { reactive, readonly } from 'vue'
 import { auth, users, loadTokens, saveTokens, clearAuthSession, onTokensChanged, ApiError } from '../api/client.js'
-import { activeCharacter, resetGameState } from './game.js'
+import { activeCharacter, loadGameState, resetGameState } from './game.js'
 import {
   clearActiveGotchi,
   publishActiveGotchi,
@@ -38,9 +38,13 @@ async function fetchMe() {
 }
 
 function publishAuthenticatedGotchi() {
+  if (!activeCharacter.value) {
+    setActiveGotchiPublishingEnabled(false)
+    void clearActiveGotchi()
+    return
+  }
   setActiveGotchiPublishingEnabled(true)
-  if (activeCharacter.value) void publishActiveGotchi(activeCharacter.value)
-  else void clearActiveGotchi()
+  void publishActiveGotchi(activeCharacter.value)
 }
 
 export async function bootstrap() {
@@ -48,6 +52,7 @@ export async function bootstrap() {
     state.user = DEMO_USER
     if (!state.tokens) state.tokens = { tokenType: 'Bearer', accessToken: 'demo', refreshToken: 'demo' }
     state.status = 'ready'
+    resetGameState()
     publishAuthenticatedGotchi()
     return
   }
@@ -60,6 +65,7 @@ export async function bootstrap() {
   state.status = 'loading'
   try {
     await fetchMe()
+    await loadGameState()
     publishAuthenticatedGotchi()
   } catch (e) {
     // refresh already attempted inside client; treat as logged out
@@ -79,6 +85,7 @@ export async function login(email, password) {
   saveTokens(tokens)
   try {
     await fetchMe()
+    await loadGameState()
     publishAuthenticatedGotchi()
   } catch (e) {
     clearAuthSession()

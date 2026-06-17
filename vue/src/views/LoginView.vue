@@ -5,7 +5,7 @@
  */
 import { ref, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { login, signup, demoLogin, authMessage } from '../stores/auth.js'
+import { login, signup, authMessage } from '../stores/auth.js'
 import CgSprite from '../components/CgSprite.vue'
 
 const route = useRoute()
@@ -32,7 +32,7 @@ async function submit() {
   try {
     if (mode.value === 'login') await login(form.email, form.password)
     else await signup(form.email, form.password)
-    router.push(route.query.redirect || '/')
+    router.push({ name: 'character-select', query: route.query.redirect ? { redirect: route.query.redirect } : {} })
   } catch (e) {
     error.value = authMessage(e)
   } finally {
@@ -40,10 +40,6 @@ async function submit() {
   }
 }
 
-function demoGo() {
-  demoLogin()
-  router.push(route.query.redirect || '/')
-}
 </script>
 
 <template>
@@ -95,9 +91,6 @@ function demoGo() {
           {{ busy ? '잠시만요…' : (mode === 'login' ? '로그인' : '가입하고 시작하기') }}
         </button>
       </form>
-
-      <div class="auth__or row center"><span class="tiny faint">또는</span></div>
-      <button class="cg-btn cg-btn--block" @click="demoGo">🎮 백엔드 없이 둘러보기 (데모)</button>
 
       <p class="auth__switch tiny muted">
         {{ mode === 'login' ? '아직 계정이 없나요?' : '이미 계정이 있나요?' }}

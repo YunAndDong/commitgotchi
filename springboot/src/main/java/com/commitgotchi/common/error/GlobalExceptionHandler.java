@@ -38,6 +38,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             InvalidSignupException.class,
+            IllegalArgumentException.class,
             MethodArgumentNotValidException.class,
             HttpMessageNotReadableException.class
     })

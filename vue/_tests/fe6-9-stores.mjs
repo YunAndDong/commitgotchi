@@ -12,6 +12,7 @@ const ok = (condition, message) => {
 
 console.log('FE-6 — 일일 레포트 귀속과 멱등성')
 resetGameState()
+setActive(gameState.characters[0].id)
 gameState.reports.splice(0)
 {
   const author = activeCharacter.value
@@ -33,6 +34,7 @@ gameState.reports.splice(0)
 
 console.log('FE-7 — 퀴즈 귀속과 동시 제출 방지')
 resetGameState()
+setActive(gameState.characters[0].id)
 {
   const owner = activeCharacter.value
   const quiz = gameState.quizzes[0]
@@ -46,6 +48,7 @@ resetGameState()
 
 console.log('FE-9 — 게시글·리뷰 CRUD 소유권')
 resetGameState()
+setActive(gameState.characters[0].id)
 {
   const post = createBoardPost('내 캐릭터 소개')
   ok(post && board()[0]?.id === post.id, '본인 게시글 작성')

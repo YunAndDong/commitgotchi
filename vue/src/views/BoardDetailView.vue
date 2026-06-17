@@ -32,9 +32,9 @@ const editingReview = ref(null)
 const reviewDraft = ref({ stars: 5, text: '' })
 const editingPost = ref(false)
 const postDraft = ref('')
-function submit() {
+async function submit() {
   if (!draft.value.text.trim()) return
-  addReview(p.value.id, draft.value.stars, draft.value.text.trim())
+  await addReview(p.value.id, draft.value.stars, draft.value.text.trim())
   draft.value = { stars: 5, text: '' }
   page.value = 1
 }
@@ -43,22 +43,22 @@ function beginReviewEdit(review) {
   editingReview.value = review.id
   reviewDraft.value = { stars: review.stars, text: review.text }
 }
-function saveReview(review) {
-  if (updateReview(p.value.id, review.id, reviewDraft.value.stars, reviewDraft.value.text)) editingReview.value = null
+async function saveReview(review) {
+  if (await updateReview(p.value.id, review.id, reviewDraft.value.stars, reviewDraft.value.text)) editingReview.value = null
 }
-function removeReview(review) {
-  deleteReview(p.value.id, review.id)
+async function removeReview(review) {
+  await deleteReview(p.value.id, review.id)
   page.value = Math.min(page.value, pages.value)
 }
 function beginPostEdit() {
   editingPost.value = true
   postDraft.value = p.value.desc
 }
-function savePost() {
-  if (updateBoardPost(p.value.id, postDraft.value)) editingPost.value = false
+async function savePost() {
+  if (await updateBoardPost(p.value.id, postDraft.value)) editingPost.value = false
 }
-function removePost() {
-  if (deleteBoardPost(p.value.id)) router.push('/board')
+async function removePost() {
+  if (await deleteBoardPost(p.value.id)) router.push('/board')
 }
 watch(() => route.params.id, () => { page.value = 1; editingReview.value = null; editingPost.value = false })
 watch(pages, value => { page.value = Math.min(page.value, value) })

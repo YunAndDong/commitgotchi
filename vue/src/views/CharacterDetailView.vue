@@ -34,19 +34,23 @@ watch(c, value => {
   quizPage.value = 1
 }, { immediate: true })
 
-function saveEdit() {
+async function saveEdit() {
   editError.value = ''
   try {
-    updateCharacter(c.value.id, form)
+    await updateCharacter(c.value.id, form)
     editing.value = false
   } catch (e) {
     editError.value = e.message
   }
 }
-function remove() {
+async function remove() {
   if (!window.confirm(`${c.value.name}을(를) 삭제할까요?`)) return
-  deleteCharacter(c.value.id)
+  await deleteCharacter(c.value.id)
   router.push('/')
+}
+
+async function activate() {
+  await setActive(c.value.id)
 }
 </script>
 
@@ -62,7 +66,7 @@ function remove() {
         <span class="cg-badge" :class="c.active ? 'cg-badge--ok' : 'cg-badge--warn'">
           {{ c.active ? '활성 캐릭터' : '비활성 캐릭터' }}
         </span>
-        <button v-if="!c.active" class="cg-btn cg-btn--accent" @click="setActive(c.id)">활성 캐릭터로 지정</button>
+        <button v-if="!c.active" class="cg-btn cg-btn--accent" @click="activate">활성 캐릭터로 지정</button>
         <button class="cg-btn" @click="editing = !editing">{{ editing ? '편집 취소' : '캐릭터 편집' }}</button>
         <button class="cg-btn danger" @click="remove">캐릭터 삭제</button>
         <RouterLink to="/report" class="cg-btn cg-btn--primary">📓 리포트 작성</RouterLink>

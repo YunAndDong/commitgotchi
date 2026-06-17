@@ -33,9 +33,9 @@ onMounted(() => {
   if (r) Object.assign(form, { mood: r.mood, title: r.title, content: r.content, tags: [...r.tags] })
 })
 
-function submit() {
+async function submit() {
   if (!form.title.trim()) return
-  saveReport({ ...form })
+  await saveReport({ ...form })
   saved.value = true
   setTimeout(() => router.push('/'), 900)
 }

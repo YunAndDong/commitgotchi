@@ -137,3 +137,21 @@ export async function authed(method, path, opts = {}) {
 export const users = {
   me: () => authed('GET', '/api/users/me'),
 }
+
+export const game = {
+  state: () => authed('GET', '/api/game/state'),
+  createCharacter: (body) => authed('POST', '/api/game/characters', { body }),
+  updateCharacter: (id, body) => authed('PATCH', `/api/game/characters/${encodeURIComponent(String(id))}`, { body }),
+  setActiveCharacter: (id) => authed('PATCH', `/api/game/characters/${encodeURIComponent(String(id))}/active`),
+  retryImage: (id) => authed('POST', `/api/game/characters/${encodeURIComponent(String(id))}/retry-image`),
+  deleteCharacter: (id) => authed('DELETE', `/api/game/characters/${encodeURIComponent(String(id))}`),
+  saveReport: (body) => authed('POST', '/api/game/reports', { body }),
+  submitQuiz: (id, body) => authed('POST', `/api/game/quizzes/${encodeURIComponent(String(id))}/submit`, { body }),
+  deliverDailyReport: (body = {}) => authed('POST', '/api/game/daily-report/deliver', { body }),
+  createBoardPost: (body) => authed('POST', '/api/game/board-posts', { body }),
+  updateBoardPost: (id, body) => authed('PATCH', `/api/game/board-posts/${encodeURIComponent(String(id))}`, { body }),
+  deleteBoardPost: (id) => authed('DELETE', `/api/game/board-posts/${encodeURIComponent(String(id))}`),
+  addReview: (postId, body) => authed('POST', `/api/game/board-posts/${encodeURIComponent(String(postId))}/reviews`, { body }),
+  updateReview: (postId, reviewId, body) => authed('PATCH', `/api/game/board-posts/${encodeURIComponent(String(postId))}/reviews/${encodeURIComponent(String(reviewId))}`, { body }),
+  deleteReview: (postId, reviewId) => authed('DELETE', `/api/game/board-posts/${encodeURIComponent(String(postId))}/reviews/${encodeURIComponent(String(reviewId))}`),
+}

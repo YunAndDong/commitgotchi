@@ -19,8 +19,8 @@ const editDraft = ref('')
 const pages = computed(() => Math.max(1, Math.ceil(posts.value.length / PAGE)))
 const shown = computed(() => posts.value.slice((page.value - 1) * PAGE, page.value * PAGE))
 function stars(n) { return '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n)) }
-function create() {
-  if (!createBoardPost(draft.value)) return
+async function create() {
+  if (!await createBoardPost(draft.value)) return
   draft.value = ''
   page.value = 1
 }
@@ -28,11 +28,11 @@ function beginEdit(post) {
   editing.value = post.id
   editDraft.value = post.desc
 }
-function saveEdit(post) {
-  if (updateBoardPost(post.id, editDraft.value)) editing.value = null
+async function saveEdit(post) {
+  if (await updateBoardPost(post.id, editDraft.value)) editing.value = null
 }
-function remove(post) {
-  if (!deleteBoardPost(post.id)) return
+async function remove(post) {
+  if (!await deleteBoardPost(post.id)) return
   page.value = Math.min(page.value, pages.value)
 }
 watch(pages, value => { page.value = Math.min(page.value, value) })

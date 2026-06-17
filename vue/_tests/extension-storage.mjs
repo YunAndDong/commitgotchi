@@ -82,10 +82,11 @@ globalThis.chrome.storage.local = {
   async set(value) { gameCalls.push(['set', value]) },
   async remove(key) { gameCalls.push(['remove', key]) },
 }
-const { activeCharacter, deleteCharacter, setActive } = await import('../src/stores/game.js')
-assert.equal(setActive(activeCharacter.value.id), true, '게임 스토어 활성 선택 성공')
+setActiveGotchiPublishingEnabled(false)
+const { activeCharacter, deleteCharacter, gameState, setActive } = await import('../src/stores/game.js')
+assert.equal(setActive(gameState.characters[0].id), true, '게임 스토어 활성 선택 성공')
 await new Promise(resolve => setTimeout(resolve, 0))
-assert.equal(gameCalls.at(-1)[0], 'set', '게임 스토어 활성 선택이 확장 저장소에 반영')
+assert.equal(gameCalls.at(-1)[0], 'set', '게임 스토어 활성 선택이 꺼져 있던 확장 게시를 켜고 저장소에 반영')
 deleteCharacter(activeCharacter.value.id)
 await new Promise(resolve => setTimeout(resolve, 0))
 assert.deepEqual(gameCalls.at(-1), ['remove', ACTIVE_GOTCHI_STORAGE_KEY], '활성 캐릭터가 없으면 확장 저장소에서 제거')

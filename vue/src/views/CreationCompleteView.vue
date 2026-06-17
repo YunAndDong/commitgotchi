@@ -43,14 +43,14 @@ watch(usable, (v) => { if (v) celebrate.value = true }, { immediate: true })
       <div class="row" style="gap: var(--sp-2)">
         <RouterLink :to="usable ? '/report' : ''" class="cg-btn cg-btn--primary" :class="{ disabled: !usable }"
                     :aria-disabled="!usable" :tabindex="usable ? 0 : -1">첫 리포트 쓰러 가기</RouterLink>
-        <RouterLink to="/" class="cg-btn">대시보드로</RouterLink>
+        <RouterLink to="/select" class="cg-btn">커밋고치 선택</RouterLink>
       </div>
     </div>
   </div>
 
   <div v-else class="cg-card center col">
     <p>캐릭터를 찾을 수 없어요.</p>
-    <RouterLink to="/" class="cg-btn">대시보드로</RouterLink>
+    <RouterLink to="/select" class="cg-btn">커밋고치 선택</RouterLink>
   </div>
 </template>
 

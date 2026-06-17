@@ -10,6 +10,7 @@
 import {
   gameState, activeCharacter, nurtureScore,
   submitQuiz, deliverDailyReport, createCharacter, retryImage,
+  setActive,
 } from '../src/stores/game.js'
 
 let pass = 0, fail = 0
@@ -17,6 +18,7 @@ const ok = (cond, msg) => { if (cond) { pass++; console.log('  ✓', msg) } else
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
 console.log('AC3 — 퀴즈 채점 실패 Fallback')
+setActive(gameState.characters[0].id)
 {
   const q = gameState.quizzes[0]
   const before = nurtureScore(activeCharacter.value)

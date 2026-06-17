@@ -9,6 +9,7 @@ const router = useRouter()
 const isExtensionPopup = document.documentElement.classList.contains('is-ext-popup')
 const links = [
   { to: '/', label: '홈', icon: '🏠' },
+  { to: '/select', label: '선택', icon: '🌱' },
   { to: '/quiz', label: '퀴즈', icon: '🧩' },
   { to: '/report', label: '리포트', icon: '📓' },
   { to: '/ranking', label: '랭킹', icon: '🏆' },

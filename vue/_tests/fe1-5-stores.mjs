@@ -11,7 +11,9 @@ const ok = (condition, message) => {
 
 console.log('FE-3~5 — 캐릭터 불변식')
 resetGameState()
-const original = activeCharacter.value
+const original = gameState.characters[0]
+ok(activeCharacter.value === null, '로그인 직후에는 활성 캐릭터가 자동 선택되지 않음')
+ok(setActive(original.id) && activeCharacter.value === original, '사용자가 선택해야 활성 캐릭터가 지정됨')
 const second = createCharacter({ name: '둘째', keyword: 'blue', personality: 'calm' })
 ok(activeCharacter.value?.id === second.id && !original.active, '신규 캐릭터만 활성화')
 ok(setActive('missing') === false && activeCharacter.value?.id === second.id, '잘못된 활성 ID는 상태를 변경하지 않음')

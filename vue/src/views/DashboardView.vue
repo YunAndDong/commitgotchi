@@ -33,8 +33,10 @@ const recentActivity = computed(() => [
   <section v-if="!hasCharacter || !c" class="empty cg-card center col">
     <CgSprite :size="120" :pending="false" emotion="joy" />
     <h1 class="big">아직 분신이 없어요</h1>
-    <p class="muted">첫 캐릭터를 만들어 오늘의 학습을 먹여보세요.</p>
-    <RouterLink to="/create" class="cg-btn cg-btn--primary">🌱 첫 분신 만들기</RouterLink>
+    <p class="muted">{{ hasCharacter ? '학습을 시작할 커밋고치를 먼저 골라주세요.' : '첫 캐릭터를 만들어 오늘의 학습을 먹여보세요.' }}</p>
+    <RouterLink :to="hasCharacter ? '/select' : '/create'" class="cg-btn cg-btn--primary">
+      {{ hasCharacter ? '커밋고치 선택하기' : '🌱 첫 분신 만들기' }}
+    </RouterLink>
   </section>
 
   <!-- DASHBOARD -->
