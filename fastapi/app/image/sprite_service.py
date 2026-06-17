@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from .background_removal import remove_background_to_alpha
 from .config import CharacterImageSettings
+from .frame_normalizer import normalize_sprite_grid
 from .gemini_client import GeminiImageGenerationClient
 from .local_storage import LocalSpriteImageStorage, StoredImage
-from .png_validation import PngValidationError, validate_transparent_png
+from .png_validation import PNG_SIGNATURE, PngValidationError, validate_transparent_png
 from .prompts import DesignKeywordError, build_sprite_prompt
+from .quality_gate import evaluate_sprite_quality
 from .schemas import (
     CharacterImageResult,
     FallbackReason,
@@ -69,15 +72,19 @@ def generate_commitgotchi_sprite(
     if not png_bytes:
         return fallback_image_result("EMPTY_IMAGE_BYTES")
 
+    processed_bytes, post_process_reason = _post_process_sprite_sheet(png_bytes)
+    if processed_bytes is None:
+        return fallback_image_result(post_process_reason or "INVALID_PNG")
+
     try:
-        validate_transparent_png(png_bytes)
+        validate_transparent_png(processed_bytes)
     except PngValidationError as exc:
         return fallback_image_result(_png_reason_to_fallback(exc.reason))
 
     try:
         image_storage = storage or LocalSpriteImageStorage(image_settings.storage_root)
         stored = image_storage.save_png(
-            png_bytes,
+            processed_bytes,
             user_id=user_id,
             image_request_id=image_request_id,
         )
@@ -110,6 +117,41 @@ def _generate_with_retries(
             if attempt == attempts - 1:
                 raise
     return b""
+
+
+def _post_process_sprite_sheet(
+    png_bytes: bytes,
+) -> tuple[bytes | None, FallbackReason | None]:
+    """Turn a raw generated PNG into a contract-ready transparent 2x3 grid.
+
+    Returns (processed_bytes, None) on success or (None, reason) when the sheet
+    cannot be repaired into a sliceable transparent grid, so the caller falls
+    back instead of storing a dirty asset.
+    """
+
+    if not png_bytes.startswith(PNG_SIGNATURE):
+        return None, "INVALID_PNG"
+
+    try:
+        background = remove_background_to_alpha(png_bytes)
+    except Exception:
+        return None, "BACKGROUND_REMOVAL_FAILED"
+
+    normalized = normalize_sprite_grid(background.png_bytes)
+    if not normalized.success:
+        return None, "GRID_NORMALIZATION_FAILED"
+
+    gate = evaluate_sprite_quality(
+        normalized.png_bytes,
+        columns=normalized.columns,
+        rows=normalized.rows,
+        cell_width=normalized.cell_width,
+        cell_height=normalized.cell_height,
+    )
+    if not gate.passed:
+        return None, "QUALITY_GATE_FAILED"
+
+    return normalized.png_bytes, None
 
 
 def _png_reason_to_fallback(reason: str) -> FallbackReason:

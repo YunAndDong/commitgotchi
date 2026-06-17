@@ -8,19 +8,25 @@ from typing import Any
 
 
 MAX_DESIGN_KEYWORD_LENGTH = 80
-PROMPT_TEMPLATE_VERSION = "commitgotchi_character_sprite_v1"
-CANONICAL_SPRITE_PROMPT_TEMPLATE = """Create a transparent PNG sprite sheet for a retro handheld virtual pet game.
+PROMPT_TEMPLATE_VERSION = "commitgotchi_character_sprite_v2"
+# v2 hardening (validated by the character-image-quality POC):
+# - drop "16x16/18x18" wording (the model baked it as visible "16x1" labels)
+# - forbid any text/numbers/labels outright
+# - request one solid flat magenta background so deterministic border flood-fill
+#   can key it out, and forbid per-creature backdrop panels
+CANONICAL_SPRITE_PROMPT_TEMPLATE = """Create a pixel-art creature sprite sheet for a retro handheld virtual pet game.
 
-Six distinct pixel-art creatures arranged in a precise 2x3 layout, no grid lines and no text.
-Each creature is drawn as a crisp pixel-art sprite on a logical pixel grid, enlarged for extraction with sharp nearest-neighbor edges.
-
-Columns: happy, sad, angry.
-Row 1: baby stage, logical 16x16 sprite design.
-Row 2: mature evolved stage, logical 18x18 sprite design.
+Draw exactly six pixel-art creatures laid out on a uniform grid of 2 rows and 3 columns.
+Every one of the six grid cells is the exact same size, with equal spacing and equal margins, and exactly one creature is centered inside each cell at roughly the same scale.
+Top row left to right: happy, sad, angry. Bottom row left to right: happy, sad, angry.
+The bottom-row creatures are a slightly larger, more evolved version of the same creature.
 
 All six sprites share the same creature identity based on this design keyword: "{designKeyword}".
-Use clean black outlines, vibrant limited palette, simple readable silhouette, front-facing pose, transparent background, no shadows, no UI, no labels.
-The output should function as a game asset sprite sheet with alpha transparency.
+Use clean black outlines, a vibrant limited palette, a simple readable silhouette, and a front-facing pose.
+
+ABSOLUTELY NO text, NO letters, NO numbers, NO labels, NO captions, NO watermark, and NO grid lines anywhere in the image.
+Fill the ENTIRE background with one solid, flat, uniform magenta color (RGB 255,0,255); the background must be a single flat color, NOT a checkerboard and NOT a gradient.
+Do NOT draw any panel, card, frame, or colored backdrop behind the creatures, and never use magenta anywhere inside the creatures. No shadows, no UI.
 """
 
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")

@@ -72,6 +72,69 @@ def make_png_with_invalid_idat(
     )
 
 
+def make_sprite_sheet_png_bytes(
+    *,
+    cell: int = 80,
+    bg_color: tuple[int, int, int] = (255, 0, 255),
+    with_alpha: bool = False,
+    panels: bool = False,
+    sprite_count: int = 6,
+) -> bytes:
+    """Build a synthetic 2x3 creature sprite sheet for post-processing tests.
+
+    Defaults to a solid magenta background with six centered blobs (with interior
+    black detail) separated by gaps, which survives background removal + grid
+    normalization + quality gate. Options reproduce known failure shapes:
+
+    - ``panels=True``: each cell is filled by an opaque backdrop -> quality gate
+      should flag ``panel_background``.
+    - ``sprite_count<6``: a missing creature -> grid normalization should fail.
+    - ``with_alpha=False``: RGB sheet with no alpha -> pipeline must add alpha.
+    """
+
+    import io
+
+    from PIL import Image, ImageDraw
+
+    columns, rows = 3, 2
+    width, height = cell * columns, cell * rows
+    mode = "RGBA" if with_alpha else "RGB"
+    base_bg = bg_color + ((255,) if with_alpha else ())
+    image = Image.new(mode, (width, height), base_bg)
+    draw = ImageDraw.Draw(image)
+
+    body_colors = [
+        (60, 200, 90), (70, 180, 220), (230, 120, 60),
+        (90, 210, 120), (80, 160, 230), (240, 140, 80),
+    ]
+    opaque = (255,) if with_alpha else ()
+    drawn = 0
+    for index in range(columns * rows):
+        if drawn >= sprite_count:
+            break
+        row, col = index // columns, index % columns
+        cx, cy = col * cell + cell // 2, row * cell + cell // 2
+        color = body_colors[index % len(body_colors)]
+        if panels:
+            margin = max(3, cell // 16)
+            draw.rectangle(
+                (col * cell + margin, row * cell + margin,
+                 (col + 1) * cell - margin, (row + 1) * cell - margin),
+                fill=color + opaque,
+            )
+        else:
+            r = cell // 3
+            draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color + opaque,
+                         outline=(0, 0, 0) + opaque, width=2)
+            draw.ellipse((cx - r // 2, cy - r // 3, cx - r // 5, cy), fill=(0, 0, 0) + opaque)
+            draw.ellipse((cx + r // 5, cy - r // 3, cx + r // 2, cy), fill=(0, 0, 0) + opaque)
+        drawn += 1
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def _chunk(chunk_type: bytes, data: bytes) -> bytes:
     checksum = crc32(chunk_type + data) & 0xFFFFFFFF
     return struct.pack(">I", len(data)) + chunk_type + data + struct.pack(">I", checksum)

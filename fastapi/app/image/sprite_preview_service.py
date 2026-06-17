@@ -21,29 +21,8 @@ from .config import CharacterImageSettings, FASTAPI_CHARACTER_IMAGE_ROOT
 from .frame_normalizer import normalize_sprite_grid
 from .gemini_client import GeminiImageGenerationClient
 from .png_validation import PngValidationError, validate_transparent_png
-from .prompts import sanitize_design_keyword
+from .prompts import build_sprite_prompt
 from .sprite_service import ImageGenerationClient
-
-
-# POC prompt: ask for a SOLID, flat, distinct-color background so deterministic
-# border flood-fill can key it out. "no checkerboard" + "never use this color in
-# the creatures" keeps the key color (magenta) from colliding with sprite art.
-PREVIEW_PROMPT_TEMPLATE = """Create a pixel-art creature sprite sheet for a retro handheld virtual pet game.
-
-Draw exactly six pixel-art creatures laid out on a uniform grid of 2 rows and 3 columns.
-Every one of the six grid cells is the exact same size, with equal spacing and equal margins.
-Place exactly one creature centered inside each cell, all six creatures roughly the same scale.
-Top row left to right: happy, sad, angry. Bottom row left to right: happy, sad, angry.
-The bottom-row creatures are a slightly larger, more evolved version of the same creature.
-
-All six creatures share one identity based on this design keyword: "{designKeyword}".
-Use clean black outlines, a vibrant limited palette, a simple readable silhouette, and a front-facing pose.
-
-ABSOLUTELY NO text, NO letters, NO numbers, NO labels, NO captions, NO watermark, and NO grid lines anywhere in the image.
-Fill the ENTIRE background with one solid, flat, uniform magenta color (RGB 255,0,255).
-The background must be a single flat color, NOT a checkerboard and NOT a gradient, with clear empty space separating every creature.
-Never use magenta anywhere inside the creatures. No shadows, no UI.
-"""
 
 
 @dataclass(frozen=True)
@@ -67,9 +46,8 @@ class SpritePreviewResult:
 
 
 def build_preview_prompt(design_keyword: str | None) -> tuple[str, dict[str, Any]]:
-    sanitized = sanitize_design_keyword(design_keyword)
-    prompt = PREVIEW_PROMPT_TEMPLATE.replace("{designKeyword}", sanitized.prompt_value)
-    return prompt, sanitized.loggable_summary()
+    built = build_sprite_prompt(design_keyword)
+    return built.prompt, built.keyword.loggable_summary()
 
 
 def generate_sprite_preview(
