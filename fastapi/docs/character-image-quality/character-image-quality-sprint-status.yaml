@@ -1,0 +1,35 @@
+generated: 2026-06-17
+last_updated: 2026-06-17
+project: Commitgotchi FastAPI AI server
+tracking_system: file-system
+epic: character-image-quality
+epic_file: fastapi/docs/character-image-quality/character-image-quality-epic.md
+
+status_definitions:
+  epic:
+    - backlog
+    - in-progress
+    - done
+  story:
+    - backlog
+    - ready-for-dev
+    - in-progress
+    - review
+    - done
+  retrospective:
+    - optional
+    - done
+
+development_status:
+  character-image-quality-epic: backlog
+  character-image-quality-1-background-removal-alpha: backlog
+  character-image-quality-2-frame-grid-normalization: backlog
+  character-image-quality-3-quality-gate-smoke-tests: backlog
+  character-image-quality-retrospective: optional
+
+notes:
+  - 흐름 C 계약(§4.4/§7.6)과 spriteMeta를 준수. 진짜 알파만 READY 저장하는 안전규칙 유지.
+  - 후처리는 검증을 약화하지 않고 알파를 "만들어" 통과시킨다.
+  - 16/18px 균일 격자 정합이 어려우면 Story 2에서 계약 재협상 레버(옵션 B/C)를 결정 포인트로 문서화.
+  - 실제 Gemini/S3 호출 금지. 모든 테스트는 fake/합성 이미지.
+  - RAG 고도화와 무관한 별도 epic.
