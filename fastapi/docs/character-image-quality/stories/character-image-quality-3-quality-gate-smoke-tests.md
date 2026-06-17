@@ -1,6 +1,6 @@
 ---
 title: Character Image Quality 3 - 품질 게이트 & 프로덕션 스모크/회귀
-status: backlog
+status: in-progress
 created: 2026-06-17
 owner: FastAPI AI 서버
 epic: character-image-quality
@@ -15,7 +15,7 @@ source_docs:
 
 ## Status
 
-backlog
+in-progress (게이트 코어 구현 완료, 프로덕션 스모크 스크립트는 후속)
 
 ## 목표
 
@@ -87,3 +87,15 @@ POC가 게이트의 필요성을 구체적으로 보여줬다.
 - **셀별 투명 비율 검사가 핵심.** "보라색 작은 용"은 alpha·격자 검증을 통과하지만 각 셀에 캐릭터 패널 배경이 남았다. 전역 검증만으론 못 잡고, **셀별 배경 투명 비율 임계**가 있어야 FALLBACK으로 거른다.
 - **붙은 스프라이트("회색 고양이 로봇")**는 Story 2에서 `FALLBACK`으로 떨어지므로, 게이트가 빈 셀/병합 셀을 추가로 점검하면 이중 안전망이 된다.
 - 권장 게이트 임계 출발점(POC 관측 기반): 전체 투명비율 ≥ 0.6, 셀별 배경 투명비율 ≥ 임계, 6셀 모두 불투명 스프라이트 픽셀 존재. "별의 커비/병아리/슬라임"은 통과, "용(패널)/고양이(병합)"는 탈락하도록 캘리브레이션.
+
+## 구현 현황 (2026-06-17)
+
+**완료 — 게이트 코어:**
+- `app/image/quality_gate.py`: 셀별 **코너 투명도**(패널 배경 탐지) + **셀 점유율**(빈 셀 탐지). `evaluate_sprite_quality()`.
+- 실측 캘리브레이션: 클린 시트 코너 투명도 0.77~0.97 vs 패널 0.07 → `DEFAULT_MIN_CORNER_TRANSPARENCY=0.45`(넓은 간격 중앙, 불꽃·날개가 코너에 닿는 정상 프레임 false-positive 방지).
+- `sprite_service`가 게이트 실패 시 `QUALITY_GATE_FAILED`로 FALLBACK(저장 안 함).
+- 테스트: `tests/image/test_image_postprocessing.py`(클린 통과 / 패널 `panel_background` 탈락).
+
+**후속 — 미착수:**
+- 프로덕션 스모크 스크립트(env 게이트, 안전 메타데이터만 기록). 현재는 수동 검증 스크립트 `scripts/character_image_preview.py`로 대체 중.
+- 셀별 투명 비율(코너뿐 아니라) 보강·임계 튜닝, 게이트 임계 설정화(`CharacterImageSettings` 노출).

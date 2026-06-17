@@ -1,6 +1,6 @@
 ---
 title: Character Image Quality 2 - 프레임 그리드 정규화 & 스프라이트 재배치
-status: backlog
+status: done
 created: 2026-06-17
 owner: FastAPI AI 서버
 epic: character-image-quality
@@ -15,7 +15,7 @@ source_docs:
 
 ## Status
 
-backlog
+done
 
 ## 목표
 
@@ -89,3 +89,11 @@ alpha projection 분할로 옵션 A를 POC 구현(`app/image/frame_normalizer.py
 - **발견된 한계 1 — 노이즈 밴드:** 화남 표정의 분노마크/잔여 speckle이 1~6px projection 밴드로 잡혀 "행 밴드 7개"로 실패("초록 슬라임"). → **작은-밴드 무시 필터**(`MIN_BAND_FRACTION`/`MIN_BAND_FLOOR_PX`)를 추가하니 슬라임이 통과(861×436). POC 코드에 반영됨.
 - **발견된 한계 2 — 붙은 스프라이트:** 하단 두 캐릭터가 투명 간격 없이 붙으면 열 projection이 2개로 병합돼 실패("회색 고양이 로봇"). projection만으로는 분리 불가. → 안전 폴백(`FALLBACK`)으로 떨어지며, 정밀 분리가 필요하면 **연결요소(BFS) 라벨링** 또는 옵션 B(실측 bbox)로 넘긴다.
 - **결론:** 검증한 키워드 기준 3개 깨끗한 READY, 1개 검증통과-but-패널(Story 1/3 영역), 1개 안전 FALLBACK. 옵션 A는 **프롬프트 경화 + 노이즈 필터**로 다수 케이스를 계약 유지로 처리하고, 잔여 케이스는 FALLBACK이 막는다. 현재 표본에선 옵션 B/C로의 계약 변경이 필수는 아니다.
+
+## 구현 완료 (2026-06-17)
+
+- `app/image/frame_normalizer.py`: alpha projection으로 행/열 밴드 분할 → 6스프라이트 bbox 크롭 → 균일 셀(최대 bbox+패딩) 중앙정렬 재배치. `normalize_sprite_grid()`.
+- 노이즈 밴드 무시 필터(`MIN_BAND_FRACTION`/`MIN_BAND_FLOOR_PX`)로 분노마크 등 1~6px 밴드 제거.
+- `sprite_service`가 정규화 실패 시 `GRID_NORMALIZATION_FAILED`로 FALLBACK(저장 안 함). 옵션 A 계약 유지 — `spriteMeta`(columns=3, rows=2) 그대로.
+- 테스트: `tests/image/test_image_postprocessing.py`(6스프라이트→균일 격자 검증 통과, 5스프라이트→실패, 노이즈 밴드 무시).
+- 한계(붙은 스프라이트)는 여전히 FALLBACK 처리. 옵션 B/C(실측 bbox·프레임별 생성)는 미착수로 남김 — 현재 표본에선 불필요.

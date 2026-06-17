@@ -1,6 +1,6 @@
 ---
 title: 캐릭터 이미지 품질 고도화 Epic (한 번에 규격 충족)
-status: backlog
+status: in-progress
 created: 2026-06-17
 owner: FastAPI AI 서버
 scope: fastapi/ 하위 이미지 생성 후처리. 흐름 C(POST /api/ai/commitgotchi) 계약 준수, RAG와 무관
