@@ -23,6 +23,11 @@ EXPECTED_COLUMNS = 3
 ALPHA_THRESHOLD = 16
 MIN_CELL_PX = 18  # png_validation MIN_FRAME_DIMENSION_PX
 CELL_PADDING = 2
+# Detached marks (anger puffs, sweat drops, leftover speckles) produce thin
+# projection bands. Bands smaller than this fraction of the axis are treated as
+# noise so they do not inflate the row/column count.
+MIN_BAND_FRACTION = 0.025
+MIN_BAND_FLOOR_PX = 10
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,7 @@ def normalize_sprite_grid(png_bytes: bytes) -> FrameNormalizationResult:
 
     row_bands = _bands(
         _projection(alpha_bytes, width, height, axis="row"),
+        min_size=_min_band(height),
     )
     if len(row_bands) != EXPECTED_ROWS:
         return _failure(png_bytes, f"expected {EXPECTED_ROWS} row bands, found {len(row_bands)}")
@@ -53,7 +59,7 @@ def normalize_sprite_grid(png_bytes: bytes) -> FrameNormalizationResult:
         col_projection = _projection(
             alpha_bytes, width, height, axis="col", y_range=(top, bottom)
         )
-        col_bands = _bands(col_projection)
+        col_bands = _bands(col_projection, min_size=_min_band(width))
         if len(col_bands) != EXPECTED_COLUMNS:
             return _failure(
                 png_bytes,
@@ -113,7 +119,7 @@ def _projection(
     return counts
 
 
-def _bands(projection: list[int]) -> list[tuple[int, int]]:
+def _bands(projection: list[int], *, min_size: int = 1) -> list[tuple[int, int]]:
     bands: list[tuple[int, int]] = []
     start: int | None = None
     for i, value in enumerate(projection):
@@ -124,7 +130,11 @@ def _bands(projection: list[int]) -> list[tuple[int, int]]:
             start = None
     if start is not None:
         bands.append((start, len(projection)))
-    return bands
+    return [(s, e) for (s, e) in bands if e - s >= min_size]
+
+
+def _min_band(axis_length: int) -> int:
+    return max(MIN_BAND_FLOOR_PX, int(axis_length * MIN_BAND_FRACTION))
 
 
 def _tight_bbox(
