@@ -1,0 +1,374 @@
+{
+  "skippedFiles": [],
+  "sourceFiles": [
+    {
+      "sourcePath": "01-computer-science-fundamentals/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/algorithm/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/algorithm/qna-algorithm.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/computer-architecture/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/computer-architecture/qna-computer-architecture.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/data-structure/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/data-structure/qna-data-structure.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/network/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/network/qna-network.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/operating-system/01-process-thread.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/operating-system/02-memory-management.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/operating-system/03-context-switching.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/operating-system/04-deadlock-race-condition.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/operating-system/05-virtual-memory.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/operating-system/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "01-computer-science-fundamentals/operating-system/qna-os.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "02-backend-engineering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "02-backend-engineering/authentication/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "02-backend-engineering/authentication/qna-authentication.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "02-backend-engineering/database/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "02-backend-engineering/database/qna-database.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "02-backend-engineering/java-fundamentals/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "02-backend-engineering/java-fundamentals/qna-java.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "02-backend-engineering/spring-framework/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "02-backend-engineering/spring-framework/qna-spring.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/browser-fundamentals/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/browser-fundamentals/qna-browser.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/build-tools/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/build-tools/qna-build-tools.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/frontend-architecture/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/frontend-architecture/qna-frontend-architecture.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/html-css/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/html-css/qna-html-css.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/javascript-deep-dive/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/javascript-deep-dive/qna-javascript.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/nextjs-rendering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/nextjs-rendering/qna-nextjs.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/react-architecture/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/react-architecture/qna-react.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/typescript/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "03-frontend-engineering/typescript/qna-typescript.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "04-system-design/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "04-system-design/caching/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "04-system-design/caching/qna-caching.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "04-system-design/performance/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "04-system-design/performance/qna-performance.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "04-system-design/qna-infrastructure.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "04-system-design/scalability/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "04-system-design/scalability/qna-scalability.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "05-ai-engineering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "05-ai-engineering/llm-integration/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "05-ai-engineering/llm-integration/qna-llm.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "05-ai-engineering/rag-pipeline/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "05-ai-engineering/rag-pipeline/qna-rag.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "05-ai-engineering/vector-database/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "05-ai-engineering/vector-database/qna-vector-db.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "06-design-patterns/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "06-design-patterns/qna-design-patterns.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "07-security/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "07-security/qna-security.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "08-api-design/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "08-api-design/qna-api-design.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "09-software-engineering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "09-software-engineering/qna-software-engineering.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "10-version-control/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "10-version-control/qna-version-control.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/aws/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/aws/qna-aws.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/cloud-fundamentals/02-virtualization-hypervisor.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/cloud-fundamentals/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/cloud-fundamentals/qna-cloud-fundamentals.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/containerization/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/containerization/docker/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/containerization/docker/qna-docker.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/devops-cicd/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/devops-cicd/qna-cicd.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/kubernetes/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/kubernetes/qna-kubernetes.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/linux-networking/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/linux-networking/qna-linux-networking.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/monitoring-observability/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/monitoring-observability/qna-monitoring.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/practical-scenarios/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/practical-scenarios/qna-architecture.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/practical-scenarios/qna-behavioral.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "11-cloud-engineering/practical-scenarios/qna-troubleshooting.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "99-practical-interview/README.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "99-practical-interview/qna-behavioral.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "99-practical-interview/qna-frontend-companies.md",
+      "sourceType": "markdown"
+    },
+    {
+      "sourcePath": "README.md",
+      "sourceType": "markdown"
+    }
+  ],
+  "sourceRoot": "/Users/tlsdla1235/study/md파일들/computer-science-interview-KR"
+}

@@ -1,0 +1,34 @@
+generated: 2026-06-13
+last_updated: 2026-06-14
+project: Commitgotchi FastAPI AI server
+tracking_system: file-system
+epic: report-generation
+epic_file: fastapi/docs/report/report-generation-epic.md
+
+status_definitions:
+  epic:
+    - backlog
+    - in-progress
+    - done
+  story:
+    - backlog
+    - ready-for-dev
+    - in-progress
+    - review
+    - done
+  retrospective:
+    - optional
+    - done
+
+development_status:
+  report-generation-epic: backlog
+  report-1-concept-chunk-catalog: done
+  report-2-report-chunking-topic-field-hints: done
+  report-3-rag-search-and-source-neighborhood: done
+  report-4-gemini-report-analysis-score-delta: done
+  report-5-report-result-assembly-quiz-recommender: done
+  report-generation-retrospective: optional
+
+notes:
+  - API/SQS/Spring Boot callback is out of this epic.
+  - Quiz grading service is already separate and is not tracked here.
