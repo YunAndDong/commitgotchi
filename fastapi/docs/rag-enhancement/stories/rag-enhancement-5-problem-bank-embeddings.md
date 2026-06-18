@@ -1,6 +1,6 @@
 ---
 title: RAG Enhancement 5 - 문제 뱅크 임베딩 인덱스 신규 구축
-status: backlog
+status: done
 created: 2026-06-17
 owner: FastAPI AI 서버
 epic: rag-enhancement
@@ -15,7 +15,7 @@ source_docs:
 
 ## Status
 
-backlog
+done
 
 ## 목표
 
@@ -66,11 +66,11 @@ backlog
 
 ## Tasks/Subtasks
 
-- [ ] 문제 임베딩 입력 텍스트 구성 helper와 content hash 기준을 정의한다.
-- [ ] `problem-embeddings.jsonl` 생성 CLI와 manifest/summary 리포트를 추가한다.
-- [ ] 문제 뱅크와 sidecar를 join하는 in-memory embedding store를 구현한다.
-- [ ] missing/stale/model/dimension mismatch issue 수집과 재사용 경로를 구현한다.
-- [ ] fake embedder 기반 생성, stale 판정, 빈/누락 파일 테스트를 추가한다.
+- [x] 문제 임베딩 입력 텍스트 구성 helper와 content hash 기준을 정의한다.
+- [x] `problem-embeddings.jsonl` 생성 CLI와 manifest/summary 리포트를 추가한다.
+- [x] 문제 뱅크와 sidecar를 join하는 in-memory embedding store를 구현한다.
+- [x] missing/stale/model/dimension mismatch issue 수집과 재사용 경로를 구현한다.
+- [x] fake embedder 기반 생성, stale 판정, 빈/누락 파일 테스트를 추가한다.
 
 ## 테스트 기준
 
@@ -104,16 +104,37 @@ backlog
 
 ### Debug Log
 
-- TBD
+- 2026-06-18: Added failing fake-embedder tests for problem embedding sidecar build and embedding store join/stale behavior.
+- 2026-06-18: Implemented `problem_embeddings`, `build_problem_bank_embeddings`, and `problem_embedding_store` without running the real Gemini bulk build.
+- 2026-06-18: Verified with `python3 -m unittest tests.rag.test_problem_bank_embeddings`, `python3 -m unittest tests.rag.test_problem_embedding_store`, problem bank/search/recommender regression tests, daily report service tests, CLI `--help`, and `git diff --check`.
+- 2026-06-18: Built the real Gemini problem embedding sidecar with `.venv/bin/python -m app.rag.build_problem_bank_embeddings` after confirming `google-genai` was available in `fastapi/.venv`.
+- 2026-06-18: Verified the generated sidecar loads 798 embedded problems with zero store issues and reran the problem embedding unit tests.
 
 ### Completion Notes
 
-- TBD
+- Problem embedding input now includes question, model answer, primary/secondary fields, nonzero score allocation, must/optional rubric terms, source path, and heading context while excluding `mustNotConfuse`.
+- Problem embedding sidecar JSONL generation supports reuse, missing/stale/model/dimension issue collection, fake-client tests, and manifest/summary report output.
+- Added in-memory problem embedding store that joins `problems.jsonl` with `problem-embeddings.jsonl` by `problemId` and `sourceKey`, returning empty stores safely for missing/empty inputs.
+- Generated `problem-embeddings.jsonl` for all 798 problem bank records with `gemini-embedding-2` and 768-dimensional embeddings; build result was `generatedCount=798`, `failedCount=0`.
+- Loaded the generated embedding store successfully with `embedded_items=798` and `issues=0`.
+- Story 6 search/ranking behavior, `search_problem_bank()`, `recommend_quizzes()`, problem bank build flow, Spring Boot, API endpoints, and SQS callback were not changed.
 
 ## File List
 
-- TBD
+- fastapi/app/rag/build_problem_bank_embeddings.py
+- fastapi/app/rag/problem_embedding_store.py
+- fastapi/app/rag/problem_embeddings.py
+- fastapi/app/rag/schemas.py
+- fastapi/data/rag/catalog/problem-embeddings.jsonl
+- fastapi/data/rag/manifests/problem-embeddings-manifest.json
+- fastapi/data/rag/reports/problem-embeddings-summary.md
+- fastapi/docs/rag-enhancement/rag-enhancement-sprint-status.yaml
+- fastapi/docs/rag-enhancement/stories/rag-enhancement-5-problem-bank-embeddings.md
+- fastapi/tests/rag/test_problem_bank_embeddings.py
+- fastapi/tests/rag/test_problem_embedding_store.py
 
 ## Change Log
 
 - 2026-06-18: Added lightweight BMAD dev-story sections.
+- 2026-06-18: Implemented problem bank embedding sidecar build/load support and moved story to review.
+- 2026-06-18: Built and committed the real problem bank embedding sidecar; moved story to done.

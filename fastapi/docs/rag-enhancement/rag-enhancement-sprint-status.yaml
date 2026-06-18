@@ -26,7 +26,7 @@ development_status:
   rag-enhancement-2-concept-search-mmr-source-cap: done
   rag-enhancement-3-source-neighborhood-rebalance: done
   rag-enhancement-4-field-multiquery-quota-merge: done
-  rag-enhancement-5-problem-bank-embeddings: backlog
+  rag-enhancement-5-problem-bank-embeddings: done
   rag-enhancement-6-problem-bank-hybrid-search: backlog
   rag-enhancement-7-benchmark-ablation-report: backlog
   rag-enhancement-retrospective: optional
