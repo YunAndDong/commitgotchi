@@ -11,6 +11,7 @@ public enum ErrorCode {
     AUTH_REFRESH_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "The refresh token is invalid."),
     AUTH_REFRESH_TOKEN_REUSED(HttpStatus.UNAUTHORIZED, "The refresh token has already been used."),
     AUTH_FORBIDDEN(HttpStatus.FORBIDDEN, "You do not have permission to access this resource."),
+    CHARACTER_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "You can create up to 3 characters."),
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "The request is invalid."),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "The HTTP method is not supported."),
     UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "The media type is not supported."),
