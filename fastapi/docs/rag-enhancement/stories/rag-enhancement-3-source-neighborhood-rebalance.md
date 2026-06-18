@@ -1,6 +1,6 @@
 ---
 title: RAG Enhancement 3 - source-neighborhood 다양성 재균형
-status: backlog
+status: done
 created: 2026-06-17
 owner: FastAPI AI 서버
 epic: rag-enhancement
@@ -14,7 +14,7 @@ source_docs:
 
 ## Status
 
-backlog
+done
 
 ## 목표
 
@@ -60,11 +60,11 @@ previous_chunk, next_chunk, parent_heading, sibling_heading, same_source_nearby,
 
 ## Tasks/Subtasks
 
-- [ ] `build_source_neighborhood()`에 same-source cap과 cross-source quota 옵션을 추가한다.
-- [ ] 같은-source 후보와 cross-source 후보를 분리해 cap/쿼터 기준으로 병합한다.
-- [ ] 관련 신호가 약한 cross-source 후보를 제외하는 임계 로직을 유지/보강한다.
-- [ ] 중복 제거, matches 제외, char cap, reason/to_dict shape를 보존한다.
-- [ ] same-source 비율 감소, 후보 부족 fallback, 결정성 테스트를 추가/갱신한다.
+- [x] `build_source_neighborhood()`에 same-source cap과 cross-source quota 옵션을 추가한다.
+- [x] 같은-source 후보와 cross-source 후보를 분리해 cap/쿼터 기준으로 병합한다.
+- [x] 관련 신호가 약한 cross-source 후보를 제외하는 임계 로직을 유지/보강한다.
+- [x] 중복 제거, matches 제외, char cap, reason/to_dict shape를 보존한다.
+- [x] same-source 비율 감소, 후보 부족 fallback, 결정성 테스트를 추가/갱신한다.
 
 ## 테스트 기준
 
@@ -97,16 +97,41 @@ previous_chunk, next_chunk, parent_heading, sibling_heading, same_source_nearby,
 
 ### Debug Log
 
-- TBD
+- 2026-06-18: RED - `python3 -m unittest tests.rag.test_source_neighborhood` failed because `max_same_source_neighbors` was not implemented and default same-source output exceeded the new cap.
+- 2026-06-18: GREEN - implemented candidate splitting, cross-source quota selection, same-source cap enforcement, and stronger weak-signal filtering.
+- 2026-06-18: Validation passed:
+  - `python3 -m unittest tests.rag.test_source_neighborhood`
+  - `python3 -m unittest tests.rag.test_concept_search`
+  - `python3 -m unittest tests.rag.test_diversity_eval`
+  - `python3 scripts/rag_diversity_eval.py --embedding-mode fake --output-md /tmp/rag-diversity-story3.md --output-json /tmp/rag-diversity-story3.json`
+- 2026-06-18: Full `python3 -m unittest discover` was attempted, but this local Python environment is missing non-RAG dependencies used by image/integration tests (`PIL`, `pydantic`, `fastapi`).
+- 2026-06-18: Review fixes validated:
+  - `python3 -m unittest tests.rag.test_source_neighborhood`
+  - `python3 -m unittest tests.rag.test_concept_search`
+  - `python3 -m unittest tests.rag.test_diversity_eval`
+  - `python3 scripts/rag_diversity_eval.py --embedding-mode fake --output-md /tmp/rag-diversity-story3-fix.md --output-json /tmp/rag-diversity-story3-fix.json`
 
 ### Completion Notes
 
-- TBD
+- Added `max_same_source_neighbors` and `min_cross_source` options to `build_source_neighborhood()` and pass-through options from evidence bundle builders.
+- Split neighborhood candidates into same-source and cross-source pools. Cross-source candidates with related signals are selected first up to quota, same-source candidates are limited by cap, and remaining space can be filled only by related cross-source candidates.
+- Tightened cross-source quota accounting so sources already present in matches are not counted as new cross-source neighborhood evidence.
+- Filtered common metadata terms such as `framework`, `cs`, `field`, and `hints` from neighborhood related-signal terms so weak metadata-only candidates do not satisfy quota.
+- Preserved duplicate chunk exclusion, seed/match exclusion behavior, char caps, and `NeighborhoodEvidence.to_dict()` output shape.
+- Added regression tests for same-source cap, cross-source quota, weak-signal exclusion, no-cross-source fallback, deterministic output, duplicate exclusion, char cap, and output shape.
+- Diversity eval result versus baseline: Tier A evidence bundle same-source neighbor ratio `1.0000 -> 0.5055`, avg distinct source `4.2967 -> 7.1978`; Tier C same-source neighbor ratio `1.0000 -> 0.5142`, avg distinct source `4.0900 -> 7.1233`.
 
 ## File List
 
-- TBD
+- fastapi/app/rag/source_neighborhood.py
+- fastapi/app/rag/concept_search.py
+- fastapi/tests/rag/test_source_neighborhood.py
+- fastapi/docs/rag-enhancement/stories/rag-enhancement-3-source-neighborhood-rebalance.md
+- fastapi/docs/rag-enhancement/rag-enhancement-sprint-status.yaml
 
 ## Change Log
 
 - 2026-06-18: Added lightweight BMAD dev-story sections.
+- 2026-06-18: Started Story 3 implementation and moved story/sprint status to in-progress.
+- 2026-06-18: Implemented source-neighborhood same-source cap, cross-source quota, stronger related-signal filtering, and validation tests; moved story/sprint status to review.
+- 2026-06-18: Addressed code-review findings for multi-seed source accounting and metadata-only weak signals; moved story/sprint status to done.

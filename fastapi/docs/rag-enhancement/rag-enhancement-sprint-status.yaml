@@ -24,7 +24,7 @@ development_status:
   rag-enhancement-epic: backlog
   rag-enhancement-1-diversity-eval-baseline: done
   rag-enhancement-2-concept-search-mmr-source-cap: done
-  rag-enhancement-3-source-neighborhood-rebalance: backlog
+  rag-enhancement-3-source-neighborhood-rebalance: done
   rag-enhancement-4-field-multiquery-quota-merge: backlog
   rag-enhancement-5-problem-bank-embeddings: backlog
   rag-enhancement-6-problem-bank-hybrid-search: backlog
