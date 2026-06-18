@@ -1,6 +1,6 @@
 ---
 title: RAG Enhancement 2 - 개념 검색 MMR 재정렬 + per-source 상한
-status: backlog
+status: done
 created: 2026-06-17
 owner: FastAPI AI 서버
 epic: rag-enhancement
@@ -14,7 +14,7 @@ source_docs:
 
 ## Status
 
-backlog
+done
 
 ## 목표
 
@@ -65,11 +65,11 @@ MMR은 "쿼리 관련성"과 "이미 선택된 결과와의 비유사성(novelty
 
 ## Tasks/Subtasks
 
-- [ ] `search_concept_chunks()`와 `ConceptCatalogSearcher.search()`에 다양성 옵션 인자를 추가한다.
-- [ ] embedding 검색 경로에 candidate pool, MMR 재정렬, per-source 상한을 적용한다.
-- [ ] keyword fallback 경로에도 per-source 상한과 deterministic tie-break를 적용한다.
-- [ ] `build_report_evidence_bundle()` 호출부에 새 옵션을 연결하되 출력 shape는 유지한다.
-- [ ] source 분산, fallback, 결정성, 회귀 테스트를 추가/갱신한다.
+- [x] `search_concept_chunks()`와 `ConceptCatalogSearcher.search()`에 다양성 옵션 인자를 추가한다.
+- [x] embedding 검색 경로에 candidate pool, MMR 재정렬, per-source 상한을 적용한다.
+- [x] keyword fallback 경로에도 per-source 상한과 deterministic tie-break를 적용한다.
+- [x] `build_report_evidence_bundle()` 호출부에 새 옵션을 연결하되 출력 shape는 유지한다.
+- [x] source 분산, fallback, 결정성, 회귀 테스트를 추가/갱신한다.
 
 ## 테스트 기준
 
@@ -103,16 +103,35 @@ MMR은 "쿼리 관련성"과 "이미 선택된 결과와의 비유사성(novelty
 
 ### Debug Log
 
-- TBD
+- 2026-06-18: 기존 `python3 -m unittest tests.rag.test_concept_search` 통과 확인 후 Story 1 하니스 before 리포트를 `/tmp/rag-diversity-story2-before.*`에 생성했다.
+- 2026-06-18: RED 단계에서 새 다양성 옵션 테스트 7개가 옵션 미지원 TypeError로 실패함을 확인했다.
+- 2026-06-18: GREEN 단계에서 `python3 -m unittest tests.rag.test_concept_search` 통과를 확인했다.
+- 2026-06-18: 회귀 테스트 `tests.rag.test_source_neighborhood`, `tests.scoring.test_report_chunker`, `tests.rag.test_diversity_eval` 통과를 확인했다.
+- 2026-06-18: Story 1 하니스 after 리포트를 `/tmp/rag-diversity-story2.*`에 생성했다. Tier A concept top-k avgDistinctSourceCount는 4.296703에서 4.56044로 증가했고 recallAtK/hitRateAtK/MRR도 0.137363/0.241758/0.106044에서 0.181319/0.340659/0.155861로 증가했다.
+
+### Implementation Plan
+
+- 기존 `ConceptSearchHit` score 및 `to_dict()` shape는 유지하고, candidate pool 이후 선택 순서에만 MMR과 source cap을 적용한다.
+- `mmr_lambda=1.0`은 기존 관련성 정렬을 보존하고, 기본값은 candidate pool 30 이상, `mmr_lambda=0.7`, `max_per_source=2`로 다양성을 켠다.
+- 청크-청크 similarity 계산에 후보 임베딩을 재사용하고, penalty 계산에 필요한 임베딩이 없으면 0 penalty로 처리해 관련성 순서 폴백을 유지한다.
+- keyword fallback은 기존 `_sorted_hits` 결정성 tie-break 이후 per-source cap만 적용한다.
 
 ### Completion Notes
 
-- TBD
+- `search_concept_chunks()`와 `ConceptCatalogSearcher.search()`에 `candidate_pool`, `mmr_lambda`, `max_per_source` 옵션을 추가했다.
+- embedding 검색은 넓은 후보 풀을 만든 뒤 MMR과 per-source cap을 적용하며, source cap에 걸린 후보는 건너뛰고 다음 source 후보로 채운다.
+- keyword fallback에도 동일한 per-source cap을 적용했고, `build_report_evidence_bundle()`/`build_report_evidence_bundles()`가 새 옵션을 전달하도록 연결했다.
+- `ConceptSearchHit`와 evidence bundle 직렬화 key는 변경하지 않았다.
+- source 분산, MMR 차순위 source 선택, `mmr_lambda=1.0` 관련성 순서 보존, 결정성, 일부 임베딩 누락, keyword fallback cap, bundle shape 회귀 테스트를 추가했다.
 
 ## File List
 
-- TBD
+- fastapi/app/rag/concept_search.py
+- fastapi/tests/rag/test_concept_search.py
+- fastapi/docs/rag-enhancement/rag-enhancement-sprint-status.yaml
+- fastapi/docs/rag-enhancement/stories/rag-enhancement-2-concept-search-mmr-source-cap.md
 
 ## Change Log
 
 - 2026-06-18: Added lightweight BMAD dev-story sections.
+- 2026-06-18: Implemented concept search candidate-pool MMR reranking, per-source cap, keyword fallback cap, option pass-through, and regression coverage.

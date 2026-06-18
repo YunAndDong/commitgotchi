@@ -24,6 +24,9 @@ from .text import clean_markdown, extract_terms, term_counter
 
 
 DEFAULT_TOP_K = 5
+DEFAULT_CANDIDATE_POOL_MIN = 30
+DEFAULT_MMR_LAMBDA = 0.7
+DEFAULT_MAX_PER_SOURCE = 2
 DEFAULT_MAX_NEIGHBORHOOD_CHUNKS = 8
 DEFAULT_MAX_BUNDLE_CHARS = 6000
 DEFAULT_MAX_TEXT_CHARS_PER_ITEM = 1200
@@ -55,6 +58,9 @@ class ConceptCatalogSearcher:
         limit: int = DEFAULT_TOP_K,
         min_score: float = 1.0,
         allow_keyword_fallback: bool = True,
+        candidate_pool: int | None = None,
+        mmr_lambda: float = DEFAULT_MMR_LAMBDA,
+        max_per_source: int | None = DEFAULT_MAX_PER_SOURCE,
     ) -> list[ConceptSearchHit]:
         return search_concept_chunks(
             query,
@@ -66,6 +72,9 @@ class ConceptCatalogSearcher:
             limit=limit,
             min_score=min_score,
             allow_keyword_fallback=allow_keyword_fallback,
+            candidate_pool=candidate_pool,
+            mmr_lambda=mmr_lambda,
+            max_per_source=max_per_source,
         )
 
 
@@ -80,6 +89,9 @@ def search_concept_chunks(
     limit: int = DEFAULT_TOP_K,
     min_score: float = 1.0,
     allow_keyword_fallback: bool = True,
+    candidate_pool: int | None = None,
+    mmr_lambda: float = DEFAULT_MMR_LAMBDA,
+    max_per_source: int | None = DEFAULT_MAX_PER_SOURCE,
 ) -> list[ConceptSearchHit]:
     catalog_store = _resolve_store(store, embedding_store)
     if limit <= 0 or not clean_markdown(query) or len(catalog_store) == 0:
@@ -102,6 +114,7 @@ def search_concept_chunks(
             min_score=min_score,
             field_hints=field_hints,
             excluded_chunk_ids=_stale_chunk_ids(index),
+            max_per_source=max_per_source,
         ) if allow_keyword_fallback else []
 
     embedder = client or GeminiEmbeddingClient()
@@ -115,9 +128,12 @@ def search_concept_chunks(
             min_score=min_score,
             field_hints=field_hints,
             excluded_chunk_ids=_stale_chunk_ids(index),
+            max_per_source=max_per_source,
         ) if allow_keyword_fallback else []
 
     hits: list[ConceptSearchHit] = []
+    query_similarities: dict[str, float] = {}
+    candidate_embeddings: dict[str, tuple[float, ...]] = {}
     query_terms = extract_terms(query_input)
     for item in index.items:
         similarity = cosine_similarity(query_embedding, item.embedding)
@@ -135,8 +151,18 @@ def search_concept_chunks(
                     matched_terms=matched_terms,
                 )
             )
+            query_similarities[item.chunk.chunk_id] = similarity
+            candidate_embeddings[item.chunk.chunk_id] = item.embedding
 
-    return _sorted_hits(hits)[:limit]
+    candidates = _sorted_hits(hits)[:_candidate_pool_size(limit, candidate_pool)]
+    return _select_diverse_hits(
+        candidates,
+        query_similarities=query_similarities,
+        candidate_embeddings=candidate_embeddings,
+        limit=limit,
+        mmr_lambda=mmr_lambda,
+        max_per_source=max_per_source,
+    )
 
 
 def build_report_evidence_bundle(
@@ -150,6 +176,9 @@ def build_report_evidence_bundle(
     max_bundle_chars: int = DEFAULT_MAX_BUNDLE_CHARS,
     max_text_chars_per_item: int = DEFAULT_MAX_TEXT_CHARS_PER_ITEM,
     allow_keyword_fallback: bool = True,
+    candidate_pool: int | None = None,
+    mmr_lambda: float = DEFAULT_MMR_LAMBDA,
+    max_per_source: int | None = DEFAULT_MAX_PER_SOURCE,
 ) -> ReportEvidenceBundle:
     catalog_store = _resolve_store(store, embedding_store)
     if top_k <= 0 or len(catalog_store) == 0 or not report_chunk.text.strip():
@@ -169,6 +198,9 @@ def build_report_evidence_bundle(
         field_hints=report_chunk.field_hints,
         limit=top_k,
         allow_keyword_fallback=allow_keyword_fallback,
+        candidate_pool=candidate_pool,
+        mmr_lambda=mmr_lambda,
+        max_per_source=max_per_source,
     )
     query_input = build_query_embedding_input(
         report_chunk.text,
@@ -217,6 +249,9 @@ def build_report_evidence_bundles(
     max_bundle_chars: int = DEFAULT_MAX_BUNDLE_CHARS,
     max_text_chars_per_item: int = DEFAULT_MAX_TEXT_CHARS_PER_ITEM,
     allow_keyword_fallback: bool = True,
+    candidate_pool: int | None = None,
+    mmr_lambda: float = DEFAULT_MMR_LAMBDA,
+    max_per_source: int | None = DEFAULT_MAX_PER_SOURCE,
 ) -> list[ReportEvidenceBundle]:
     catalog_store = _resolve_store(store, embedding_store)
     return [
@@ -230,6 +265,9 @@ def build_report_evidence_bundles(
             max_bundle_chars=max_bundle_chars,
             max_text_chars_per_item=max_text_chars_per_item,
             allow_keyword_fallback=allow_keyword_fallback,
+            candidate_pool=candidate_pool,
+            mmr_lambda=mmr_lambda,
+            max_per_source=max_per_source,
         )
         for report_chunk in report_chunks
     ]
@@ -270,6 +308,7 @@ def _keyword_fallback(
     min_score: float,
     field_hints: tuple[str, ...],
     excluded_chunk_ids: set[str] | None = None,
+    max_per_source: int | None = DEFAULT_MAX_PER_SOURCE,
 ) -> list[ConceptSearchHit]:
     if limit <= 0:
         return []
@@ -295,7 +334,7 @@ def _keyword_fallback(
                     matched_terms=matched_terms,
                 )
             )
-    return _sorted_hits(hits)[:limit]
+    return _apply_per_source_cap(_sorted_hits(hits), limit=limit, max_per_source=max_per_source)
 
 
 def _stale_chunk_ids(index: ConceptEmbeddingStore) -> set[str]:
@@ -379,6 +418,112 @@ def _sorted_hits(hits: list[ConceptSearchHit]) -> list[ConceptSearchHit]:
             hit.chunk.chunk_id,
         ),
     )
+
+
+def _candidate_pool_size(limit: int, candidate_pool: int | None) -> int:
+    if limit <= 0:
+        return 0
+    if candidate_pool is None:
+        return max(limit * 6, DEFAULT_CANDIDATE_POOL_MIN)
+    return max(limit, candidate_pool)
+
+
+def _select_diverse_hits(
+    candidates: list[ConceptSearchHit],
+    *,
+    query_similarities: dict[str, float],
+    candidate_embeddings: dict[str, tuple[float, ...]],
+    limit: int,
+    mmr_lambda: float,
+    max_per_source: int | None,
+) -> list[ConceptSearchHit]:
+    if limit <= 0 or not candidates:
+        return []
+    if mmr_lambda >= 1.0:
+        return _apply_per_source_cap(candidates, limit=limit, max_per_source=max_per_source)
+
+    weight = min(max(mmr_lambda, 0.0), 1.0)
+    selected: list[ConceptSearchHit] = []
+    selected_embeddings: list[tuple[float, ...]] = []
+    remaining = list(candidates)
+    source_counts: Counter[str] = Counter()
+    candidate_order = {hit.chunk.chunk_id: index for index, hit in enumerate(candidates)}
+
+    while remaining and len(selected) < limit:
+        best_hit: ConceptSearchHit | None = None
+        best_key: tuple[float, int] | None = None
+        for hit in remaining:
+            if _source_limit_reached(source_counts, hit, max_per_source):
+                continue
+            relevance = query_similarities.get(hit.chunk.chunk_id, hit.score / 10.0)
+            penalty = _max_similarity_to_selected(
+                candidate_embeddings.get(hit.chunk.chunk_id),
+                selected_embeddings,
+            )
+            mmr_score = (weight * relevance) - ((1.0 - weight) * penalty)
+            key = (mmr_score, -candidate_order[hit.chunk.chunk_id])
+            if best_key is None or key > best_key:
+                best_key = key
+                best_hit = hit
+
+        if best_hit is None:
+            break
+
+        selected.append(best_hit)
+        source_counts[best_hit.chunk.source_path] += 1
+        embedding = candidate_embeddings.get(best_hit.chunk.chunk_id)
+        if embedding is not None:
+            selected_embeddings.append(embedding)
+        remaining.remove(best_hit)
+
+    return selected
+
+
+def _max_similarity_to_selected(
+    embedding: tuple[float, ...] | None,
+    selected_embeddings: list[tuple[float, ...]],
+) -> float:
+    if embedding is None or not selected_embeddings:
+        return 0.0
+    similarities = (
+        similarity
+        for selected_embedding in selected_embeddings
+        if (similarity := cosine_similarity(embedding, selected_embedding)) is not None
+    )
+    return max((0.0, *similarities))
+
+
+def _apply_per_source_cap(
+    hits: list[ConceptSearchHit],
+    *,
+    limit: int,
+    max_per_source: int | None,
+) -> list[ConceptSearchHit]:
+    if limit <= 0:
+        return []
+    if max_per_source is None:
+        return hits[:limit]
+    if max_per_source <= 0:
+        return []
+
+    selected: list[ConceptSearchHit] = []
+    source_counts: Counter[str] = Counter()
+    for hit in hits:
+        if _source_limit_reached(source_counts, hit, max_per_source):
+            continue
+        selected.append(hit)
+        source_counts[hit.chunk.source_path] += 1
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _source_limit_reached(
+    source_counts: Counter[str],
+    hit: ConceptSearchHit,
+    max_per_source: int | None,
+) -> bool:
+    return max_per_source is not None and source_counts[hit.chunk.source_path] >= max_per_source
 
 
 def _evidence_matches(

@@ -33,6 +33,17 @@ class FailingEmbeddingClient:
         raise RuntimeError("embedding service unavailable")
 
 
+class StaticEmbeddingClient:
+    def __init__(self, query_embedding: tuple[float, ...]):
+        self.query_embedding = query_embedding
+
+    def embed_document(self, text: str) -> tuple[float, ...]:
+        raise AssertionError("document embedding is not used during search")
+
+    def embed_query(self, text: str) -> tuple[float, ...]:
+        return self.query_embedding
+
+
 class ConceptSearchTest(unittest.TestCase):
     def test_embedding_search_finds_jpa_concept_as_top_result(self) -> None:
         store, embedding_store = _search_stores()
@@ -151,6 +162,163 @@ class ConceptSearchTest(unittest.TestCase):
         self.assertEqual(bundle.matches, ())
         self.assertEqual(bundle.neighborhood, ())
 
+    def test_embedding_search_caps_final_hits_per_source(self) -> None:
+        store, embedding_store = _diversity_search_stores()
+
+        hits = search_concept_chunks(
+            "css layout browser",
+            store=store,
+            embedding_store=embedding_store,
+            client=StaticEmbeddingClient(_unit_vector(1.0, 1.0, 0.0)),
+            limit=5,
+            candidate_pool=6,
+            max_per_source=2,
+        )
+
+        source_counts = _source_counts(hits)
+        self.assertLessEqual(source_counts["01-css/css.md"], 2)
+        self.assertGreaterEqual(len(source_counts), 2)
+
+    def test_mmr_adds_secondary_relevant_source_before_duplicate_chunk(self) -> None:
+        store, embedding_store = _diversity_search_stores()
+
+        hits = search_concept_chunks(
+            "css layout browser",
+            store=store,
+            embedding_store=embedding_store,
+            client=StaticEmbeddingClient(_unit_vector(1.0, 1.0, 0.0)),
+            limit=3,
+            candidate_pool=6,
+            mmr_lambda=0.7,
+            max_per_source=10,
+        )
+
+        self.assertEqual(hits[0].chunk.source_path, "01-css/css.md")
+        self.assertEqual(hits[1].chunk.source_path, "02-browser/rendering.md")
+
+    def test_mmr_lambda_one_preserves_relevance_order_when_cap_allows_it(self) -> None:
+        store, embedding_store = _diversity_search_stores()
+
+        hits = search_concept_chunks(
+            "css layout browser",
+            store=store,
+            embedding_store=embedding_store,
+            client=StaticEmbeddingClient(_unit_vector(1.0, 1.0, 0.0)),
+            limit=4,
+            candidate_pool=6,
+            mmr_lambda=1.0,
+            max_per_source=10,
+        )
+
+        self.assertEqual(
+            [hit.chunk.chunk_id for hit in hits],
+            [
+                "concept:sha256:css-0",
+                "concept:sha256:css-1",
+                "concept:sha256:css-2",
+                "concept:sha256:browser",
+            ],
+        )
+
+    def test_embedding_search_is_deterministic_for_same_catalog(self) -> None:
+        store, embedding_store = _diversity_search_stores()
+        kwargs = {
+            "store": store,
+            "embedding_store": embedding_store,
+            "client": StaticEmbeddingClient(_unit_vector(1.0, 1.0, 0.0)),
+            "limit": 5,
+            "candidate_pool": 6,
+            "max_per_source": 2,
+        }
+
+        first = search_concept_chunks("css layout browser", **kwargs)
+        second = search_concept_chunks("css layout browser", **kwargs)
+
+        self.assertEqual(
+            [hit.to_dict() for hit in first],
+            [hit.to_dict() for hit in second],
+        )
+
+    def test_missing_chunk_embeddings_do_not_crash_mmr_selection(self) -> None:
+        store, embedding_store = _diversity_search_stores()
+        partial_embedding_store = ConceptEmbeddingStore(
+            items=embedding_store.items[:2] + embedding_store.items[3:],
+            issues=(
+                ConceptEmbeddingStoreIssue(
+                    reason="missing_embedding",
+                    chunk_id="concept:sha256:css-2",
+                    message="missing test embedding",
+                ),
+            ),
+            expected_model="fake-embedding-model",
+            expected_dimensionality=3,
+        )
+
+        hits = search_concept_chunks(
+            "css layout browser",
+            store=store,
+            embedding_store=partial_embedding_store,
+            client=StaticEmbeddingClient(_unit_vector(1.0, 1.0, 0.0)),
+            limit=4,
+            candidate_pool=6,
+            max_per_source=2,
+        )
+
+        self.assertTrue(hits)
+        self.assertLessEqual(_source_counts(hits)["01-css/css.md"], 2)
+
+    def test_keyword_fallback_applies_per_source_cap(self) -> None:
+        chunks = (
+            _chunk("css-0", "01-css/css.md", ("CSS", "Layout"), 0, "CSS layout flexbox grid cascade.", ("framework",)),
+            _chunk("css-1", "01-css/css.md", ("CSS", "Box"), 1, "CSS layout box model flexbox.", ("framework",)),
+            _chunk("css-2", "01-css/css.md", ("CSS", "Cascade"), 2, "CSS layout cascade specificity.", ("framework",)),
+            _chunk("browser", "02-browser/rendering.md", ("Browser", "Rendering"), 0, "Browser layout uses CSS render trees.", ("framework",)),
+        )
+        store = ConceptCatalogStore(chunks)
+
+        hits = search_concept_chunks(
+            "css layout",
+            store=store,
+            embedding_store=ConceptEmbeddingStore(),
+            client=FailingEmbeddingClient(),
+            limit=4,
+            allow_keyword_fallback=True,
+            max_per_source=1,
+        )
+
+        source_counts = _source_counts(hits)
+        self.assertEqual(source_counts["01-css/css.md"], 1)
+        self.assertEqual(source_counts["02-browser/rendering.md"], 1)
+
+    def test_report_evidence_bundle_passes_diversity_options_without_shape_change(self) -> None:
+        store, embedding_store = _diversity_search_stores()
+        report_chunk = ReportChunk(
+            "report:css",
+            "css layout browser",
+            0,
+            18,
+            ("CSS Layout",),
+            ("framework",),
+        )
+
+        bundle = build_report_evidence_bundle(
+            report_chunk,
+            store=store,
+            embedding_store=embedding_store,
+            client=StaticEmbeddingClient(_unit_vector(1.0, 1.0, 0.0)),
+            top_k=4,
+            candidate_pool=6,
+            max_per_source=1,
+        )
+        payload = bundle.to_dict()
+
+        match_sources = [match["sourcePath"] for match in payload["matches"]]
+        self.assertEqual(len(match_sources), len(set(match_sources)))
+        self.assertEqual(
+            set(payload["matches"][0]),
+            {"chunkId", "score", "searchMode", "matchedTerms", "sourcePath", "headingPath", "fieldHints", "text"},
+        )
+
 
 def _search_stores() -> tuple[ConceptCatalogStore, ConceptEmbeddingStore]:
     chunks = (
@@ -184,6 +352,64 @@ def _search_stores() -> tuple[ConceptCatalogStore, ConceptEmbeddingStore]:
     return store, ConceptEmbeddingStore(items=items, expected_model="fake-embedding-model", expected_dimensionality=4)
 
 
+def _diversity_search_stores() -> tuple[ConceptCatalogStore, ConceptEmbeddingStore]:
+    chunks = (
+        _chunk(
+            "css-0",
+            "01-css/css.md",
+            ("CSS", "Layout"),
+            0,
+            "CSS layout flexbox grid cascade browser rendering.",
+            ("framework",),
+        ),
+        _chunk(
+            "css-1",
+            "01-css/css.md",
+            ("CSS", "Layout"),
+            1,
+            "CSS layout flexbox grid browser rendering repeated.",
+            ("framework",),
+        ),
+        _chunk(
+            "css-2",
+            "01-css/css.md",
+            ("CSS", "Layout"),
+            2,
+            "CSS layout cascade specificity browser rendering repeated.",
+            ("framework",),
+        ),
+        _chunk(
+            "browser",
+            "02-browser/rendering.md",
+            ("Browser", "Rendering"),
+            0,
+            "Browser rendering layout uses style and paint.",
+            ("framework",),
+        ),
+        _chunk(
+            "dom",
+            "03-browser/dom.md",
+            ("Browser", "DOM"),
+            0,
+            "DOM layout updates can trigger rendering work.",
+            ("framework",),
+        ),
+    )
+    embeddings = {
+        "concept:sha256:css-0": (1.0, 0.0, 0.0),
+        "concept:sha256:css-1": (1.0, 0.0, 0.0),
+        "concept:sha256:css-2": (1.0, 0.0, 0.0),
+        "concept:sha256:browser": (0.0, 1.0, 0.0),
+        "concept:sha256:dom": _unit_vector(0.5, 0.5, 1.0),
+    }
+    store = ConceptCatalogStore(chunks)
+    items = tuple(
+        EmbeddedConceptChunk(chunk=chunk, embedding=embeddings[chunk.chunk_id])
+        for chunk in chunks
+    )
+    return store, ConceptEmbeddingStore(items=items, expected_model="fake-embedding-model", expected_dimensionality=3)
+
+
 def _chunk(
     suffix: str,
     source_path: str,
@@ -204,6 +430,20 @@ def _chunk(
         field_hints=field_hints,
         neighbors=ConceptNeighbors(),
     )
+
+
+def _source_counts(hits) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for hit in hits:
+        counts[hit.chunk.source_path] = counts.get(hit.chunk.source_path, 0) + 1
+    return counts
+
+
+def _unit_vector(*values: float) -> tuple[float, ...]:
+    norm = sum(value * value for value in values) ** 0.5
+    if norm == 0.0:
+        raise ValueError("zero vector")
+    return tuple(value / norm for value in values)
 
 
 def _fake_vector(text: str) -> tuple[float, ...]:
