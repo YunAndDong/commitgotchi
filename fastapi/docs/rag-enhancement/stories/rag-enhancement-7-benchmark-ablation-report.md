@@ -1,6 +1,6 @@
 ---
 title: RAG Enhancement 7 - 최종 벤치마크 · Ablation · 포트폴리오 리포트
-status: backlog
+status: done
 created: 2026-06-17
 owner: FastAPI AI 서버
 epic: rag-enhancement
@@ -15,7 +15,7 @@ source_docs:
 
 ## Status
 
-backlog
+done
 
 ## 목표
 
@@ -63,11 +63,11 @@ backlog
 
 ## Tasks/Subtasks
 
-- [ ] `eval_metrics.py`에 관련성/다양성/통계/게이트 순수 함수를 구현한다.
-- [ ] Story 1 하니스를 재사용해 B0, +S2, +S3, +S4, +S5/6 ablation runner를 구현한다.
-- [ ] baseline vs final, ablation, case study, 메타데이터를 포함한 `.md`/`.json` 리포트를 생성한다.
-- [ ] 합격 게이트와 악화 질의 요약을 자동 판정해 리포트에 남긴다.
-- [ ] 손계산 fixture 기반 metric/stat/gate/report 테스트를 추가한다.
+- [x] `eval_metrics.py`에 관련성/다양성/통계/게이트 순수 함수를 구현한다.
+- [x] Story 1 하니스를 재사용해 B0, +S2, +S3, +S4, +S5/6 ablation runner를 구현한다.
+- [x] baseline vs final, ablation, case study, 메타데이터를 포함한 `.md`/`.json` 리포트를 생성한다.
+- [x] 합격 게이트와 악화 질의 요약을 자동 판정해 리포트에 남긴다.
+- [x] 손계산 fixture 기반 metric/stat/gate/report 테스트를 추가한다.
 
 ## 테스트 기준
 
@@ -102,16 +102,46 @@ backlog
 
 ### Debug Log
 
-- TBD
+- 2026-06-19: Preflight confirmed current branch `feature/rag-enhancement`; Story 1~6 are `done` in `fastapi/docs/rag-enhancement/rag-enhancement-sprint-status.yaml`.
+- 2026-06-19: Story 7 was `backlog` in sprint status, but the user explicitly provided `fastapi/docs/rag-enhancement/stories/rag-enhancement-7-benchmark-ablation-report.md`; continued per user instruction and recorded this exception.
+- 2026-06-19: Added RED tests for `app.rag.eval_metrics` and `scripts.rag_benchmark`; initial runs failed with missing modules as expected.
+- 2026-06-19: Implemented pure relevance/diversity/stat/gate helpers in `fastapi/app/rag/eval_metrics.py`.
+- 2026-06-19: Implemented fake-embedding-only benchmark/ablation/report CLI in `fastapi/scripts/rag_benchmark.py`, reusing Story 1 fixture loading, fake embedder, fake stores, and validation helpers.
+- 2026-06-19: Full default benchmark initially exceeded practical runtime when Tier C also computed evidence bundles; adjusted Tier C to 150-query top-k diversity sweep and kept Tier A evidence bundle measurement intact.
+- 2026-06-19: Generated `fastapi/data/rag/reports/rag-enhancement-benchmark.md` and `.json` with `embeddingMode=fake`, `callsGemini=false`, model `fake-hash-embedding`, dimensions `32`.
+- 2026-06-19: `python3 -m unittest tests.rag.test_eval_metrics` passed (5 tests).
+- 2026-06-19: `python3 -m unittest tests.rag.test_rag_benchmark` passed (3 tests).
+- 2026-06-19: `python3 -m unittest tests.rag.test_diversity_eval` passed (8 tests).
+- 2026-06-19: `python3 -m unittest tests.rag.test_problem_bank_search` passed (14 tests).
+- 2026-06-19: `python3 -m unittest tests.rag.test_quiz_recommender` passed (10 tests).
+- 2026-06-19: `python3 -m unittest tests.scoring.test_daily_report_service` passed (7 tests).
+- 2026-06-19: Code review found no closure-blocking issues; Story 7 approved for closure.
 
 ### Completion Notes
 
-- TBD
+- Story 7 was implemented as measurement/reporting only. No search, recommendation, catalog generation, API, SQS, Spring callback, `problem-embeddings.jsonl`, manifest, summary, or `problems.jsonl` runtime artifacts were regenerated or modified.
+- The benchmark supports B0 → +S2 → +S3 → +S4 → +S5/6 using only currently exposed public arguments: concept MMR/source cap, source-neighborhood quota arguments, `max_subqueries`, and problem-bank keyword-only vs fake embedding hybrid mode.
+- S3, S4, and S5/6 are documented with limitations where current public toggles cannot perfectly isolate pre-story internals.
+- Primary Tier A concept top-k gate result is FAIL: ILD is the only statistically significant diversity improvement, Recall@k falls from 0.1374 to 0.1099, and worsened query ratio is 0.1758.
+- Evidence bundle distribution improvement is strong: distinct source 4.2967 → 7.4505, catalog coverage 0.3736 → 0.8352, source HHI 0.2732 → 0.1608, same-source neighbor ratio 1.0000 → 0.5000.
+- Reports explicitly state that this is source coverage/diversity/distribution measurement, not final answer generation quality evaluation. Relevance metrics are binary because `relevanceGrades` is empty; real semantic accuracy and answer quality require follow-up real embedding + graded relevance evaluation.
+- Review closure note: primary top-k gate remains FAIL and is intentionally reported as such; closure is for the measurement/reporting story, with real embedding + graded relevance left as non-blocking follow-up.
 
 ## File List
 
-- TBD
+- fastapi/app/rag/eval_metrics.py
+- fastapi/scripts/rag_benchmark.py
+- fastapi/tests/rag/test_eval_metrics.py
+- fastapi/tests/rag/test_rag_benchmark.py
+- fastapi/data/rag/reports/rag-enhancement-benchmark.md
+- fastapi/data/rag/reports/rag-enhancement-benchmark.json
+- fastapi/README.md
+- fastapi/docs/troubleshooting/rag/rag-enhancement-benchmark.md
+- fastapi/docs/rag-enhancement/rag-enhancement-sprint-status.yaml
+- fastapi/docs/rag-enhancement/stories/rag-enhancement-7-benchmark-ablation-report.md
 
 ## Change Log
 
 - 2026-06-18: Added lightweight BMAD dev-story sections.
+- 2026-06-19: Implemented Story 7 benchmark/ablation/report layer, generated reports, documented results and limitations, and marked story ready for review.
+- 2026-06-19: Review approved Story 7 for closure and marked status done.

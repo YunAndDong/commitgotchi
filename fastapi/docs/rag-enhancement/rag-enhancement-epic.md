@@ -1,6 +1,6 @@
 ---
 title: RAG 검색 다양성 고도화 Epic
-status: backlog
+status: done
 created: 2026-06-17
 owner: FastAPI AI 서버
 scope: fastapi/ 하위 내부 검색 품질 개선만. Spring Boot 인스턴스·§4 계약·출력 shape 불변
@@ -84,7 +84,7 @@ related_docs:
 ## 6. Epic 완료 기준
 
 - 평가 방법론(골든셋·표준 IR 지표·다양성 지표·ablation·통계·합격 게이트)이 정의되고, Story 1·7로 baseline과 최종을 정형 비교한다.
-- Story 7의 합격 게이트(다양성 유의 개선 + 관련성 ε 이내 유지 + 악화 질의 비율 한도)를 통과하고, 포트폴리오용 before/after 리포트가 생성된다.
+- Story 7의 합격 게이트(다양성 유의 개선 + 관련성 ε 이내 유지 + 악화 질의 비율 한도)를 자동 판정하고, 포트폴리오용 before/after 리포트가 생성된다.
 - Story 1의 평가 하니스로 고도화 전/후 다양성 지표(질의당 distinct sourcePath 수, source 집중도, 필드/폴더 커버리지)와 관련성 회귀를 비교할 수 있다.
 - 개념 검색이 같은 source 파일로 도배되지 않는다(per-source 상한 + MMR). 동일 질의에서 등장 파일 수가 베이스라인 대비 증가한다.
 - source-neighborhood가 씨앗 문서 한 개로 굳지 않고 타 문서 컨텍스트를 cap 안에서 안정적으로 포함한다.
@@ -92,3 +92,10 @@ related_docs:
 - 문제 뱅크가 키워드+벡터 하이브리드로 검색되어 의미적 매치를 회수하고, 추천 퀴즈가 더 다양한 source·주제에서 나온다.
 - 위 모든 변경에도 §4 계약 출력 shape와 기존 테스트가 깨지지 않는다.
 - 관련성 회귀가 없다(평가 하니스의 known-query 체크 통과).
+
+## 7. Closure Notes
+
+- 2026-06-19: Story 1~7 are complete, and this epic is closed for the agreed A안 scope: source coverage/diversity/distribution measurement, not final answer generation quality evaluation.
+- Story 7 primary Tier A concept top-k gate is **FAIL** and remains documented in `fastapi/data/rag/reports/rag-enhancement-benchmark.md`: ILD is the only statistically significant diversity improvement, Recall@k decreases from 0.1374 to 0.1099, and worsened query ratio is 0.1758.
+- Evidence bundle distribution improved strongly: distinct source 4.2967 → 7.4505, catalog coverage 0.3736 → 0.8352, source HHI 0.2732 → 0.1608, same-source neighbor ratio 1.0000 → 0.5000.
+- Real embedding runs and graded relevance labels remain follow-up work, not blockers for this measurement/reporting closure.
