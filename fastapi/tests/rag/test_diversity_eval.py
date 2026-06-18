@@ -16,7 +16,9 @@ from scripts.rag_diversity_eval import (
     calculate_diversity_metrics,
     calculate_relevance_metrics,
     evaluate_concept_queries,
+    evaluate_problem_queries,
     generate_fake_embedding_store,
+    generate_fake_problem_embedding_store,
     generate_tier_c_queries,
     load_tier_a_queries,
     validate_tier_a_fixture,
@@ -155,6 +157,48 @@ class DiversityEvalTest(unittest.TestCase):
         self.assertEqual(results.top_k["q-jpa"][0].source_path, "03-framework/jpa.md")
         self.assertEqual(results.bundle["q-jpa"][0].source_path, "03-framework/jpa.md")
 
+    def test_fake_embedder_evaluates_problem_queries_without_api(self) -> None:
+        store = ProblemBankStore(
+            (
+                _problem(
+                    101,
+                    "jpa",
+                    "JPA N+1 문제와 fetch join 해결법을 설명하세요.",
+                    "N+1은 지연 로딩 반복 쿼리이며 fetch join으로 줄일 수 있습니다.",
+                    "db",
+                    ("db", "framework"),
+                    ("JPA", "N+1", "fetch join"),
+                ),
+                _problem(
+                    202,
+                    "http",
+                    "HTTP 상태 코드와 REST API를 설명하세요.",
+                    "HTTP 상태 코드는 요청 처리 결과를 표현합니다.",
+                    "network",
+                    ("network",),
+                    ("HTTP", "REST"),
+                ),
+            )
+        )
+        embedding_store = generate_fake_problem_embedding_store(store)
+
+        results = evaluate_problem_queries(
+            (
+                _query(
+                    "q-jpa-problem",
+                    "fixtures/jpa.md",
+                    report_text="JPA N+1 fetch join이 헷갈린다.",
+                    fields=("db", "framework"),
+                ),
+            ),
+            store=store,
+            embedding_store=embedding_store,
+            client=FakeEmbeddingClient(),
+            top_k=1,
+        )
+
+        self.assertEqual(results.top_k["q-jpa-problem"][0].source_path, "fixtures/jpa.md")
+
 
 def _load_catalog_source_paths(path: Path) -> tuple[str, ...]:
     source_paths: set[str] = set()
@@ -184,6 +228,34 @@ def _chunk(
         content_hash=f"sha256:{suffix}",
         field_hints=field_hints,
         neighbors=ConceptNeighbors(),
+    )
+
+
+def _problem(
+    problem_id: int,
+    key: str,
+    question: str,
+    model_answer: str,
+    primary_field: str,
+    fields: tuple[str, ...],
+    rubric_terms: tuple[str, ...],
+) -> ProblemRecord:
+    score_allocation = {field: 0 for field in ("db", "algorithm", "cs", "network", "framework")}
+    for field in fields:
+        score_allocation[field] = 7
+    return ProblemRecord(
+        problem_id=problem_id,
+        source_key=f"sha256:fixture-{key}",
+        question=question,
+        model_answer=model_answer,
+        difficulty="intermediate",
+        primary_field=primary_field,
+        fields=fields,
+        score_allocation=score_allocation,
+        source_path=f"fixtures/{key}.md",
+        heading_path=("Fixture", question),
+        rubric=ProblemRubric(must_mention=rubric_terms),
+        content_hash=f"sha256:fixture-{key}-content",
     )
 
 

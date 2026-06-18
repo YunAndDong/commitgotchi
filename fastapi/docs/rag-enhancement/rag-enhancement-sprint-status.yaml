@@ -1,5 +1,5 @@
 generated: 2026-06-17
-last_updated: 2026-06-18
+last_updated: 2026-06-19
 project: Commitgotchi FastAPI AI server
 tracking_system: file-system
 epic: rag-enhancement
@@ -27,7 +27,7 @@ development_status:
   rag-enhancement-3-source-neighborhood-rebalance: done
   rag-enhancement-4-field-multiquery-quota-merge: done
   rag-enhancement-5-problem-bank-embeddings: done
-  rag-enhancement-6-problem-bank-hybrid-search: backlog
+  rag-enhancement-6-problem-bank-hybrid-search: done
   rag-enhancement-7-benchmark-ablation-report: backlog
   rag-enhancement-retrospective: optional
 

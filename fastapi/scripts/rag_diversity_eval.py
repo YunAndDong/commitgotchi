@@ -18,6 +18,7 @@ if str(FASTAPI_ROOT) not in sys.path:
     sys.path.insert(0, str(FASTAPI_ROOT))
 
 from app.rag.concept_search import build_report_evidence_bundle  # noqa: E402
+from app.rag.concept_embeddings import GeminiEmbeddingClient  # noqa: E402
 from app.rag.concept_store import (  # noqa: E402
     DEFAULT_CATALOG_PATH,
     ConceptCatalogStore,
@@ -29,6 +30,15 @@ from app.rag.embedding_store import (  # noqa: E402
     load_concept_embedding_store,
 )
 from app.rag.problem_bank_search import ProblemBankSearcher  # noqa: E402
+from app.rag.problem_embedding_store import (  # noqa: E402
+    EmbeddedProblem,
+    ProblemEmbeddingStore,
+    load_problem_embedding_store,
+)
+from app.rag.problem_embeddings import (  # noqa: E402
+    DEFAULT_PROBLEM_EMBEDDINGS_PATH,
+    build_problem_embedding_input,
+)
 from app.rag.problem_bank_store import (  # noqa: E402
     DEFAULT_CATALOG_PATH as DEFAULT_PROBLEM_BANK_PATH,
     ProblemBankStore,
@@ -174,6 +184,25 @@ def generate_fake_embedding_store(
         for chunk in store.records
     )
     return ConceptEmbeddingStore(
+        items=items,
+        expected_model=FAKE_EMBEDDING_MODEL,
+        expected_dimensionality=dimensions,
+    )
+
+
+def generate_fake_problem_embedding_store(
+    store: ProblemBankStore,
+    *,
+    dimensions: int = FAKE_EMBEDDING_DIMENSIONS,
+) -> ProblemEmbeddingStore:
+    items = tuple(
+        EmbeddedProblem(
+            problem=problem,
+            embedding=fake_embedding(_fake_problem_embedding_input(problem), dimensions=dimensions),
+        )
+        for problem in store.records
+    )
+    return ProblemEmbeddingStore(
         items=items,
         expected_model=FAKE_EMBEDDING_MODEL,
         expected_dimensionality=dimensions,
@@ -377,11 +406,17 @@ def evaluate_problem_queries(
     queries: Sequence[EvalQuery],
     *,
     store: ProblemBankStore,
+    embedding_store: ProblemEmbeddingStore | None = None,
+    client: Any | None = None,
     top_k: int = 3,
     known_source_paths: Iterable[str] = (),
 ) -> ProblemEvaluationResult:
     known_sources = tuple(known_source_paths)
-    searcher = ProblemBankSearcher(store)
+    searcher = ProblemBankSearcher(
+        store,
+        embedding_store=embedding_store,
+        client=client,
+    )
     results: dict[str, tuple[RetrievedItem, ...]] = {}
     for query in queries:
         hits = searcher.search(query.report_text, limit=top_k)
@@ -558,6 +593,7 @@ def run_baseline_evaluation(
     problem_bank_path: Path = DEFAULT_PROBLEM_BANK_PATH,
     queries_path: Path = DEFAULT_QUERIES_PATH,
     embeddings_path: Path | None = None,
+    problem_embeddings_path: Path | None = None,
     tier_c_queries_path: Path | None = None,
     tier_c_min_queries: int = 150,
     tier_c_max_queries: int = 300,
@@ -594,6 +630,11 @@ def run_baseline_evaluation(
         catalog_store=catalog_store,
         embeddings_path=embeddings_path,
     )
+    problem_embedding_store, problem_client, problem_embedding_metadata = _prepare_problem_embedding_components(
+        embedding_mode,
+        problem_store=problem_store,
+        problem_embeddings_path=problem_embeddings_path,
+    )
 
     concept_tier_a = evaluate_concept_queries(
         tier_a_queries,
@@ -607,6 +648,8 @@ def run_baseline_evaluation(
     problem_tier_a = evaluate_problem_queries(
         tier_a_queries,
         store=problem_store,
+        embedding_store=problem_embedding_store,
+        client=problem_client,
         top_k=problem_top_k,
         known_source_paths=catalog_sources,
     )
@@ -622,6 +665,8 @@ def run_baseline_evaluation(
     problem_tier_c = evaluate_problem_queries(
         tier_c_queries,
         store=problem_store,
+        embedding_store=problem_embedding_store,
+        client=problem_client,
         top_k=problem_top_k,
         known_source_paths=catalog_sources,
     )
@@ -646,6 +691,7 @@ def run_baseline_evaluation(
             "tierAQueryCount": len(tier_a_queries),
             "tierCQueryCount": len(tier_c_queries),
             "embedding": embedding_metadata,
+            "problemEmbedding": problem_embedding_metadata,
         },
         "validation": validation.to_json_dict(),
         "tierA": {
@@ -823,6 +869,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--problem-bank-path", type=Path, default=DEFAULT_PROBLEM_BANK_PATH)
     parser.add_argument("--queries-path", type=Path, default=DEFAULT_QUERIES_PATH)
     parser.add_argument("--embeddings-path", type=Path, default=None)
+    parser.add_argument("--problem-embeddings-path", type=Path, default=None)
     parser.add_argument("--tier-c-queries-path", type=Path, default=None)
     parser.add_argument("--write-tier-c-queries", type=Path, default=None)
     parser.add_argument("--tier-c-min-queries", type=int, default=150)
@@ -863,6 +910,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         problem_bank_path=args.problem_bank_path,
         queries_path=args.queries_path,
         embeddings_path=args.embeddings_path,
+        problem_embeddings_path=args.problem_embeddings_path,
         tier_c_queries_path=args.tier_c_queries_path,
         tier_c_min_queries=args.tier_c_min_queries,
         tier_c_max_queries=args.tier_c_max_queries,
@@ -1060,6 +1108,44 @@ def _prepare_embedding_components(
     raise ValueError(f"unknown embedding mode: {embedding_mode}")
 
 
+def _prepare_problem_embedding_components(
+    embedding_mode: str,
+    *,
+    problem_store: ProblemBankStore,
+    problem_embeddings_path: Path | None,
+) -> tuple[ProblemEmbeddingStore | None, Any | None, dict[str, Any]]:
+    if embedding_mode == "fake":
+        store = generate_fake_problem_embedding_store(problem_store)
+        return store, FakeEmbeddingClient(), {
+            "model": store.expected_model,
+            "dimensions": store.expected_dimensionality,
+            "storeItemCount": len(store),
+            "issueCount": len(store.issues),
+            "callsGemini": False,
+        }
+    if embedding_mode == "keyword":
+        return None, None, {
+            "model": "keyword-fallback",
+            "dimensions": 0,
+            "storeItemCount": 0,
+            "issueCount": 0,
+            "callsGemini": False,
+        }
+    if embedding_mode == "sidecar":
+        store = load_problem_embedding_store(
+            store=problem_store,
+            embeddings_path=problem_embeddings_path or DEFAULT_PROBLEM_EMBEDDINGS_PATH,
+        )
+        return store, GeminiEmbeddingClient(), {
+            "model": store.expected_model,
+            "dimensions": store.expected_dimensionality,
+            "storeItemCount": len(store),
+            "issueCount": len(store.issues),
+            "callsGemini": True,
+        }
+    raise ValueError(f"unknown embedding mode: {embedding_mode}")
+
+
 def _catalog_source_paths(store: ConceptCatalogStore) -> tuple[str, ...]:
     return tuple(sorted({chunk.source_path for chunk in store.records}))
 
@@ -1088,6 +1174,10 @@ def _fake_embedding_input(chunk: ConceptChunkRecord) -> str:
             chunk.text,
         )
     )
+
+
+def _fake_problem_embedding_input(problem: ProblemRecord) -> str:
+    return build_problem_embedding_input(problem)
 
 
 def _topic_from_chunk(chunk: ConceptChunkRecord) -> str:

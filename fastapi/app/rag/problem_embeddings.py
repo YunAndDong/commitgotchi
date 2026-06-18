@@ -60,6 +60,25 @@ def build_problem_embedding_input(problem: ProblemRecord) -> str:
     )
 
 
+def build_problem_query_embedding_input(
+    query: str,
+    *,
+    field: str | None = None,
+    difficulty: str | None = None,
+) -> str:
+    return clean_markdown(
+        "\n".join(
+            (
+                "Problem bank retrieval query",
+                f"Field filter: {field or ''}",
+                f"Difficulty filter: {difficulty or ''}",
+                "Report text:",
+                query,
+            )
+        )
+    )
+
+
 def make_problem_embedding_record(
     problem: ProblemRecord,
     *,
