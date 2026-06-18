@@ -13,3 +13,7 @@
 
 # BMad
 _bmad/
+
+# RAG labeling candidates; final SSOT fixture lives in fastapi/tests/fixtures/rag/eval/queries.jsonl
+fastapi/docs/rag-enhancement/labeling/queries.claude.jsonl
+fastapi/docs/rag-enhancement/labeling/queries.codex.jsonl

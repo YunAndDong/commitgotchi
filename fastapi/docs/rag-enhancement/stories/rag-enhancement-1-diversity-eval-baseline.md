@@ -1,6 +1,6 @@
 ---
 title: RAG Enhancement 1 - 검색 다양성 평가 하니스 & 베이스라인
-status: ready-for-dev
+status: done
 created: 2026-06-17
 owner: FastAPI AI 서버
 epic: rag-enhancement
@@ -16,7 +16,7 @@ source_docs:
 
 ## Status
 
-ready-for-dev
+done
 
 ## 목표
 
@@ -64,13 +64,13 @@ ready-for-dev
 
 ## Tasks/Subtasks
 
-- [ ] Tier A 평가 fixture(`fastapi/tests/fixtures/rag/eval/queries.jsonl`) 로더와 validator를 구현한다.
-- [ ] `chunks.jsonl` distinct source 91개와 Tier A fixture의 `sourcePath` 집합이 완전 일치하는지 검증한다.
-- [ ] Tier C 비라벨 다양성 스윕 질의 생성/입력 경로를 추가한다.
-- [ ] 개념 검색·문제 뱅크 검색 결과를 받아 다양성/관련성 메트릭을 계산하는 순수 함수를 구현한다.
-- [ ] `fastapi/scripts/rag_diversity_eval.py` CLI로 baseline `.md`/`.json` 리포트를 생성한다.
-- [ ] fake embedder/소형 fixture 기반 단위 테스트를 추가해 실제 API 호출 없이 검증한다.
-- [ ] 검색·추천·카탈로그 로직을 변경하지 않았는지 회귀 테스트로 확인한다.
+- [x] Tier A 평가 fixture(`fastapi/tests/fixtures/rag/eval/queries.jsonl`) 로더와 validator를 구현한다.
+- [x] `chunks.jsonl` distinct source 91개와 Tier A fixture의 `sourcePath` 집합이 완전 일치하는지 검증한다.
+- [x] Tier C 비라벨 다양성 스윕 질의 생성/입력 경로를 추가한다.
+- [x] 개념 검색·문제 뱅크 검색 결과를 받아 다양성/관련성 메트릭을 계산하는 순수 함수를 구현한다.
+- [x] `fastapi/scripts/rag_diversity_eval.py` CLI로 baseline `.md`/`.json` 리포트를 생성한다.
+- [x] fake embedder/소형 fixture 기반 단위 테스트를 추가해 실제 API 호출 없이 검증한다.
+- [x] 검색·추천·카탈로그 로직을 변경하지 않았는지 회귀 테스트로 확인한다.
 
 ## 테스트 기준
 
@@ -108,17 +108,36 @@ ready-for-dev
 
 ### Debug Log
 
-- TBD
+- 2026-06-18: `python3 -m unittest tests.rag.test_diversity_eval` failed RED before harness existed (`ModuleNotFoundError: scripts.rag_diversity_eval`).
+- 2026-06-18: Implemented `fastapi/scripts/rag_diversity_eval.py` with Tier A loading/validation, Tier C generation, pure diversity/relevance metrics, fake embedder mode, sidecar CLI mode, and report writers.
+- 2026-06-18: `python3 -m unittest tests.rag.test_diversity_eval` passed (7 tests).
+- 2026-06-18: `python3 scripts/rag_diversity_eval.py --validate-only` passed: 91 records, source full match, 0 duplicates, sorted=True.
+- 2026-06-18: `python3 scripts/rag_diversity_eval.py --embedding-mode fake` generated baseline Markdown and JSON reports.
+- 2026-06-18: `python3 -m unittest discover tests/rag` passed (63 tests); `python3 -m unittest discover tests/scoring` passed (45 tests).
+- 2026-06-18: System Python full discovery initially failed due missing local dependencies; temporary venv full discovery passed after installing test dependencies and Python 3.14-compatible psycopg binary wrapper (`/tmp/commitgotchi-fastapi-venv/bin/python -m unittest discover tests`, 190 tests).
 
 ### Completion Notes
 
-- TBD
+- Tier A final fixture is used as SSOT from `fastapi/tests/fixtures/rag/eval/queries.jsonl`; no label set regeneration, merge, or comparison was performed.
+- Validator enforces record count, exact catalog source coverage, duplicate/missing/extra detection, sourcePath sorting, queryId slug rule, sourceTier, required label fields, anchor-in-relevant rule, and optional relevance grade bounds.
+- Tier C unlabeled sweep can be generated deterministically from catalog headings (150-300 records) or supplied via CLI input path; generated records do not carry relevance labels.
+- Diversity and relevance calculations are pure functions over normalized retrieval results and cover distinct sources, source concentration, field/folder/catalog coverage, same-source neighborhood ratio, Recall@k, Hit@k, MRR, source coverage, and optional nDCG.
+- Baseline reports were generated in fake embedder mode, which does not call Gemini. `--embedding-mode sidecar` is available for sidecar/Gemini query embedding runs.
+- Search, recommendation, neighborhood, and catalog implementation files were not modified.
 
 ## File List
 
-- TBD
+- fastapi/scripts/rag_diversity_eval.py
+- fastapi/tests/rag/test_diversity_eval.py
+- fastapi/tests/fixtures/rag/eval/queries.jsonl
+- fastapi/data/rag/reports/rag-diversity-baseline.md
+- fastapi/data/rag/reports/rag-diversity-baseline.json
+- fastapi/docs/rag-enhancement/rag-enhancement-sprint-status.yaml
+- fastapi/docs/rag-enhancement/stories/rag-enhancement-1-diversity-eval-baseline.md
 
 ## Change Log
 
 - 2026-06-18: Aligned Story 1 scope with source coverage golden set (91) and unlabeled diversity sweep SSOT.
 - 2026-06-18: Added lightweight BMAD dev-story sections and marked Story 1 ready for development.
+- 2026-06-18: Implemented RAG diversity evaluation harness, fake/sidecar CLI paths, unit tests, and baseline reports; marked story ready for review.
+- 2026-06-18: BMAD code review found no blocking issues; marked Story 1 done.
