@@ -209,6 +209,40 @@ class ReportConsumerProcessTest(unittest.TestCase):
         self.assertNotIn("quizSubmission", serialized_payload)
         self.assertNotIn("https://evil.example/callback", serialized_payload)
 
+    def test_valid_message_preserves_character_emotion_for_service_context(self) -> None:
+        from app.integration.report_consumer import process_report_request_message
+
+        message = _valid_message()
+        message["characterMetadata"]["emotion"] = "ANGRY"
+        service = RecordingReportService()
+
+        result = process_report_request_message(
+            message,
+            report_service=service,
+            callback_client=_spring_callback_client(FakeTransport()),
+        )
+
+        self.assertTrue(result.callback_ok)
+        self.assertEqual(service.calls[0]["character_metadata"]["emotion"], "ANGRY")
+
+    def test_invalid_character_emotion_rejects_message_before_service_call(self) -> None:
+        from app.integration.report_consumer import process_report_request_message
+
+        message = _valid_message()
+        message["characterMetadata"]["emotion"] = "HAPPY"
+        service = RecordingReportService()
+
+        result = process_report_request_message(
+            message,
+            report_service=service,
+            callback_client=_spring_callback_client(FakeTransport()),
+        )
+
+        self.assertFalse(result.callback_attempted)
+        self.assertTrue(result.poison)
+        self.assertEqual(result.error, "invalid report request schema")
+        self.assertEqual(service.calls, [])
+
     def test_callback_200_duplicate_body_still_deletes(self) -> None:
         from app.integration.report_consumer import process_report_request_message
 
@@ -571,7 +605,6 @@ def _report_result() -> dict[str, Any]:
     return {
         "status": "SUCCESS",
         "scoreDelta": {"db": 0, "algorithm": 3, "cs": 0, "network": 1, "framework": 0},
-        "emotion": "JOY",
         "statusMessage": "좋은 학습 흐름이에요.",
         "dailyReport": {
             "text": "합성 분석 결과",

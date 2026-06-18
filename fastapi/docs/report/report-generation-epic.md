@@ -25,7 +25,6 @@ FastAPI AI 서버 안에서 사용자의 일일 학습 리포트를 분석하고
 ```json
 {
   "scoreDelta": { "db": 0, "algorithm": 0, "cs": 0, "network": 0, "framework": 0 },
-  "emotion": "JOY",
   "statusMessage": "오늘 학습 기록이 알찼어요!",
   "dailyReport": {
     "text": "오늘 학습은 ...",
@@ -66,6 +65,7 @@ FastAPI AI 서버 안에서 사용자의 일일 학습 리포트를 분석하고
 - 여기서 "주변"은 벡터 거리만이 아니라 `sourcePath`, `headingPath` 부모/형제, 문서 내 이전/다음 heading, 같은 폴더의 관련 문서 같은 출처 기반 인접 컨텍스트를 의미한다.
 - Gemini는 리포트 분석, 피드백, 추천 문안 생성에 사용하되 모델 출력은 신뢰하지 않는다.
 - 서버는 `scoreDelta`를 필드별 `0..10`으로 clamp하고 schema validation을 반드시 수행한다.
+- 캐릭터 감정 상태는 Spring Boot가 `characterMetadata.emotion`으로 전달하며, FastAPI는 이를 문체/톤 컨텍스트로만 소비하고 report 결과에는 `emotion`을 출력하지 않는다.
 - 리포트 분석 점수는 리포트 내용 자체만 기준으로 산정한다.
 - 리포트 점수와 퀴즈 채점 점수는 이중계상하지 않는다.
 - `recommendedQuizzes`는 기존 퀴즈 추천 함수 결과를 사용한다.
@@ -327,7 +327,7 @@ report chunk, retrieval 결과, source-neighborhood evidence를 바탕으로 Gem
 - 모델 출력 schema validation
 - 서버 측 `scoreDelta` clamp
 - confidence 낮음, JSON parsing 실패, Gemini 호출 실패 시 fallback
-- `emotion`, `statusMessage`, `dailyReport.text`, `dailyReport.feedback`, `nextRecommendation` 후보 생성
+- `statusMessage`, `dailyReport.text`, `dailyReport.feedback`, `nextRecommendation` 후보 생성
 
 권장 출력 모델:
 
@@ -347,7 +347,6 @@ report chunk, retrieval 결과, source-neighborhood evidence를 바탕으로 Gem
     "framework": 7
   },
   "confidence": 0.84,
-  "emotion": "JOY",
   "statusMessage": "핵심 원인과 해결책을 잘 연결했어요.",
   "dailyReport": {
     "text": "오늘은 JPA N+1의 발생 원인과 해결 전략을 중심으로 학습했습니다.",
@@ -439,7 +438,6 @@ def generate_daily_report_result(
 {
   "status": "SUCCESS",
   "scoreDelta": { "db": 8, "algorithm": 0, "cs": 0, "network": 0, "framework": 7 },
-  "emotion": "JOY",
   "statusMessage": "핵심 원인과 해결책을 잘 연결했어요.",
   "dailyReport": {
     "text": "오늘은 JPA N+1의 발생 원인과 해결 전략을 중심으로 학습했습니다.",
@@ -477,13 +475,13 @@ def generate_daily_report_result(
 
 ### Acceptance Criteria
 
-- 결과는 `scoreDelta`, `emotion`, `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes`를 포함한다.
+- 결과는 `scoreDelta`, `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes`를 포함한다.
 - `scoreDelta`는 리포트 분석 결과만 반영한다.
 - `recommendedQuizzes`는 기존 퀴즈 추천 함수 결과를 사용한다.
 - 추천 퀴즈는 `problemId`, `question`, `modelAnswer`, `scoreAllocation` 스냅샷을 포함한다.
 - 가까운 문제가 없으면 `recommendedQuizzes: []`를 반환한다.
 - 퀴즈 추천 실패 시에도 리포트 분석 결과는 가능한 범위에서 반환된다.
-- 리포트 분석 실패 시 fallback payload는 전 필드 0점, 보수적 emotion/statusMessage, `recommendedQuizzes: []`를 반환한다.
+- 리포트 분석 실패 시 fallback payload는 전 필드 0점, 보수적 `statusMessage`, `recommendedQuizzes: []`를 반환한다.
 - 결과에는 퀴즈 채점 결과나 `gradings` 배열이 포함되지 않는다.
 - 이후 SQS/Spring Boot 콜백 계층에서 `requestId`, `userId`, `characterId`, `targetDate`를 감싸기 쉬운 구조다.
 

@@ -49,6 +49,7 @@ class ReportAnalyzerTest(unittest.TestCase):
         self.assertIn("JPA N+1", result["topics"])
         self.assertIn("fetch join", result["dailyReport"]["feedback"])
         self.assertIn("EntityGraph", result["nextRecommendation"]["topics"])
+        self.assertNotIn("emotion", result)
         self.assertNotIn("recommendedQuizzes", result)
         self.assertNotIn("gradings", result)
         self.assertNotIn("requestId", result)
@@ -58,6 +59,7 @@ class ReportAnalyzerTest(unittest.TestCase):
         self.assertIn("report:0", prompt)
         self.assertIn("concept:jpa-n-plus-one", prompt)
         self.assertIn("따뜻하지만 틀린 부분은 분명하게 짚는 성격", prompt)
+        self.assertIn("귀엽고 다정한 Commitgotchi", prompt)
 
     def test_json_string_response_is_parsed(self) -> None:
         from app.scoring.report_analyzer import analyze_daily_report
@@ -270,6 +272,7 @@ class ReportAnalyzerTest(unittest.TestCase):
             user_metadata=user_metadata,
             character_metadata={
                 "personality": "칭찬을 많이 하는 성격",
+                "emotion": "ANGRY",
                 "currentStats": {"db": 120, "network": 60, "framework": 140},
             },
             report_chunks=[_report_chunk(text="JWT 토큰 검증 흐름을 정리했다.")],
@@ -286,6 +289,9 @@ class ReportAnalyzerTest(unittest.TestCase):
         self.assertIn("recentReports", prompt)
         self.assertIn("recentFieldChanges", prompt)
         self.assertIn("currentStats", prompt)
+        self.assertIn('"emotion": "ANGRY"', prompt)
+        self.assertIn("삐진 듯한 귀여운 투덜거림", prompt)
+        self.assertIn("딱딱한 교사/보고서체", prompt)
         self.assertIn("연속 작성", result["statusMessage"])
         self.assertIn("network 정체", result["dailyReport"]["feedback"])
         self.assertIn("currentStats", result["nextRecommendation"]["rationale"])
@@ -398,6 +404,32 @@ class ReportAnalyzerTest(unittest.TestCase):
         }
         self.assertTrue(forbidden_keys.isdisjoint(result))
 
+    def test_report_analysis_preview_prompt_only_fake_mode_skips_gemini_call(self) -> None:
+        from scripts import report_analysis_preview
+
+        with patch.object(
+            report_analysis_preview,
+            "analyze_daily_report",
+            side_effect=AssertionError("Gemini analysis must not run in prompt-only mode"),
+        ):
+            output = report_analysis_preview.build_preview_output(
+                report_title="오늘의 학습",
+                report_content="JPA N+1과 HTTP 상태 코드를 복습했다.",
+                user_metadata={},
+                character_personality="차분한 조언자",
+                character_metadata={},
+                embedding_mode="fake",
+                analysis_mode="prompt-only",
+                show_evidence=True,
+            )
+
+        self.assertEqual(output["analysisMode"], "prompt-only")
+        self.assertEqual(output["embeddingMode"], "fake")
+        self.assertEqual(output["analysis"]["status"], "PROMPT_ONLY")
+        self.assertIn("prompt", output)
+        self.assertIn("reportChunks", output)
+        self.assertIn("evidenceBundles", output)
+
 
 def _report_chunk(text: str = "JPA N+1 원인과 fetch join 해결책을 정리했다.") -> ReportChunk:
     return ReportChunk(
@@ -463,7 +495,6 @@ def _success_payload(
             else {"db": 8, "algorithm": 0, "cs": 0, "network": 0, "framework": 7}
         ),
         "confidence": confidence,
-        "emotion": "JOY",
         "statusMessage": status_message,
         "dailyReport": {
             "text": "오늘은 JPA N+1의 발생 원인과 해결 전략을 중심으로 학습했습니다.",

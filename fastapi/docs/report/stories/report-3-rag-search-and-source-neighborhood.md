@@ -456,7 +456,7 @@ python3 -m unittest discover -s tests
 - prompt 작성 또는 model output parsing
 - pgvector, 운영 vector index, DB persistence
 - 최종 `scoreDelta` 산정
-- `emotion`, `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes` 생성
+- `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes` 생성
 - API endpoint
 - SQS consumer
 - Spring Boot callback 전송

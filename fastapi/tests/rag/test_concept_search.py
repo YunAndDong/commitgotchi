@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from app.rag.concept_search import (
+    ConceptSearchHit,
     build_report_evidence_bundle,
     build_report_evidence_bundles,
     search_concept_chunks,
@@ -14,6 +15,7 @@ from app.rag.embedding_store import (
     EmbeddedConceptChunk,
 )
 from app.rag.schemas import ConceptChunkRecord, ConceptNeighbors
+from app.rag.multi_query import build_report_subqueries, merge_subquery_hits
 from app.scoring.schemas import ReportChunk
 
 
@@ -42,6 +44,36 @@ class StaticEmbeddingClient:
 
     def embed_query(self, text: str) -> tuple[float, ...]:
         return self.query_embedding
+
+
+class FieldAwareEmbeddingClient:
+    def __init__(
+        self,
+        *,
+        fail_field: str | None = None,
+        combined_field_vector: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0),
+    ):
+        self.fail_field = fail_field
+        self.combined_field_vector = combined_field_vector
+        self.queries: list[str] = []
+
+    def embed_document(self, text: str) -> tuple[float, ...]:
+        raise AssertionError("document embedding is not used during search")
+
+    def embed_query(self, text: str) -> tuple[float, ...]:
+        self.queries.append(text)
+        field_line = _field_line(text)
+        if self.fail_field is not None and field_line == f"Field hints: {self.fail_field}":
+            raise RuntimeError(f"forced {self.fail_field} embedding failure")
+        if field_line == "Field hints: db":
+            return (1.0, 0.0, 0.0, 0.0)
+        if field_line == "Field hints: network":
+            return (0.0, 1.0, 0.0, 0.0)
+        if field_line == "Field hints: algorithm":
+            return (0.0, 0.0, 1.0, 0.0)
+        if field_line == "Field hints: framework":
+            return (0.0, 0.0, 0.0, 1.0)
+        return self.combined_field_vector
 
 
 class ConceptSearchTest(unittest.TestCase):
@@ -319,6 +351,161 @@ class ConceptSearchTest(unittest.TestCase):
             {"chunkId", "score", "searchMode", "matchedTerms", "sourcePath", "headingPath", "fieldHints", "text"},
         )
 
+    def test_report_bundle_multiquery_merges_db_and_network_field_results(self) -> None:
+        store, embedding_store = _multi_field_search_stores()
+        report_chunk = ReportChunk(
+            "report:multi",
+            "트랜잭션 격리와 HTTP 재시도 처리를 함께 정리했다.",
+            0,
+            30,
+            ("Transaction", "HTTP"),
+            ("db", "network"),
+        )
+
+        bundle = build_report_evidence_bundle(
+            report_chunk,
+            store=store,
+            embedding_store=embedding_store,
+            client=FieldAwareEmbeddingClient(),
+            top_k=2,
+            max_neighborhood_chunks=0,
+            max_subqueries=3,
+        )
+
+        matched_ids = [match.chunk_id for match in bundle.matches]
+        self.assertIn("concept:sha256:transaction", matched_ids)
+        self.assertIn("concept:sha256:http", matched_ids)
+
+    def test_max_subqueries_is_honored_and_weak_single_signal_falls_back(self) -> None:
+        store, embedding_store = _multi_field_search_stores()
+        rich_chunk = ReportChunk(
+            "report:rich",
+            "트랜잭션, HTTP, 그래프, Spring MVC를 정리했다.",
+            0,
+            31,
+            ("Transaction", "HTTP", "Graph", "Spring MVC"),
+            ("db", "network", "algorithm", "framework"),
+        )
+        rich_client = FieldAwareEmbeddingClient()
+
+        build_report_evidence_bundle(
+            rich_chunk,
+            store=store,
+            embedding_store=embedding_store,
+            client=rich_client,
+            top_k=3,
+            max_neighborhood_chunks=0,
+            max_subqueries=2,
+        )
+
+        self.assertEqual(len(rich_client.queries), 2)
+        self.assertLessEqual(len(build_report_subqueries(rich_chunk, max_subqueries=2)), 2)
+
+        weak_chunk = ReportChunk(
+            "report:weak",
+            "Spring 설정을 훑어봤다.",
+            0,
+            14,
+            (),
+            ("framework",),
+        )
+        weak_client = FieldAwareEmbeddingClient()
+
+        build_report_evidence_bundle(
+            weak_chunk,
+            store=store,
+            embedding_store=embedding_store,
+            client=weak_client,
+            top_k=2,
+            max_neighborhood_chunks=0,
+            max_subqueries=3,
+        )
+
+        self.assertEqual(len(weak_client.queries), 1)
+
+    def test_multiquery_failed_subquery_does_not_use_keyword_fallback_lane(self) -> None:
+        store, embedding_store = _multi_field_search_stores()
+        report_chunk = ReportChunk(
+            "report:partial",
+            "트랜잭션 격리와 HTTP 재시도를 같이 복습했다.",
+            0,
+            29,
+            ("Transaction", "HTTP"),
+            ("db", "network"),
+        )
+
+        bundle = build_report_evidence_bundle(
+            report_chunk,
+            store=store,
+            embedding_store=embedding_store,
+            client=FieldAwareEmbeddingClient(fail_field="network"),
+            top_k=2,
+            max_neighborhood_chunks=0,
+            max_subqueries=3,
+        )
+
+        self.assertEqual([match.chunk_id for match in bundle.matches], ["concept:sha256:transaction"])
+        self.assertEqual([match.search_mode for match in bundle.matches], ["embedding"])
+
+    def test_multiquery_merge_dedupes_and_applies_global_source_cap_deterministically(self) -> None:
+        shared = _chunk("shared", "shared/source.md", ("Shared",), 0, "shared db network", ("db", "network"))
+        same_source = _chunk("same-source", "shared/source.md", ("Shared", "More"), 1, "more db", ("db",))
+        db_other = _chunk("db-other", "db/other.md", ("DB",), 0, "transaction isolation", ("db",))
+        net_other = _chunk("net-other", "network/other.md", ("Network",), 0, "http retry", ("network",))
+        lanes = (
+            (
+                ConceptSearchHit(shared, 9.0, "embedding", ("shared",)),
+                ConceptSearchHit(same_source, 8.0, "embedding", ("db",)),
+                ConceptSearchHit(db_other, 7.0, "embedding", ("db",)),
+            ),
+            (
+                ConceptSearchHit(shared, 9.5, "embedding", ("shared",)),
+                ConceptSearchHit(net_other, 8.5, "embedding", ("network",)),
+            ),
+        )
+
+        first = merge_subquery_hits(lanes, limit=3, max_per_source=1)
+        second = merge_subquery_hits(lanes, limit=3, max_per_source=1)
+
+        self.assertEqual([hit.to_dict() for hit in first], [hit.to_dict() for hit in second])
+        self.assertEqual(len({hit.chunk.chunk_id for hit in first}), len(first))
+        self.assertEqual(_source_counts(first), {"shared/source.md": 1, "network/other.md": 1, "db/other.md": 1})
+
+    def test_multiquery_bundle_output_shape_remains_stable(self) -> None:
+        store, embedding_store = _multi_field_search_stores()
+        report_chunk = ReportChunk(
+            "report:shape",
+            "트랜잭션 격리와 HTTP 상태 코드를 비교했다.",
+            0,
+            27,
+            ("Transaction", "HTTP"),
+            ("db", "network"),
+        )
+
+        bundle = build_report_evidence_bundle(
+            report_chunk,
+            store=store,
+            embedding_store=embedding_store,
+            client=FieldAwareEmbeddingClient(),
+            top_k=2,
+            max_neighborhood_chunks=2,
+            max_subqueries=3,
+        )
+        payload = bundle.to_dict()
+
+        self.assertEqual(set(payload), {"reportChunkId", "query", "matches", "neighborhood"})
+        self.assertEqual(set(payload["query"]), {"text", "topicHints", "fieldHints"})
+        self.assertTrue(payload["matches"])
+        self.assertEqual(
+            set(payload["matches"][0]),
+            {"chunkId", "score", "searchMode", "matchedTerms", "sourcePath", "headingPath", "fieldHints", "text"},
+        )
+        for item in payload["neighborhood"]:
+            self.assertEqual(
+                set(item),
+                {"reason", "chunkId", "sourcePath", "headingPath", "fieldHints", "text"},
+            )
+
 
 def _search_stores() -> tuple[ConceptCatalogStore, ConceptEmbeddingStore]:
     chunks = (
@@ -410,6 +597,55 @@ def _diversity_search_stores() -> tuple[ConceptCatalogStore, ConceptEmbeddingSto
     return store, ConceptEmbeddingStore(items=items, expected_model="fake-embedding-model", expected_dimensionality=3)
 
 
+def _multi_field_search_stores() -> tuple[ConceptCatalogStore, ConceptEmbeddingStore]:
+    chunks = (
+        _chunk(
+            "transaction",
+            "01-db/transaction.md",
+            ("DB", "Transaction"),
+            0,
+            "Database transaction isolation, lock ordering, rollback, and consistency.",
+            ("db",),
+        ),
+        _chunk(
+            "http",
+            "02-network/http.md",
+            ("Network", "HTTP"),
+            0,
+            "HTTP retry, timeout, status code, idempotency, and network failure handling.",
+            ("network",),
+        ),
+        _chunk(
+            "graph",
+            "03-algorithm/graph.md",
+            ("Algorithm", "Graph"),
+            0,
+            "Graph traversal, shortest path, queue, and visited node management.",
+            ("algorithm",),
+        ),
+        _chunk(
+            "spring",
+            "04-framework/spring.md",
+            ("Framework", "Spring MVC"),
+            0,
+            "Spring MVC controller, request mapping, dependency injection, and filters.",
+            ("framework",),
+        ),
+    )
+    embeddings = {
+        "concept:sha256:transaction": (1.0, 0.0, 0.0, 0.0),
+        "concept:sha256:http": (0.0, 1.0, 0.0, 0.0),
+        "concept:sha256:graph": (0.0, 0.0, 1.0, 0.0),
+        "concept:sha256:spring": (0.0, 0.0, 0.0, 1.0),
+    }
+    store = ConceptCatalogStore(chunks)
+    items = tuple(
+        EmbeddedConceptChunk(chunk=chunk, embedding=embeddings[chunk.chunk_id])
+        for chunk in chunks
+    )
+    return store, ConceptEmbeddingStore(items=items, expected_model="fake-embedding-model", expected_dimensionality=4)
+
+
 def _chunk(
     suffix: str,
     source_path: str,
@@ -437,6 +673,16 @@ def _source_counts(hits) -> dict[str, int]:
     for hit in hits:
         counts[hit.chunk.source_path] = counts.get(hit.chunk.source_path, 0) + 1
     return counts
+
+
+def _field_line(query_input: str) -> str:
+    marker = "Field hints:"
+    if marker not in query_input:
+        return ""
+    value = query_input.split(marker, 1)[1].split("Report text:", 1)[0].strip()
+    if value:
+        return f"{marker} {value}"
+    return ""
 
 
 def _unit_vector(*values: float) -> tuple[float, ...]:

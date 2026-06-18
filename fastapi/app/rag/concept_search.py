@@ -13,6 +13,11 @@ from .concept_embeddings import (
 )
 from .concept_store import ConceptCatalogStore, load_concept_catalog_store
 from .embedding_store import ConceptEmbeddingStore, load_concept_embedding_store
+from .multi_query import (
+    DEFAULT_MAX_SUBQUERIES,
+    build_report_subqueries,
+    merge_subquery_hits,
+)
 from .schemas import (
     ConceptChunkRecord,
     ConceptSearchHit,
@@ -181,6 +186,7 @@ def build_report_evidence_bundle(
     candidate_pool: int | None = None,
     mmr_lambda: float = DEFAULT_MMR_LAMBDA,
     max_per_source: int | None = DEFAULT_MAX_PER_SOURCE,
+    max_subqueries: int = DEFAULT_MAX_SUBQUERIES,
 ) -> ReportEvidenceBundle:
     catalog_store = _resolve_store(store, embedding_store)
     if top_k <= 0 or len(catalog_store) == 0 or not report_chunk.text.strip():
@@ -191,18 +197,17 @@ def build_report_evidence_bundle(
             field_hints=report_chunk.field_hints,
         )
 
-    hits = search_concept_chunks(
-        report_chunk.text,
+    hits = _search_report_chunk_matches(
+        report_chunk,
         store=catalog_store,
         embedding_store=embedding_store,
         client=client,
-        topic_hints=report_chunk.topic_hints,
-        field_hints=report_chunk.field_hints,
-        limit=top_k,
+        top_k=top_k,
         allow_keyword_fallback=allow_keyword_fallback,
         candidate_pool=candidate_pool,
         mmr_lambda=mmr_lambda,
         max_per_source=max_per_source,
+        max_subqueries=max_subqueries,
     )
     query_input = build_query_embedding_input(
         report_chunk.text,
@@ -258,6 +263,7 @@ def build_report_evidence_bundles(
     candidate_pool: int | None = None,
     mmr_lambda: float = DEFAULT_MMR_LAMBDA,
     max_per_source: int | None = DEFAULT_MAX_PER_SOURCE,
+    max_subqueries: int = DEFAULT_MAX_SUBQUERIES,
 ) -> list[ReportEvidenceBundle]:
     catalog_store = _resolve_store(store, embedding_store)
     return [
@@ -276,9 +282,67 @@ def build_report_evidence_bundles(
             candidate_pool=candidate_pool,
             mmr_lambda=mmr_lambda,
             max_per_source=max_per_source,
+            max_subqueries=max_subqueries,
         )
         for report_chunk in report_chunks
     ]
+
+
+def _search_report_chunk_matches(
+    report_chunk: ReportChunk,
+    *,
+    store: ConceptCatalogStore,
+    embedding_store: ConceptEmbeddingStore | None,
+    client: EmbeddingClient | None,
+    top_k: int,
+    allow_keyword_fallback: bool,
+    candidate_pool: int | None,
+    mmr_lambda: float,
+    max_per_source: int | None,
+    max_subqueries: int,
+) -> list[ConceptSearchHit]:
+    subqueries = build_report_subqueries(
+        report_chunk,
+        max_subqueries=max_subqueries,
+    )
+    if len(subqueries) > 1:
+        lanes = [
+            search_concept_chunks(
+                subquery.query,
+                store=store,
+                embedding_store=embedding_store,
+                client=client,
+                topic_hints=subquery.topic_hints,
+                field_hints=subquery.field_hints,
+                limit=top_k,
+                allow_keyword_fallback=False,
+                candidate_pool=candidate_pool,
+                mmr_lambda=mmr_lambda,
+                max_per_source=max_per_source,
+            )
+            for subquery in subqueries
+        ]
+        merged = merge_subquery_hits(
+            lanes,
+            limit=top_k,
+            max_per_source=max_per_source,
+        )
+        if merged:
+            return merged
+
+    return search_concept_chunks(
+        report_chunk.text,
+        store=store,
+        embedding_store=embedding_store,
+        client=client,
+        topic_hints=report_chunk.topic_hints,
+        field_hints=report_chunk.field_hints,
+        limit=top_k,
+        allow_keyword_fallback=allow_keyword_fallback,
+        candidate_pool=candidate_pool,
+        mmr_lambda=mmr_lambda,
+        max_per_source=max_per_source,
+    )
 
 
 def cosine_similarity(

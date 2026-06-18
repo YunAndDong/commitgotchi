@@ -9,7 +9,6 @@ from app.scoring.policy import clamp_score_delta, sanitize_score_allocation, zer
 REPORT_RESULT_FIELDS = (
     "status",
     "scoreDelta",
-    "emotion",
     "statusMessage",
     "dailyReport",
     "nextRecommendation",

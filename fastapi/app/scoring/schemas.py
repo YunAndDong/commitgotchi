@@ -8,6 +8,7 @@ from app.rag.schemas import SCORE_FIELDS
 
 QuizGradingStatus = Literal["GRADED", "UNGRADED"]
 ReportAnalysisStatus = Literal["SUCCESS", "FALLBACK"]
+EmotionStatus = Literal["JOY", "ANGRY", "SAD"]
 ScoreVector = dict[str, int]
 
 
@@ -82,7 +83,6 @@ class ReportAnalysis:
     field_evidence: dict[str, str]
     score_delta: ScoreVector
     confidence: float
-    emotion: str
     status_message: str
     daily_report: DailyReportAnalysis | None
     next_recommendation: NextRecommendation | None
@@ -100,7 +100,6 @@ class ReportAnalysis:
                 for field_name in SCORE_FIELDS
             },
             "confidence": self.confidence,
-            "emotion": self.emotion,
             "statusMessage": self.status_message,
             "dailyReport": (
                 self.daily_report.to_dict()
@@ -142,7 +141,6 @@ class DailyReportResult:
 
     status: ReportAnalysisStatus
     score_delta: ScoreVector
-    emotion: str
     status_message: str
     daily_report: DailyReportAnalysis
     next_recommendation: NextRecommendation
@@ -155,7 +153,6 @@ class DailyReportResult:
                 field_name: int(self.score_delta.get(field_name, 0))
                 for field_name in SCORE_FIELDS
             },
-            "emotion": self.emotion,
             "statusMessage": self.status_message,
             "dailyReport": self.daily_report.to_dict(),
             "nextRecommendation": self.next_recommendation.to_dict(),

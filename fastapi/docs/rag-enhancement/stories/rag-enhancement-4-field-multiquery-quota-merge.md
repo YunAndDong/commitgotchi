@@ -1,6 +1,6 @@
 ---
 title: RAG Enhancement 4 - 필드/주제 멀티쿼리 검색 & 쿼터 병합
-status: backlog
+status: done
 created: 2026-06-17
 owner: FastAPI AI 서버
 epic: rag-enhancement
@@ -14,7 +14,7 @@ source_docs:
 
 ## Status
 
-backlog
+done
 
 ## 목표
 
@@ -60,11 +60,11 @@ backlog
 
 ## Tasks/Subtasks
 
-- [ ] `ReportChunk`의 `field_hints`/`topic_hints` 기반 sub-query 생성 로직을 추가한다.
-- [ ] sub-query 개수 상한과 단일 쿼리 fallback을 구현한다.
-- [ ] 각 sub-query 검색 결과를 quota/round-robin 방식으로 병합하고 중복을 제거한다.
-- [ ] 병합 후 전역 per-source 상한과 deterministic tie-break를 유지한다.
-- [ ] 다중 필드, 실패 sub-query, 호출 수 상한, 회귀 테스트를 추가/갱신한다.
+- [x] `ReportChunk`의 `field_hints`/`topic_hints` 기반 sub-query 생성 로직을 추가한다.
+- [x] sub-query 개수 상한과 단일 쿼리 fallback을 구현한다.
+- [x] 각 sub-query 검색 결과를 quota/round-robin 방식으로 병합하고 중복을 제거한다.
+- [x] 병합 후 전역 per-source 상한과 deterministic tie-break를 유지한다.
+- [x] 다중 필드, 실패 sub-query, 호출 수 상한, 회귀 테스트를 추가/갱신한다.
 
 ## 테스트 기준
 
@@ -98,16 +98,31 @@ backlog
 
 ### Debug Log
 
-- TBD
+- 2026-06-18: Story 4와 rag-enhancement sprint status를 in-progress로 갱신하고 RED 테스트를 추가했다.
+- 2026-06-18: `fastapi/app/rag/multi_query.py`에 sub-query 생성 및 quota/round-robin 병합 로직을 분리했다.
+- 2026-06-18: `build_report_evidence_bundle()`/`build_report_evidence_bundles()`에서 멀티쿼리를 선택적으로 사용하도록 연결하고 단일 검색 fallback을 유지했다.
+- 2026-06-18: `report_analysis_preview.py`로 endpoint/SQS/Spring 없이 chunking, RAG evidence, prompt-only/Gemini 분석 경로를 확인할 수 있게 했다.
+- 2026-06-18: 지정 회귀 테스트와 fake embedding diversity eval, prompt-only preview 실행을 통과했다.
 
 ### Completion Notes
 
-- TBD
+- `field_hints`에 strong signal(db/network/algorithm 등)이 있으면 필드별 sub-query를 우선 생성하고, `framework`/`cs`만 있는 약한 신호는 단일 검색으로 fallback하도록 했다.
+- 각 sub-query는 기존 `search_concept_chunks()`를 그대로 호출하므로 Story 2의 MMR 및 per-source cap을 재사용한다.
+- sub-query 결과는 lane별 최소 선택 후 round-robin으로 채우며 duplicate `chunkId`와 병합 후 global per-source cap을 적용한다.
+- 일부 sub-query embedding 실패 시 해당 lane은 빈 결과로 취급되고, 나머지 lane 결과로 evidence bundle을 구성한다.
+- Story 3의 `build_source_neighborhood()` 흐름과 `ReportEvidenceBundle.to_dict()`/`NeighborhoodEvidence.to_dict()` shape는 변경하지 않았다.
 
 ## File List
 
-- TBD
+- fastapi/app/rag/concept_search.py
+- fastapi/app/rag/multi_query.py
+- fastapi/scripts/report_analysis_preview.py
+- fastapi/tests/rag/test_concept_search.py
+- fastapi/tests/scoring/test_report_analyzer.py
+- fastapi/docs/rag-enhancement/rag-enhancement-sprint-status.yaml
+- fastapi/docs/rag-enhancement/stories/rag-enhancement-4-field-multiquery-quota-merge.md
 
 ## Change Log
 
 - 2026-06-18: Added lightweight BMAD dev-story sections.
+- 2026-06-18: Implemented field/topic multi-query retrieval, quota merge, preview script, and Story 4 regression tests.

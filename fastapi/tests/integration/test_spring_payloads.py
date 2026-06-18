@@ -30,7 +30,6 @@ class ReportCallbackPayloadTest(unittest.TestCase):
         for field_name in (
             "status",
             "scoreDelta",
-            "emotion",
             "statusMessage",
             "dailyReport",
             "nextRecommendation",
@@ -144,7 +143,6 @@ def _report_result() -> dict[str, Any]:
     return {
         "status": "SUCCESS",
         "scoreDelta": {"db": 1, "algorithm": 0, "cs": 0, "network": 0, "framework": 2},
-        "emotion": "JOY",
         "statusMessage": "오늘 학습 기록이 알찼어요!",
         "dailyReport": {
             "text": "오늘은 JPA N+1을 정리했습니다.",
