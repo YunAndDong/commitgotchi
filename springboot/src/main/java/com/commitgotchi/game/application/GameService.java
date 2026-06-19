@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class GameService {
@@ -186,9 +187,9 @@ public class GameService {
         if (quiz == null || quiz.path("scored").asBoolean(false)) {
             return response(state, quiz == null ? NullNode.instance : quiz);
         }
-        int selected = request.path("selected").asInt(-1);
+        String userAnswer = requiredText(request, "userAnswer");
         quiz.put("submitted", true);
-        quiz.put("selected", selected);
+        quiz.put("userAnswer", userAnswer);
         quiz.put("scored", false);
         quiz.put("gradeFailed", false);
         if (bool(request, "fail")) {
@@ -197,12 +198,11 @@ public class GameService {
             save(userId, state);
             return response(state, objectMapper.createObjectNode().put("ok", false).set("quiz", quiz));
         }
-        boolean correct = selected == quiz.path("answer").asInt();
+        QuizEvaluation evaluation = evaluateQuizAnswer(quiz, userAnswer);
+        boolean correct = evaluation.correct();
         quiz.put("correct", correct);
-        quiz.put("deltaAmount", correct ? 12 : 3);
-        quiz.put("feedback", correct
-                ? "정답! 핵심을 정확히 짚었어요. 한 번 확정한 최단거리를 다시 보지 않는 그리디 전제가 음수 간선과 충돌하죠."
-                : "아쉬워요. 다익스트라는 확정한 노드를 다시 갱신하지 않는 그리디라 음수 간선을 놓칠 수 있어요. 음수 간선엔 벨만-포드를 씁니다.");
+        quiz.put("deltaAmount", evaluation.deltaAmount());
+        quiz.put("feedback", evaluation.feedback());
         ObjectNode character = findObject(array(state, "characters"), quiz.path("characterId").asText());
         Long characterId = parseCharacterId(quiz.path("characterId").asText());
         if (character == null || characterId == null) {
@@ -222,7 +222,7 @@ public class GameService {
                 stat,
                 quiz.path("deltaAmount").asInt(0),
                 correct ? CharacterEmotion.JOY : CharacterEmotion.SAD,
-                correct ? "오 정답! 똑똑한데?" : "괜찮아, 틀리면서 크는 거지."
+                correct ? "좋은 답변이야! 핵심을 잡았어." : "괜찮아, 답을 다듬으면서 크는 거지."
         ).orElse(null);
         if (updated == null) {
             quiz.put("scored", false);
@@ -774,39 +774,98 @@ public class GameService {
         ArrayNode quizzes = array(state, "quizzes");
         String date = today();
         quizzes.add(quiz(nextId(state, "q"), date, "algo", characterId,
-                "다익스트라 알고리즘이 음의 가중치 간선을 처리하지 못하는 이유로 가장 적절한 것은?",
-                List.of("우선순위 큐를 쓰기 때문에", "한 번 확정한 최단거리를 다시 갱신하지 않는 그리디 전제 때문에", "인접 리스트를 사용하기 때문에", "시간복잡도가 높기 때문에"),
-                1, "algo"));
+                "다익스트라 알고리즘이 음의 가중치 간선을 처리하지 못하는 이유를 설명해 주세요.",
+                "다익스트라는 한 번 확정한 최단거리를 다시 갱신하지 않는 그리디 전제에 기대기 때문에, 음수 간선으로 더 짧은 경로가 나중에 발견되는 경우를 처리하지 못합니다.",
+                List.of("그리디", "확정", "갱신", "음수 간선"),
+                "algo"));
         quizzes.add(quiz(nextId(state, "q"), date, "net", characterId,
-                "TCP 3-way handshake에서 클라이언트가 마지막으로 보내는 세그먼트는?",
-                List.of("SYN", "SYN-ACK", "ACK", "FIN"),
-                2, "net"));
+                "TCP 3-way handshake에서 클라이언트가 마지막으로 보내는 세그먼트와 그 역할을 설명해 주세요.",
+                "클라이언트가 마지막으로 보내는 세그먼트는 ACK입니다. 서버의 SYN-ACK를 확인하고 연결 수립을 마무리한다는 의미를 전달합니다.",
+                List.of("ACK"),
+                "net"));
     }
 
     private ObjectNode quiz(String id, String date, String tag, String characterId, String question,
-                            List<String> options, int answer, String deltaStat) {
+                            String modelAnswer, List<String> answerKeywords, String deltaStat) {
         ObjectNode quiz = objectMapper.createObjectNode()
                 .put("id", id)
                 .put("date", date)
                 .put("tag", tag)
                 .put("question", question)
-                .put("answer", answer)
+                .put("modelAnswer", modelAnswer)
                 .put("submitted", false)
-                .put("selected", NullNode.instance.asText())
-                .put("correct", NullNode.instance.asText())
                 .put("scored", false)
                 .put("gradeFailed", false)
-                .put("feedback", NullNode.instance.asText())
                 .put("deltaStat", deltaStat)
                 .put("deltaAmount", 0)
                 .put("characterId", characterId);
-        ArrayNode optionNodes = objectMapper.createArrayNode();
-        options.forEach(optionNodes::add);
-        quiz.set("options", optionNodes);
-        quiz.set("selected", NullNode.instance);
+        ArrayNode keywordNodes = objectMapper.createArrayNode();
+        answerKeywords.forEach(keywordNodes::add);
+        quiz.set("answerKeywords", keywordNodes);
+        quiz.set("options", objectMapper.createArrayNode());
+        quiz.set("userAnswer", NullNode.instance);
         quiz.set("correct", NullNode.instance);
         quiz.set("feedback", NullNode.instance);
         return quiz;
+    }
+
+    private QuizEvaluation evaluateQuizAnswer(ObjectNode quiz, String userAnswer) {
+        JsonNode keywords = quiz.path("answerKeywords");
+        int keywordCount = keywords.isArray() ? keywords.size() : 0;
+        int matched = 0;
+        if (keywordCount > 0) {
+            for (JsonNode keyword : keywords) {
+                if (containsKeyword(userAnswer, keyword.asText())) {
+                    matched++;
+                }
+            }
+            int requiredMatches = Math.max(1, (int) Math.ceil(keywordCount * 0.5));
+            boolean correct = matched >= requiredMatches;
+            return quizEvaluation(quiz, correct);
+        }
+
+        String modelAnswer = modelAnswerFor(quiz);
+        boolean correct = containsKeyword(userAnswer, modelAnswer);
+        return quizEvaluation(quiz, correct);
+    }
+
+    private QuizEvaluation quizEvaluation(ObjectNode quiz, boolean correct) {
+        String modelAnswer = modelAnswerFor(quiz);
+        String feedback = correct
+                ? "좋은 답변이에요. 핵심 근거가 충분히 들어 있어요. 모범답안: " + modelAnswer
+                : "핵심이 조금 부족해요. 문제의 원인이나 역할을 더 구체적으로 적어 보세요. 모범답안: " + modelAnswer;
+        return new QuizEvaluation(correct, correct ? 12 : 3, feedback);
+    }
+
+    private String modelAnswerFor(ObjectNode quiz) {
+        String modelAnswer = quiz.path("modelAnswer").asText("").trim();
+        if (!modelAnswer.isBlank()) {
+            return modelAnswer;
+        }
+        JsonNode options = quiz.path("options");
+        int answer = quiz.path("answer").asInt(-1);
+        if (options.isArray() && answer >= 0 && answer < options.size()) {
+            return options.get(answer).asText("").trim();
+        }
+        return "";
+    }
+
+    private boolean containsKeyword(String answer, String keyword) {
+        String normalizedAnswer = normalizeAnswerText(answer);
+        String normalizedKeyword = normalizeAnswerText(keyword);
+        return !normalizedKeyword.isBlank() && normalizedAnswer.contains(normalizedKeyword);
+    }
+
+    private String normalizeAnswerText(String value) {
+        return value == null
+                ? ""
+                : value.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9가-힣+#]+", " ")
+                .trim()
+                .replaceAll("\\s+", " ");
+    }
+
+    private record QuizEvaluation(boolean correct, int deltaAmount, String feedback) {
     }
 
     private String reactionFor(String mood) {

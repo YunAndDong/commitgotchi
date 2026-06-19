@@ -128,7 +128,7 @@ async function activate() {
             <div class="row between">
               <strong class="qline">{{ q.question }}</strong>
               <span class="cg-badge" :class="q.correct ? 'cg-badge--ok' : 'cg-badge--fire'">
-                {{ q.correct ? '정답' : '오답' }}
+                {{ q.correct ? '충분' : '보완' }}
               </span>
             </div>
             <div class="tiny faint mono">{{ q.date }} · {{ STAT_LABELS[q.deltaStat] }} +{{ q.deltaAmount }}</div>

@@ -115,7 +115,7 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"selected":1}
+                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.scored").value(true))
@@ -132,7 +132,7 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"selected":1}
+                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.scored").value(true))
@@ -191,7 +191,7 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                         .header("Authorization", failureUser.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"selected":1,"fail":true}
+                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다.","fail":true}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.ok").value(false))
@@ -213,7 +213,7 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                         .header("Authorization", staleUser.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"selected":1}
+                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.scored").value(false))
@@ -442,7 +442,7 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                             .header("Authorization", bearer)
                             .contentType("application/json")
                             .content("""
-                                    {"selected":1}
+                                    {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
                                     """))
                     .andReturn()
                     .getResponse()

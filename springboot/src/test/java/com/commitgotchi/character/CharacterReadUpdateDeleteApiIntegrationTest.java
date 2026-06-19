@@ -116,7 +116,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                         .header("Authorization", owner.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"selected":1}
+                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
                                 """))
                 .andExpect(status().isOk());
 
@@ -217,7 +217,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"selected":1}
+                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
                                 """))
                 .andExpect(status().isOk());
 
@@ -241,7 +241,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
                 .andExpect(jsonPath("$.item.spriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/fallback-default.png"))
                 .andExpect(jsonPath("$.item.spriteMeta.frameMap.baby.joy[0]").value(0))
-                .andExpect(jsonPath("$.item.message").value("오 정답! 똑똑한데?"))
+                .andExpect(jsonPath("$.item.message").value("좋은 답변이야! 핵심을 잡았어."))
                 .andExpect(jsonPath("$.item.active").value(true))
                 .andExpect(jsonPath("$.state.characters[0].name").value("Renamed"));
 
@@ -530,7 +530,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"selected":1}
+                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.characterId").value(secondId.toString()))

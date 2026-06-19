@@ -24,7 +24,7 @@ const quizDone = computed(() => activeQuizzes.value.filter(q => q.scored).length
 const reportStatus = computed(() => gameState.dailyReport.status) // pending | failed | ready
 const recentActivity = computed(() => [
   ...gameState.reports.map(r => ({ id: `r${r.id}`, date: r.date, text: `리포트 · ${r.title}` })),
-  ...gameState.quizzes.filter(q => q.scored).map(q => ({ id: `q${q.id}`, date: q.date, text: `퀴즈 · ${q.correct ? '정답' : '오답'}` })),
+  ...gameState.quizzes.filter(q => q.scored).map(q => ({ id: `q${q.id}`, date: q.date, text: `퀴즈 · ${q.correct ? '충분' : '보완'}` })),
 ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4))
 </script>
 

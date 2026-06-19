@@ -100,6 +100,9 @@ function normalizeQuiz(raw) {
     date: raw?.date || todayISO(),
     tag: raw?.tag || raw?.deltaStat || 'algo',
     question: String(raw?.question || ''),
+    modelAnswer: String(raw?.modelAnswer || ''),
+    answerKeywords: Array.isArray(raw?.answerKeywords) ? raw.answerKeywords : [],
+    userAnswer: raw?.userAnswer ?? '',
     options: Array.isArray(raw?.options) ? raw.options : [],
     answer: Number(raw?.answer),
     submitted: !!raw?.submitted,
@@ -256,16 +259,16 @@ export async function deleteReview(postId, reviewId) {
 }
 
 /* ---- actions ---- */
-export async function createCharacter({ name, keyword, personality }, { failImage = false } = {}) {
+export async function createCharacter({ name, keyword, personality }) {
   if (state.characters.length >= MAX_CHARACTERS) {
     throw new Error(`캐릭터는 최대 ${MAX_CHARACTERS}개까지 만들 수 있어요.`)
   }
   if (!name?.trim()) throw new Error('이름을 입력해 주세요.')
+  if (!keyword?.trim()) throw new Error('디자인 키워드를 입력해 주세요.')
   return mutate(gameApi.createCharacter({
     name: name.trim(),
-    keyword: keyword?.trim() || '',
-    personality: personality?.trim() || '',
-    failImage,
+    keyword: keyword.trim(),
+    personality: personality?.trim() || '칭찬은 많이, 틀린 건 명확히 짚어주는',
   }))
 }
 
@@ -303,8 +306,8 @@ export async function saveReport({ mood, title, content, tags }) {
   }))
 }
 
-export async function submitQuiz(quizId, selected, { fail = false } = {}) {
-  const item = await mutate(gameApi.submitQuiz(quizId, { selected, fail }))
+export async function submitQuiz(quizId, userAnswer, { fail = false } = {}) {
+  const item = await mutate(gameApi.submitQuiz(quizId, { userAnswer, fail }))
   if (item?.ok === false) return item
   return item
 }

@@ -12,7 +12,6 @@ const router = useRouter()
 const form = reactive({ name: '', keyword: '', personality: '' })
 const error = ref('')
 const previewEmotion = ref('joy')
-const failImage = ref(false) // 데모: 이미지 생성 실패(Fallback) 재현
 const full = computed(() => gameState.characters.length >= MAX_CHARACTERS)
 
 const keywordChips = ['연두색 새싹', '동그란 눈', '흙갈색 화분', '작은 공룡', '픽셀 별', '몽실몽실 구름']
@@ -23,12 +22,13 @@ function addChip(ch) {
 async function submit() {
   error.value = ''
   if (!form.name.trim()) { error.value = '이름을 입력해 주세요.'; return }
+  if (!form.keyword.trim()) { error.value = '디자인 키워드를 입력해 주세요.'; return }
   try {
     const c = await createCharacter({
       name: form.name.trim(),
       keyword: form.keyword.trim(),
       personality: form.personality.trim() || '칭찬은 많이, 틀린 건 명확히 짚어주는',
-    }, { failImage: failImage.value })
+    })
     router.push(`/complete/${c.id}`)
   } catch (e) {
     error.value = e.message
@@ -67,10 +67,6 @@ async function submit() {
           <p class="tiny faint">성격은 캐릭터의 말풍선 톤에 반영돼요 (FR-23).</p>
         </div>
 
-        <label class="demo tiny muted">
-          <input type="checkbox" v-model="failImage" :disabled="full" /> 데모: 이미지 생성 실패 재현(Fallback)
-        </label>
-
         <p v-if="error" class="err" role="alert">{{ error }}</p>
         <button class="cg-btn cg-btn--primary cg-btn--block" :disabled="full">✨ 분신 생성하기</button>
       </form>
@@ -94,7 +90,6 @@ async function submit() {
 .create { display: grid; grid-template-columns: 1fr 320px; gap: var(--sp-4); align-items: start; max-width: 900px; margin: 0 auto; }
 .preview { padding: var(--sp-5); gap: var(--sp-3); position: sticky; top: 90px; }
 .chipbtn { cursor: pointer; }
-.demo { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .err { color: var(--angry); font-family: var(--font-head); font-size: 13px; }
 @media (max-width: 760px) { .create { grid-template-columns: 1fr; } .preview { position: static; } }
 </style>

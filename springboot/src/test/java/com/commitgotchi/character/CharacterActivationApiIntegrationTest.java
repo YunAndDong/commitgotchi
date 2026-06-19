@@ -112,7 +112,7 @@ class CharacterActivationApiIntegrationTest extends PostgresIntegrationTest {
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"selected":1}
+                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
                                 """))
                 .andExpect(status().isOk());
         Map<String, Object> before = stableCharacterColumns(characterId);

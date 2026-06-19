@@ -25,15 +25,15 @@ class CorsConfigurationIntegrationTest extends PostgresIntegrationTest {
     private MockMvc mockMvc;
 
     @Test
-    void allowedPreflightRunsBeforeAuthenticationWithMinimalMethodsAndHeaders() throws Exception {
+    void allowedPreflightRunsBeforeAuthenticationWithApiMethodsAndHeaders() throws Exception {
         mockMvc.perform(options("/api/users/me")
                         .header("Origin", "http://localhost:5173")
                         .header("Access-Control-Request-Method", "GET")
-                        .header("Access-Control-Request-Headers", "Authorization"))
+                        .header("Access-Control-Request-Headers", "Authorization, Content-Type"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
-                .andExpect(header().string("Access-Control-Allow-Methods", "GET,POST,OPTIONS"))
-                .andExpect(header().string("Access-Control-Allow-Headers", "Authorization"))
+                .andExpect(header().string("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS"))
+                .andExpect(header().string("Access-Control-Allow-Headers", "Authorization, Content-Type"))
                 .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
     }
 
@@ -50,9 +50,34 @@ class CorsConfigurationIntegrationTest extends PostgresIntegrationTest {
         mockMvc.perform(options("/api/users/me")
                         .header("Origin", CHROME_EXTENSION_ORIGIN)
                         .header("Access-Control-Request-Method", "GET")
-                        .header("Access-Control-Request-Headers", "Authorization"))
+                        .header("Access-Control-Request-Headers", "Authorization, Content-Type"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", CHROME_EXTENSION_ORIGIN))
+                .andExpect(header().string("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS"))
+                .andExpect(header().string("Access-Control-Allow-Headers", "Authorization, Content-Type"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+    }
+
+    @Test
+    void trustedChromeExtensionCanPreflightMutatingGameApiMethods() throws Exception {
+        mockMvc.perform(options("/api/game/characters/1")
+                        .header("Origin", CHROME_EXTENSION_ORIGIN)
+                        .header("Access-Control-Request-Method", "PATCH")
+                        .header("Access-Control-Request-Headers", "Authorization, Content-Type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", CHROME_EXTENSION_ORIGIN))
+                .andExpect(header().string("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS"))
+                .andExpect(header().string("Access-Control-Allow-Headers", "Authorization, Content-Type"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+
+        mockMvc.perform(options("/api/game/characters/1")
+                        .header("Origin", CHROME_EXTENSION_ORIGIN)
+                        .header("Access-Control-Request-Method", "DELETE")
+                        .header("Access-Control-Request-Headers", "Authorization, Content-Type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", CHROME_EXTENSION_ORIGIN))
+                .andExpect(header().string("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS"))
+                .andExpect(header().string("Access-Control-Allow-Headers", "Authorization, Content-Type"))
                 .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
     }
 

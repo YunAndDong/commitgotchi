@@ -5,6 +5,9 @@
 > 2026-06-14 메모: `vue/public/manifest.json`의 공개키가 신뢰 확장 ID를
 > `daijhhcaecladkkpcjdlfgcokohehhmn`으로 고정한다. 로그인 시 "네트워크 오류"가 보일 때의 진단
 > 절차는 [`troubleshooting-login-network-error.md`](./troubleshooting-login-network-error.md) 참고.
+>
+> 2026-06-19 메모: 게임 API가 사용하는 `PATCH`/`DELETE` preflight도 통과하도록 CORS 허용
+> 메서드에 `PATCH`, `DELETE`를 추가했다.
 
 ## 배경
 
@@ -83,7 +86,9 @@ if ("chrome-extension".equalsIgnoreCase(scheme)) {
 ### 3. `src/test/java/com/commitgotchi/security/CorsConfigurationIntegrationTest.java`
 
 실행 환경의 `CORS_ALLOWED_ORIGINS`에 확장 origin이 없어도 지정된 확장 프로그램의 preflight 요청에
-정확한 `Access-Control-Allow-Origin` 응답이 반환되는지 검증한다.
+정확한 `Access-Control-Allow-Origin` 응답이 반환되는지 검증한다. 또한 확장 프로그램에서 호출하는
+캐릭터 수정·삭제 흐름이 브라우저 preflight에서 막히지 않도록 `PATCH`와 `DELETE` 요청 메서드도
+검증한다.
 
 ## 적용(설정) 방법
 
@@ -93,7 +98,7 @@ origin을 추가로 허용한다. prod에서는 기존 정책대로 `CORS_ALLOWE
 ## 동작 확인 포인트
 
 - 허용된 CORS 응답: `Access-Control-Allow-Origin: chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn`
-- 허용 메서드: `GET, POST, OPTIONS` / 허용 헤더: `Authorization, Content-Type`
+- 허용 메서드: `GET, POST, PATCH, DELETE, OPTIONS` / 허용 헤더: `Authorization, Content-Type`
 - `Access-Control-Allow-Credentials: true`를 반환해 HttpOnly refresh cookie 흐름을 허용한다.
 - 운영(`prod`) refresh cookie는 `Secure; SameSite=None`으로 발급되어 확장 프로그램의 cross-site fetch에
   포함된다. 비보안 로컬 환경은 `SameSite=Lax`를 유지하므로 확장 프로그램에서는 데모 모드 또는 HTTPS
@@ -104,5 +109,6 @@ origin을 추가로 허용한다. prod에서는 기존 정책대로 `CORS_ALLOWE
 ## 변경하지 않은 것 (범위 준수)
 
 - `/springboot` 외 다른 폴더(프론트엔드, FastAPI 등)는 읽기만 했고 수정하지 않았다.
-- CORS 메서드/헤더 정책은 그대로 유지하고, refresh cookie 흐름을 위해 credentials를 허용했다.
+- CORS 헤더 정책은 그대로 유지하고, 메서드 정책은 현재 `/api/**` 계약(`GET`, `POST`, `PATCH`,
+  `DELETE`)에 맞췄다. refresh cookie 흐름을 위해 credentials를 허용했다.
 - prod에서 최소 1개 HTTPS origin 필요, 와일드카드 금지 등 기존 보안 규칙은 그대로 유지했다.
