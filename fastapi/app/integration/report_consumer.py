@@ -21,6 +21,7 @@ DEFAULT_MAX_NUMBER_OF_MESSAGES = 1
 INVALID_SCHEMA_ERROR = "invalid report request schema"
 CALLBACK_FAILED_ERROR = "spring callback failed"
 MISSING_QUEUE_URL_ERROR = "REPORT_REQUEST_QUEUE_URL is required"
+REPORT_EMOTIONS = frozenset(("JOY", "ANGRY", "SAD"))
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ class _CharacterMetadataMessage(BaseModel):
     character_id: int = Field(alias="characterId")
     name: str | None = None
     personality: str | None = None
+    emotion: str | None = None
     current_stats: Mapping[str, Any] | None = Field(default=None, alias="currentStats")
 
     @field_validator("character_id", mode="before")
@@ -78,6 +80,16 @@ class _CharacterMetadataMessage(BaseModel):
             return None
         text = str(value).strip()
         return text or None
+
+    @field_validator("emotion", mode="before")
+    @classmethod
+    def _optional_emotion(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        emotion = str(value).strip()
+        if emotion not in REPORT_EMOTIONS:
+            raise ValueError("emotion must be one of JOY, ANGRY, SAD")
+        return emotion
 
 
 class _ReportRequestMessage(BaseModel):
@@ -345,7 +357,6 @@ def _safe_fallback_report_result() -> dict[str, Any]:
     return {
         "status": "FALLBACK",
         "scoreDelta": zero_score_vector(),
-        "emotion": "SAD",
         "statusMessage": "리포트 분석을 완료하지 못했지만 안전한 fallback 결과를 전송합니다.",
         "dailyReport": {
             "text": "",

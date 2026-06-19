@@ -20,6 +20,7 @@ from .policy import (
 from .report_chunker import chunk_daily_report
 from .schemas import (
     DailyReportAnalysis,
+    EmotionStatus,
     NextRecommendation,
     ReportAnalysis,
     ReportChunk,
@@ -30,10 +31,20 @@ DEFAULT_GEMINI_REPORT_ANALYZER_MODEL = "gemini-3.1-flash-lite"
 FASTAPI_ROOT = Path(__file__).resolve().parents[2]
 FALLBACK_STATUS_MESSAGE = (
     "오늘은 리포트를 안정적으로 분석하지 못했어요. "
-    "내일 다시 차근차근 확인해 볼게요."
+    "조금 속상하지만, 내일 다시 차근차근 봐줄게요."
 )
-FALLBACK_FEEDBACK = "분석 가능한 리포트 근거가 부족해 점수를 부여하지 않았습니다."
-FALLBACK_RECOMMENDATION = "리포트 근거가 충분할 때 다음 학습 주제를 추천합니다."
+FALLBACK_FEEDBACK = "분석할 만한 리포트 근거가 아직 부족해서 점수는 살짝 아껴둘게요."
+FALLBACK_RECOMMENDATION = "리포트 근거가 더 또렷해지면 다음 학습 주제를 콕 집어 추천할게요."
+BASE_TONE_GUIDANCE = (
+    "기본 말투: 모든 감정에서 귀엽고 다정한 Commitgotchi 캐릭터 말투를 유지한다. "
+    "사무적이거나 딱딱한 보고서체는 피하고, 짧고 생동감 있는 표현으로 말한다. "
+    "다만 학습 근거, 부족한 점, 다음 행동은 정확하게 짚는다."
+)
+EMOTION_TONE_GUIDANCE: dict[str, str] = {
+    "JOY": "기쁨: 뿌듯하고 밝은 말투를 쓰되, 귀여운 칭찬과 정확한 피드백을 함께 둔다.",
+    "ANGRY": "화남: 무섭게 화내기보다 삐진 듯한 귀여운 투덜거림으로 엄격하게 짚는다. 모욕이나 과도한 비난은 피한다.",
+    "SAD": "슬픔: 살짝 시무룩하고 서운한 말투를 쓰되, 다정하게 다시 이어갈 힘을 준다.",
+}
 
 
 class ReportAnalysisModelClient(Protocol):
@@ -206,7 +217,6 @@ def fallback_report_analysis() -> ReportAnalysis:
         field_evidence={field_name: "" for field_name in SCORE_FIELDS},
         score_delta=zero_score_vector(),
         confidence=0.0,
-        emotion="SAD",
         status_message=FALLBACK_STATUS_MESSAGE,
         daily_report=DailyReportAnalysis(text="", feedback=FALLBACK_FEEDBACK),
         next_recommendation=NextRecommendation(
@@ -277,7 +287,6 @@ def _report_analysis_from_payload(payload: Mapping[str, Any]) -> ReportAnalysis:
         return fallback_report_analysis()
 
     topics = _required_string_tuple(payload.get("topics"), "topics")
-    emotion = _required_text(payload.get("emotion"), "emotion")
     status_message = _required_text(payload.get("statusMessage"), "statusMessage")
     daily_report = _daily_report_from_payload(
         _require_mapping(payload.get("dailyReport"), "dailyReport")
@@ -292,7 +301,6 @@ def _report_analysis_from_payload(payload: Mapping[str, Any]) -> ReportAnalysis:
         field_evidence=_field_evidence_from_payload(payload["fieldEvidence"]),
         score_delta=apply_report_confidence_policy(raw_score_delta, confidence),
         confidence=confidence,
-        emotion=emotion,
         status_message=status_message,
         daily_report=daily_report,
         next_recommendation=next_recommendation,
@@ -385,11 +393,25 @@ def _character_context(
     character_metadata: Mapping[str, Any] | None,
 ) -> Mapping[str, Any]:
     metadata = _json_safe_mapping(character_metadata or {})
+    emotion = _resolve_character_emotion(metadata.get("emotion"))
     return {
+        "baseToneGuidance": BASE_TONE_GUIDANCE,
         "personality": _clean_text(character_personality),
+        "emotion": emotion,
+        "emotionToneGuidance": EMOTION_TONE_GUIDANCE.get(
+            emotion,
+            "명시 감정 없음: 귀엽고 다정한 기본 말투를 유지하며 personality와 학습 근거를 자연스럽게 반영한다.",
+        ),
         "currentStats": _json_safe(metadata.get("currentStats", {})),
         "characterMetadata": metadata,
     }
+
+
+def _resolve_character_emotion(value: Any) -> EmotionStatus | str:
+    emotion = _clean_text(value).upper()
+    if emotion in EMOTION_TONE_GUIDANCE:
+        return emotion
+    return ""
 
 
 def _study_continuity_context(weekly_streak: Any) -> Mapping[str, Any]:

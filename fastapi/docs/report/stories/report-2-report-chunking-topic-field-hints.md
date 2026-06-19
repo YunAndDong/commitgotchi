@@ -235,7 +235,7 @@ python3 -m unittest discover -s tests
 - embedding 생성
 - vector store 또는 pgvector 구현
 - 최종 `scoreDelta` 산정
-- emotion/statusMessage/dailyReport feedback/nextRecommendation 생성
+- statusMessage/dailyReport feedback/nextRecommendation 생성
 - 기존 quiz recommender 연결 또는 수정
 - 문제 은행 생성/검색/추천 흐름 수정
 - API endpoint

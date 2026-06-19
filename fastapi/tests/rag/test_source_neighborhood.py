@@ -28,6 +28,8 @@ class SourceNeighborhoodTest(unittest.TestCase):
             query_terms=("jpa", "n+1", "lazy", "fetch"),
             field_hints=("db", "framework"),
             max_chunks=8,
+            max_same_source_neighbors=5,
+            min_cross_source=2,
             max_chars=5000,
             max_text_chars_per_item=600,
         )
@@ -44,7 +46,187 @@ class SourceNeighborhoodTest(unittest.TestCase):
         self.assertIn("same_folder_related", reasons)
         self.assertNotIn("concept:sha256:n-plus-one", by_id)
         self.assertEqual(len(by_id), len(neighborhood))
+        self.assertLessEqual(_source_count(neighborhood, seed.source_path), 5)
+        self.assertGreaterEqual(_cross_source_count(neighborhood, seed.source_path), 2)
         self.assertNotIn("concept:sha256:unrelated", by_id)
+        self.assertNotIn("concept:sha256:weak-db-related", by_id)
+
+    def test_defaults_cap_same_source_neighbors_and_fill_cross_source_quota(self) -> None:
+        store = ConceptCatalogStore(_neighborhood_chunks())
+        seed = store.get("concept:sha256:n-plus-one")
+        hits = [ConceptSearchHit(seed, 9.5, "embedding", ("jpa", "n+1", "lazy"))]
+
+        neighborhood = build_source_neighborhood(
+            hits,
+            store=store,
+            query_terms=("jpa", "n+1", "lazy", "fetch"),
+            field_hints=("db", "framework"),
+            max_chunks=8,
+            max_chars=5000,
+            max_text_chars_per_item=600,
+        )
+
+        self.assertLessEqual(_source_count(neighborhood, seed.source_path), 4)
+        self.assertGreaterEqual(_cross_source_count(neighborhood, seed.source_path), 2)
+        self.assertNotIn(
+            "concept:sha256:n-plus-one",
+            {item.chunk_id for item in neighborhood},
+        )
+
+    def test_does_not_fill_cross_source_quota_with_weak_signal(self) -> None:
+        store = ConceptCatalogStore(_neighborhood_chunks())
+        seed = store.get("concept:sha256:n-plus-one")
+        hits = [ConceptSearchHit(seed, 9.5, "embedding", ())]
+
+        neighborhood = build_source_neighborhood(
+            hits,
+            store=store,
+            query_terms=("transaction",),
+            field_hints=("db",),
+            max_chunks=6,
+            max_same_source_neighbors=2,
+            min_cross_source=2,
+            max_chars=5000,
+        )
+
+        self.assertEqual(_cross_source_count(neighborhood, seed.source_path), 0)
+        self.assertLessEqual(_source_count(neighborhood, seed.source_path), 2)
+
+    def test_cross_source_quota_does_not_count_other_match_sources(self) -> None:
+        chunks = (
+            _chunk(
+                "seed-a",
+                "03-framework/a.md",
+                ("Framework", "A"),
+                0,
+                "Shared relational topic seed A.",
+                ("db",),
+                next_id="concept:sha256:a-nearby",
+            ),
+            _chunk(
+                "a-nearby",
+                "03-framework/a.md",
+                ("Framework", "A", "Nearby"),
+                1,
+                "Shared relational topic around seed A.",
+                ("db",),
+            ),
+            _chunk(
+                "seed-b",
+                "03-framework/b.md",
+                ("Framework", "B"),
+                0,
+                "Shared relational topic seed B.",
+                ("db",),
+                next_id="concept:sha256:b-nearby",
+            ),
+            _chunk(
+                "b-nearby",
+                "03-framework/b.md",
+                ("Framework", "B", "Nearby"),
+                1,
+                "Shared relational topic around seed B.",
+                ("db",),
+            ),
+            _chunk(
+                "external-related",
+                "04-api/rest.md",
+                ("API", "Related"),
+                0,
+                "Shared relational topic from an external source.",
+                ("db", "network"),
+            ),
+        )
+        store = ConceptCatalogStore(chunks)
+        seed_a = store.get("concept:sha256:seed-a")
+        seed_b = store.get("concept:sha256:seed-b")
+        self.assertIsNotNone(seed_a)
+        self.assertIsNotNone(seed_b)
+        hits = [
+            ConceptSearchHit(seed_a, 9.5, "embedding", ("shared", "relational")),
+            ConceptSearchHit(seed_b, 9.0, "embedding", ("shared", "relational")),
+        ]
+
+        neighborhood = build_source_neighborhood(
+            hits,
+            store=store,
+            query_terms=("shared", "relational"),
+            field_hints=("db",),
+            max_chunks=4,
+            max_same_source_neighbors=1,
+            min_cross_source=2,
+            max_chars=5000,
+        )
+
+        seed_source_paths = {seed_a.source_path, seed_b.source_path}
+        seed_source_count = sum(
+            1 for item in neighborhood if item.source_path in seed_source_paths
+        )
+        self.assertLessEqual(seed_source_count, 1)
+        self.assertIn(
+            "concept:sha256:external-related",
+            {item.chunk_id for item in neighborhood},
+        )
+
+    def test_common_metadata_terms_do_not_create_related_signal(self) -> None:
+        store = ConceptCatalogStore(_neighborhood_chunks())
+        seed = store.get("concept:sha256:n-plus-one")
+        hits = [ConceptSearchHit(seed, 9.5, "embedding", ("framework",))]
+
+        neighborhood = build_source_neighborhood(
+            hits,
+            store=store,
+            query_terms=("report", "chunk", "field", "hints", "framework"),
+            field_hints=("framework",),
+            max_chunks=4,
+            max_same_source_neighbors=0,
+            min_cross_source=2,
+            max_chars=5000,
+        )
+
+        self.assertEqual(neighborhood, [])
+
+    def test_falls_back_to_same_source_cap_when_cross_source_missing(self) -> None:
+        store = ConceptCatalogStore(_neighborhood_chunks())
+        seed = store.get("concept:sha256:n-plus-one")
+        hits = [ConceptSearchHit(seed, 9.5, "embedding", ())]
+
+        neighborhood = build_source_neighborhood(
+            hits,
+            store=store,
+            query_terms=("nonexistent",),
+            field_hints=(),
+            max_chunks=6,
+            max_same_source_neighbors=3,
+            min_cross_source=2,
+            max_chars=5000,
+        )
+
+        self.assertEqual(_source_count(neighborhood, seed.source_path), 3)
+        self.assertEqual(_cross_source_count(neighborhood, seed.source_path), 0)
+
+    def test_selection_is_deterministic_and_preserves_output_shape(self) -> None:
+        store = ConceptCatalogStore(_neighborhood_chunks())
+        seed = store.get("concept:sha256:n-plus-one")
+        hits = [ConceptSearchHit(seed, 9.5, "embedding", ("jpa", "n+1", "lazy"))]
+        kwargs = {
+            "store": store,
+            "query_terms": ("jpa", "n+1", "lazy", "fetch"),
+            "field_hints": ("db", "framework"),
+            "max_chunks": 8,
+            "max_chars": 5000,
+            "max_text_chars_per_item": 600,
+        }
+
+        first = build_source_neighborhood(hits, **kwargs)
+        second = build_source_neighborhood(hits, **kwargs)
+
+        self.assertEqual([item.to_dict() for item in first], [item.to_dict() for item in second])
+        self.assertTrue(first)
+        self.assertEqual(
+            set(first[0].to_dict()),
+            {"reason", "chunkId", "sourcePath", "headingPath", "fieldHints", "text"},
+        )
 
     def test_same_folder_related_requires_signal(self) -> None:
         store = ConceptCatalogStore(_neighborhood_chunks())
@@ -160,6 +342,30 @@ def _neighborhood_chunks() -> tuple[ConceptChunkRecord, ...]:
             ("db", "framework"),
         ),
         _chunk(
+            "hibernate-related",
+            "03-framework/hibernate.md",
+            ("Spring Framework", "Hibernate Batch Fetch"),
+            0,
+            "Hibernate batch fetching mitigates JPA N+1 lazy loading with grouped SQL selects.",
+            ("db", "framework"),
+        ),
+        _chunk(
+            "api-related",
+            "04-api/rest.md",
+            ("API", "Pagination"),
+            0,
+            "API pagination can avoid N+1 query patterns when DTO mapping touches lazy associations.",
+            ("db", "network"),
+        ),
+        _chunk(
+            "weak-db-related",
+            "03-framework/database-basics.md",
+            ("Database", "Transactions"),
+            0,
+            "Database indexes and transactions improve relational storage performance.",
+            ("db",),
+        ),
+        _chunk(
             "unrelated",
             "03-framework/react.md",
             ("Frontend", "React"),
@@ -168,6 +374,14 @@ def _neighborhood_chunks() -> tuple[ConceptChunkRecord, ...]:
             ("framework",),
         ),
     )
+
+
+def _source_count(neighborhood, source_path: str) -> int:
+    return sum(1 for item in neighborhood if item.source_path == source_path)
+
+
+def _cross_source_count(neighborhood, source_path: str) -> int:
+    return sum(1 for item in neighborhood if item.source_path != source_path)
 
 
 def _chunk(

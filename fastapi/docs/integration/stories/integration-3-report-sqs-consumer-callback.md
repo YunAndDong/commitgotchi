@@ -111,7 +111,7 @@ Integration Story 2는 최근 커밋 `62545c1 feat(fastapi): add quiz grading en
 
 Report Story 5는 `524f0fd feat: assemble daily report result`에서 완료됐고, `generate_daily_report_result()`는 wrapper 없는 core payload만 반환한다.
 
-- output field는 `status`, `scoreDelta`, `emotion`, `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes`다.
+- output field는 `status`, `scoreDelta`, `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes`다.
 - `requestId`, `userId`, `characterId`, `targetDate`는 Story 3가 SQS message metadata로 감싼다.
 - analyzer failure 또는 `FALLBACK`도 callback-ready core payload shape를 유지한다.
 - `scoreDelta`는 report analysis 결과만 보존하고 recommender/quiz score를 더하지 않는다.
@@ -216,7 +216,7 @@ Do not implement:
      - `characterId`
      - `targetDate`
    - payload body:
-     - Story 5 result payload: `status`, `scoreDelta`, `emotion`, `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes`
+     - Story 5 result payload: `status`, `scoreDelta`, `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes`
    - fallback result도 같은 wrapper를 사용한다.
    - quiz grading result, quiz submission, `gradings`는 포함하지 않는다.
    - wrapper helper는 `build_report_callback_payload()`를 우선 재사용한다.
@@ -403,7 +403,6 @@ Settings 규칙:
     "network": 1,
     "framework": 0
   },
-  "emotion": "JOY",
   "statusMessage": "오늘 학습 기록이 알찼어요!",
   "dailyReport": {
     "text": "오늘 학습은 JPA 영속성 영역에 집중되었습니다.",

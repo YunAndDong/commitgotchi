@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import math
 import tempfile
 import unittest
 from pathlib import Path
 
+from app.rag.problem_embedding_store import EmbeddedProblem, ProblemEmbeddingStore
 from app.rag.problem_bank_store import ProblemBankStore
 from app.rag.quiz_recommender import (
     build_recommendation_query,
@@ -110,6 +112,26 @@ class QuizRecommenderTest(unittest.TestCase):
             [],
         )
 
+    def test_hybrid_unrelated_report_returns_empty_array(self) -> None:
+        low_positive_similarity = 0.2
+        embedding_store = _embedding_store(
+            self.store.records,
+            vectors={},
+            default=(
+                low_positive_similarity,
+                math.sqrt(1.0 - low_positive_similarity * low_positive_similarity),
+            ),
+        )
+
+        quizzes = recommend_quizzes(
+            "오늘 점심으로 김치찌개를 먹었다",
+            store=self.store,
+            embedding_store=embedding_store,
+            client=_FakeEmbeddingClient((1.0, 0.0)),
+        )
+
+        self.assertEqual(quizzes, [])
+
     def test_recommendations_are_capped_at_three(self) -> None:
         quizzes = recommend_quizzes(
             "JPA N+1 fetch join OAuth JWT REST API Docker 컨테이너 다익스트라 그래프",
@@ -178,6 +200,44 @@ class QuizRecommenderTest(unittest.TestCase):
         ]
         self.assertEqual(len(n_plus_one_questions), 1)
 
+    def test_hybrid_candidates_preserve_limit_shape_and_dedupe(self) -> None:
+        embedding_store = _embedding_store(
+            self.store.records,
+            vectors={
+                101: (1.0, 0.0),
+                102: (1.0, 0.0),
+                202: (0.8, 0.2),
+                303: (0.7, 0.3),
+                404: (0.6, 0.4),
+            },
+            default=(0.0, 1.0),
+        )
+
+        quizzes = recommend_quizzes(
+            "semantic sparse alpha",
+            store=self.store,
+            embedding_store=embedding_store,
+            client=_FakeEmbeddingClient((1.0, 0.0)),
+            limit=10,
+            min_score=99.0,
+        )
+
+        self.assertLessEqual(len(quizzes), 3)
+        self.assertEqual(len([quiz for quiz in quizzes if "N+1" in quiz["question"]]), 1)
+        for snapshot in quizzes:
+            self.assertEqual(
+                set(snapshot),
+                {
+                    "problemId",
+                    "question",
+                    "modelAnswer",
+                    "scoreAllocation",
+                    "difficulty",
+                    "sourcePath",
+                    "matchScore",
+                },
+            )
+
 
 def _problem(
     problem_id: int,
@@ -210,6 +270,36 @@ def _problem(
         heading_path=("Fixture", question),
         rubric=ProblemRubric(must_mention=rubric_terms),
         content_hash=f"sha256:fixture-{key}-content",
+    )
+
+
+class _FakeEmbeddingClient:
+    def __init__(self, query_embedding: tuple[float, ...]):
+        self.query_embedding = query_embedding
+
+    def embed_document(self, text: str) -> tuple[float, ...]:
+        return self.query_embedding
+
+    def embed_query(self, text: str) -> tuple[float, ...]:
+        return self.query_embedding
+
+
+def _embedding_store(
+    records: tuple[ProblemRecord, ...],
+    *,
+    vectors: dict[int, tuple[float, ...]],
+    default: tuple[float, ...],
+) -> ProblemEmbeddingStore:
+    return ProblemEmbeddingStore(
+        items=tuple(
+            EmbeddedProblem(
+                problem=problem,
+                embedding=vectors.get(problem.problem_id, default),
+            )
+            for problem in records
+        ),
+        expected_model="fake",
+        expected_dimensionality=len(default),
     )
 
 

@@ -85,6 +85,7 @@ class DailyReportServiceTest(unittest.TestCase):
             )
 
         self.assertEqual(result["status"], "SUCCESS")
+        self.assertNotIn("emotion", result)
         self.assertEqual(
             result["scoreDelta"],
             {"db": 6, "algorithm": 0, "cs": 0, "network": 2, "framework": 4},
@@ -138,7 +139,6 @@ class DailyReportServiceTest(unittest.TestCase):
                 field_evidence={field: "" for field in SCORE_FIELDS},
                 score_delta={"framework": 3},
                 confidence=0.8,
-                emotion="JOY",
                 status_message="Docker 흐름을 잘 잡았어요.",
                 daily_report=DailyReportAnalysis(
                     text="Docker 이미지와 컨테이너를 비교했습니다.",
@@ -263,7 +263,6 @@ def _success_analysis(
             else {"db": 8, "algorithm": 0, "cs": 0, "network": 3, "framework": 5}
         ),
         "confidence": 0.86,
-        "emotion": "JOY",
         "statusMessage": "핵심 원인과 해결책을 잘 연결했어요.",
         "dailyReport": {
             "text": "오늘은 JPA N+1과 JWT 흐름을 정리했습니다.",

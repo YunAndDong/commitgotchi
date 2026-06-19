@@ -243,7 +243,6 @@ def _report_result() -> dict[str, Any]:
     return {
         "status": "SUCCESS",
         "scoreDelta": {"db": 1, "algorithm": 0, "cs": 0, "network": 0, "framework": 2},
-        "emotion": "JOY",
         "statusMessage": "좋은 흐름이에요.",
         "dailyReport": {"text": "JPA를 공부했습니다.", "feedback": "근거가 좋습니다."},
         "nextRecommendation": {"topics": ["JPA"], "rationale": "fetch join으로 확장하세요."},
