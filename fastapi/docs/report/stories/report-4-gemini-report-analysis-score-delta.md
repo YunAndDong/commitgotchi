@@ -42,7 +42,7 @@ Spring Boot 리포트 요청 계약의 `userMetadata`와 `characterMetadata`에 
 
 Report Generation Epic은 FastAPI 내부 함수 중심으로 리포트 분석 파이프라인을 단계적으로 만든다. Story 1은 `computer-science-interview-KR` concept catalog를 만들었고, Story 2는 daily report를 deterministic `ReportChunk` 목록으로 나누었고, Story 3은 각 `ReportChunk`에 대해 embedding-first retrieval과 source-neighborhood evidence bundle을 완성했다.
 
-Architecture의 리포트 결과 콜백 계약은 최종적으로 다음 핵심 필드를 요구한다: `status`, `scoreDelta`, `emotion`, `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes`. 이 중 Story 4는 `recommendedQuizzes`를 제외한 분석 결과만 만든다. Story 5가 Story 4 분석 결과와 기존 quiz recommender 결과를 조립해 Spring Boot callback shape에 가까운 내부 payload를 만든다.
+Architecture의 리포트 결과 콜백 계약은 최종적으로 다음 핵심 필드를 요구한다: `status`, `scoreDelta`, `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes`. 이 중 Story 4는 `recommendedQuizzes`를 제외한 분석 결과만 만든다. 캐릭터 감정은 Spring Boot가 `characterMetadata.emotion`으로 결정해 요청에 넣고, FastAPI는 그 값을 문체/톤 컨텍스트로만 소비한다. Story 5가 Story 4 분석 결과와 기존 quiz recommender 결과를 조립해 Spring Boot callback shape에 가까운 내부 payload를 만든다.
 
 중요한 계약:
 
@@ -83,7 +83,7 @@ Architecture의 리포트 결과 콜백 계약은 최종적으로 다음 핵심 
 
 4. Gemini report analysis prompt
    - prompt 파일 후보: `fastapi/app/scoring/prompts/report_analysis.md`
-   - prompt에는 리포트 원문, `ReportChunk` dict 목록, Story 3 evidence bundle dict 목록, `userMetadata`/최근 학습 컨텍스트, character personality, scoring rubric, output JSON shape를 넣는다.
+   - prompt에는 리포트 원문, `ReportChunk` dict 목록, Story 3 evidence bundle dict 목록, `userMetadata`/최근 학습 컨텍스트, character personality, `characterMetadata.emotion`, scoring rubric, output JSON shape를 넣는다.
    - Gemini에게 `scoreDelta`는 리포트 본문 근거만으로 산정하도록 지시한다.
    - retrieval evidence, `fieldHints`, streak, recent study context, `scoreDeltaHint`, `currentStats`는 grounding, 피드백, 다음 추천 근거일 뿐 점수 직접 산식이 아니라고 명시한다.
    - prompt에도 quiz grading result, quiz submission, `gradings`, `recommendedQuizzes`를 사용하지 말라고 명시한다.
@@ -105,7 +105,7 @@ Architecture의 리포트 결과 콜백 계약은 최종적으로 다음 핵심 
    - `confidence`는 서버에서 `0.0..1.0`으로 clamp한다.
    - confidence가 낮으면 보수적 score를 적용한다. 권장 기준은 `confidence < 0.35`이면 fallback 또는 전 필드 0점, `0.35 <= confidence < 0.55`이면 점수 상한을 낮추는 보수 정책이다.
    - Gemini 호출 실패, JSON parsing 실패, schema validation 실패, 빈 리포트, evidence 생성 실패는 안전한 `FALLBACK` `ReportAnalysis`로 내려간다.
-   - fallback은 전 필드 0점, 낮은 confidence, 보수적 emotion/statusMessage, 최소 nextRecommendation을 반환한다.
+   - fallback은 전 필드 0점, 낮은 confidence, 보수적 `statusMessage`, 최소 nextRecommendation을 반환한다.
 
 8. 캐릭터 personality 반영
    - analyzer 입력 또는 함수 인자로 `character_personality`를 받을 수 있어야 한다.
@@ -188,7 +188,6 @@ class ReportAnalysis:
     field_evidence: dict[str, str]
     score_delta: dict[str, int]
     confidence: float
-    emotion: str
     status_message: str
     daily_report: DailyReportAnalysis | None
     next_recommendation: NextRecommendation | None
@@ -222,7 +221,6 @@ class ReportAnalysis:
     "framework": 7
   },
   "confidence": 0.84,
-  "emotion": "JOY",
   "statusMessage": "연속 학습 흐름을 이어가면서 핵심 원인과 해결책을 잘 연결했어요.",
   "dailyReport": {
     "text": "오늘은 JPA N+1의 발생 원인과 해결 전략을 중심으로 학습했습니다.",
@@ -256,15 +254,14 @@ Fallback:
     "framework": 0
   },
   "confidence": 0.0,
-  "emotion": "SAD",
-  "statusMessage": "오늘은 리포트를 안정적으로 분석하지 못했어요. 내일 다시 차근차근 확인해 볼게요.",
+  "statusMessage": "오늘은 리포트를 안정적으로 분석하지 못했어요. 조금 속상하지만, 내일 다시 차근차근 봐줄게요.",
   "dailyReport": {
     "text": "",
-    "feedback": "분석 가능한 리포트 근거가 부족해 점수를 부여하지 않았습니다."
+    "feedback": "분석할 만한 리포트 근거가 아직 부족해서 점수는 살짝 아껴둘게요."
   },
   "nextRecommendation": {
     "topics": [],
-    "rationale": "리포트 근거가 충분할 때 다음 학습 주제를 추천합니다."
+    "rationale": "리포트 근거가 더 또렷해지면 다음 학습 주제를 콕 집어 추천할게요."
   }
 }
 ```
@@ -299,17 +296,18 @@ Story 4 output에는 다음을 포함하지 않는다.
 16. Gemini 호출 실패 시 `FALLBACK` 결과를 반환한다.
 17. confidence가 낮으면 보수적 score 또는 fallback이 적용된다.
 18. `fieldEvidence`는 5개 score field를 모두 포함하며, 근거가 부족한 field는 빈 문자열 또는 보수적 메시지를 둔다.
-19. `topics`, `emotion`, `statusMessage`, `dailyReport.text`, `dailyReport.feedback`, `nextRecommendation.topics`, `nextRecommendation.rationale`가 output에 포함된다.
+19. `topics`, `statusMessage`, `dailyReport.text`, `dailyReport.feedback`, `nextRecommendation.topics`, `nextRecommendation.rationale`가 output에 포함된다.
 20. `character_personality` 또는 `character_metadata.personality`가 prompt/input에 포함된다.
-21. `dailyReport.feedback`, `statusMessage`, `nextRecommendation.rationale`는 character personality를 문체에 반영하되 학습 평가 정확성을 흐리지 않는다.
-22. `user_metadata`가 제공되면 `weeklyStudyStreak`, `reportDirection.scoreDeltaHint`, `reportDirection.focus`, 최근 공부한 주제/리포트, 최근 분야별 점수 변화가 prompt/input에 포함된다.
-23. `character_metadata.currentStats`가 제공되면 prompt/input에 포함된다.
-24. 연속 작성, 오랜만의 복귀, 뜸한 작성/접속, 최근 다른 분야의 뚜렷한 성장/정체가 유의미하면 `statusMessage`, `dailyReport.feedback`, `nextRecommendation.rationale`에 반영된다.
-25. `user_metadata`, streak, 최근 학습/점수 변화, `scoreDeltaHint`, `currentStats`는 `scoreDelta` 직접 산식이나 가산점으로 사용하지 않는다.
-26. 퀴즈 채점 결과, quiz submission, `gradings` 배열을 읽거나 사용하지 않는다.
-27. 기존 `grade_quiz_answer()` 또는 quiz grading service를 호출하지 않는다.
-28. Story 4 output은 `recommendedQuizzes`를 포함하지 않는다.
-29. Story 4는 API endpoint, SQS consumer, Spring Boot callback 전송, request/user/character/date wrapper를 만들지 않는다.
+21. `character_metadata.emotion`이 제공되면 prompt/input에 포함되며, output field로는 반환하지 않는다.
+22. `dailyReport.feedback`, `statusMessage`, `nextRecommendation.rationale`는 character personality와 emotion을 문체에 반영하되 학습 평가 정확성을 흐리지 않는다.
+23. `user_metadata`가 제공되면 `weeklyStudyStreak`, `reportDirection.scoreDeltaHint`, `reportDirection.focus`, 최근 공부한 주제/리포트, 최근 분야별 점수 변화가 prompt/input에 포함된다.
+24. `character_metadata.currentStats`가 제공되면 prompt/input에 포함된다.
+25. 연속 작성, 오랜만의 복귀, 뜸한 작성/접속, 최근 다른 분야의 뚜렷한 성장/정체가 유의미하면 `statusMessage`, `dailyReport.feedback`, `nextRecommendation.rationale`에 반영된다.
+26. `user_metadata`, streak, 최근 학습/점수 변화, `scoreDeltaHint`, `currentStats`는 `scoreDelta` 직접 산식이나 가산점으로 사용하지 않는다.
+27. 퀴즈 채점 결과, quiz submission, `gradings` 배열을 읽거나 사용하지 않는다.
+28. 기존 `grade_quiz_answer()` 또는 quiz grading service를 호출하지 않는다.
+29. Story 4 output은 `recommendedQuizzes`를 포함하지 않는다.
+30. Story 4는 API endpoint, SQS consumer, Spring Boot callback 전송, request/user/character/date wrapper를 만들지 않는다.
 
 ## 테스트 기준
 

@@ -306,6 +306,44 @@ cd fastapi
 .venv/bin/python scripts/integration_contract_preview.py
 ```
 
+## RAG Enhancement Benchmark
+
+Story 7 benchmark는 A안 기준으로 실행했다. 즉, 최종 답변 문장 생성 품질을 평가하지 않고, 검색 결과가 어떤 문서/source를 얼마나 골고루 끌어오는지와 관련성 회귀 가드를 측정한다.
+
+재현 명령:
+
+```bash
+cd fastapi
+python3 scripts/rag_benchmark.py
+```
+
+산출물:
+
+- `data/rag/reports/rag-enhancement-benchmark.md`
+- `data/rag/reports/rag-enhancement-benchmark.json`
+
+Headline 결과(embeddingMode=`fake`, callsGemini=`false`, 32차원 fake-hash embedding):
+
+- Tier A concept top-k: B0 대비 final은 distinct source 4.2967 → 4.4505, ILD 0.2882 → 0.3563, source HHI 0.2642 → 0.2440으로 다양성/집중도는 일부 개선됐다.
+- Tier A evidence bundle: distinct source 4.2967 → 7.4505, catalog coverage 0.3736 → 0.8352, same-source neighbor ratio 1.0000 → 0.5000으로 source-neighborhood 분포 개선은 강하게 확인됐다.
+- Problem bank top-k: distinct source 2.4176 → 2.4615, MRR 0.0824 → 0.0989로 소폭 개선됐지만 catalog coverage는 0.6351 → 0.6081로 낮아졌다.
+- Primary top-k pass/fail gate는 FAIL이다. 유의 개선은 ILD 1개뿐이고, Recall@k가 0.1374 → 0.1099로 epsilon 0.02보다 크게 하락했으며, worsened query ratio가 0.1758로 기준 0.10을 넘었다.
+- 이 결과는 "분포/다양성 개선, 특히 evidence bundle의 소스 쏠림 완화"는 방어 가능하게 보여주지만, 현재 `relevanceGrades`가 비어 있어 relevance 지표는 `relevantSourcePaths` 기반 binary relevance다. 실제 의미 검색 정확도와 답변 생성 품질 평가는 후속 real embedding + graded relevance 작업이 필요하다.
+
+Story 7에서 실행한 테스트:
+
+```bash
+cd fastapi
+python3 -m unittest tests.rag.test_eval_metrics
+python3 -m unittest tests.rag.test_rag_benchmark
+python3 -m unittest tests.rag.test_diversity_eval
+python3 -m unittest tests.rag.test_problem_bank_search
+python3 -m unittest tests.rag.test_quiz_recommender
+python3 -m unittest tests.scoring.test_daily_report_service
+```
+
+위 테스트는 2026-06-19에 모두 통과했다.
+
 Integration tests:
 
 ```bash

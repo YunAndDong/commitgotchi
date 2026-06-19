@@ -255,6 +255,7 @@ flowchart TB
     "characterId": 10,
     "name": "커밋 몬스터",
     "personality": "칭찬을 많이 하지만 틀린 부분은 명확하게 지적하는 성격",
+    "emotion": "JOY",
     "currentStats": { "db": 120, "algorithm": 200, "cs": 80, "network": 60, "framework": 140 }
   },
   "dailyReport": {
@@ -266,6 +267,7 @@ flowchart TB
 
 - `requestId`: **멱등 키.** Spring Boot가 생성, FastAPI가 콜백 시 그대로 반환. (UUID, `userId+targetDate` 조합으로 결정적 생성 권장)
 - `reportDirection.scoreDeltaHint`: 최근 1주일 추세에서 도출한 리포트 방향. 예: `algorithm +3`, `network +1`.
+- `characterMetadata.emotion`: Spring Boot가 결정한 현재 캐릭터 감정. enum은 `JOY`(기쁨), `ANGRY`(화남), `SAD`(슬픔) 3개만 허용한다. FastAPI는 이 값을 새로 판정하지 않고 리포트 문장의 말투에만 반영한다.
 - `currentStats`: 진화 임계(1,000) 판정·점수 인플레 경계(SM-C1)를 위해 AI에 현재 능력치 컨텍스트로 제공. `[ASSUMPTION]`
 - 자정 리포트는 퀴즈 채점 결과를 종합하지 않고, 학습 리포트와 주간 추세만으로 리포트·점수 변화량·추천 퀴즈를 생성한다.
 
@@ -287,7 +289,6 @@ Content-Type: application/json
   "targetDate": "2026-06-06",
   "status": "SUCCESS",
   "scoreDelta": { "db": 0, "algorithm": 3, "cs": 0, "network": 1, "framework": 0 },
-  "emotion": "JOY",
   "statusMessage": "오늘 학습 기록이 알찼어요! 퀴즈에서 본 약점도 내일 같이 잡아봐요.",
   "dailyReport": {
     "text": "오늘 학습은 JPA 영속성 영역에 집중되었습니다 ...",
@@ -311,6 +312,7 @@ Content-Type: application/json
 ```
 
 - `scoreDelta`: **학습 리포트 분석분만.** 각 필드(`db`, `algorithm`, `cs`, `network`, `framework`)는 `0..10` 범위를 넘지 않는다.
+- `emotion`은 리포트 결과 콜백에 포함하지 않는다. 감정 상태 결정과 저장은 Spring Boot 책임이며, FastAPI는 4.1 요청의 `characterMetadata.emotion`을 문체 컨텍스트로만 소비한다.
 - `dailyReport`는 리포트 본문과 학습 피드백만 담는다. 퀴즈 채점·피드백은 흐름 B의 웹훅 결과가 단독 책임을 가진다.
 - `gradings` 배열 제거: 채점은 흐름 B 책임이 되었으므로 리포트 콜백에서 빠진다.
 - `recommendedQuizzes`: 다음날(오전 9시) 사용자에게 제공될 추천 퀴즈. `problemId`는 효선의 MD 기반 RAG/문제 DB에서 매칭된 문제 번호이며, 신규 생성 문제라면 nullable로 둘 수 있다. `scoreAllocation`은 **이 퀴즈를 모두 맞혔을 때 얻을 수 있는 필드별 최대 점수**이고, 각 필드는 `0..10` 범위다.
@@ -324,7 +326,6 @@ Content-Type: application/json
   "status": "FALLBACK",
   "failedStages": ["REPORT"],
   "scoreDelta": { "db": 0, "algorithm": 0, "cs": 0, "network": 0, "framework": 0 },
-  "emotion": "SAD",
   "statusMessage": "오늘은 분석을 제대로 못 했어요. 내일 다시 도전!",
   "dailyReport": null,
   "nextRecommendation": null,
@@ -731,18 +732,16 @@ stateDiagram-v2
 
 ### 7.2 감정 규칙 (FR-23) `[RESOLVES Q2 — 제안값, 검토 후 조정 가능]`
 
-AI(FastAPI)가 `scoreDelta` 합과 학습 여부를 바탕으로 결정하고 `emotion`을 콜백/웹훅에 포함. **두 흐름 모두 감정을 갱신**한다 — 퀴즈 채점 웹훅(흐름 B) 수신 직후 감정이 바뀌어 사용자가 결과 조회 시 반응을 본다. 제안 기준 `[ASSUMPTION]`:
+감정 상태(`emotion`) 결정과 저장 책임은 Spring Boot에 있다. FastAPI는 흐름 A 리포트 요청의 `characterMetadata.emotion`을 입력 컨텍스트로 받아 `statusMessage`, `dailyReport.feedback`, `nextRecommendation.rationale`의 말투에만 반영하고, 리포트 콜백에는 `emotion`을 반환하지 않는다. enum은 `JOY`(기쁨), `ANGRY`(화남), `SAD`(슬픔) 3개만 허용한다.
 
 | 흐름 | 조건 | 감정 |
 |------|------|------|
-| A(리포트) | 당일 학습 있음 & scoreDelta 합 > 0 | `JOY` (기쁨) |
-| A(리포트) | 당일 학습 있음 & scoreDelta 합 = 0 | `SAD` (슬픔) |
-| A(리포트) | 당일 미학습(리포트 없음) | `ANGRY` (화남) |
+| A(리포트) | Spring Boot가 리포트 요청 생성 전 캐릭터 상태를 판정 | `JOY`/`ANGRY`/`SAD` 중 하나를 `characterMetadata.emotion`에 포함 |
 | B(퀴즈) | `sum(scoreDelta) >= sum(scoreAllocation) * 0.6` | `JOY` |
 | B(퀴즈) | `sum(scoreDelta) < sum(scoreAllocation) * 0.6` | `SAD` |
 
-- 흐름 B 채점이 감정을 갱신한 뒤 자정 흐름 A가 다시 갱신할 수 있다(**최종 상태는 마지막 갱신 흐름이 결정** — 자정 리포트가 그날의 종합 감정으로 마무리). `[ASSUMPTION — 검토 후 조정]`
-- `statusMessage`는 캐릭터 `personality`를 반영해 AI가 생성(FR-23).
+- 흐름 B 채점이 감정을 갱신한 뒤 자정 흐름 A 요청을 만들 때 Spring Boot가 다시 현재 감정을 산정할 수 있다. `[ASSUMPTION — 검토 후 조정]`
+- `statusMessage`는 캐릭터 `personality`와 입력 `emotion`을 반영해 AI가 생성(FR-23).
 
 ### 7.3 Fallback 정책 (FR-16) `[RESOLVES Q4]`
 
@@ -866,11 +865,11 @@ sequenceDiagram
 
   alt 채점 성공
     FA->>AI: 서술형 채점·피드백
-    AI-->>FA: feedback·scoreDelta·emotion
-    FA->>SB: POST /api/internal/quizzes/grade-result {GRADED, scoreAllocation, scoreDelta}
+    AI-->>FA: feedback·scoreDelta
+    FA->>SB: POST /api/internal/quizzes/grade-result {GRADED, scoreAllocation, scoreDelta, feedback, emotion, statusMessage}
     SB->>DB: TX[웹훅 멱등체크 → 제출 GRADED → 퀴즈점수 누적 → 전투력 → 진화 → 감정]
   else 채점 실패/타임아웃
-    FA->>SB: POST /api/internal/quizzes/grade-result {UNGRADED, scoreDelta=0}
+    FA->>SB: POST /api/internal/quizzes/grade-result {UNGRADED, scoreDelta=0, emotion, statusMessage}
     SB->>DB: 제출 UNGRADED 유지(점수 미반영)
   end
   V->>SB: GET /api/quizzes/submissions/{submissionId}
@@ -917,7 +916,7 @@ sequenceDiagram
 | AD-5 | 활성 단일성은 부분 유니크 인덱스로 DB 강제 | 로직 무관 불변식 보장 | 확정 |
 | AD-6 | 점수는 일 단위 누적, 주간은 집계·표시용 | PRD §4.4 정합 | 확정 |
 | AD-7 | 진화는 스프라이트 행 전환(baby→mature) + 플래그, 보너스 없음 | 점수 인플레 경계(SM-C1) | 제안 `[RESOLVES Q3]` |
-| AD-8 | 감정은 규칙 기반 AI 결정, 흐름 A·B 모두 갱신 | FR-23, 즉시 반응 | 제안 `[RESOLVES Q2]` |
+| AD-8 | 감정 상태 결정은 Spring Boot 책임, FastAPI는 입력 emotion을 말투 컨텍스트로만 소비 | FR-23, 계약 책임 분리 | 확정(개정) `[RESOLVES Q2]` |
 | AD-9 | Fallback은 흐름별 부분 실패 허용 | 흐름 무중단(SM-3) | 확정 `[RESOLVES Q4]` |
 | AD-10 | AI 모델 벤더는 FastAPI 내부에 캡슐화·교체 가능 | AI 품질 반복개선(SM-1) | 확정 |
 | AD-11 | **퀴즈/리포트 점수 출처 상호 배타(이중계상 금지)** | 같은 학습 2회 점수화 방지 | 확정 `[§4.5]` |

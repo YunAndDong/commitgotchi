@@ -4,7 +4,11 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
+from .concept_embeddings import EmbeddingClient
+from .problem_embedding_store import ProblemEmbeddingStore
 from .problem_bank_search import (
+    DEFAULT_KEYWORD_WEIGHT,
+    DEFAULT_VECTOR_WEIGHT,
     ProblemSearchHit,
     problem_to_recommendation_snapshot,
     search_problem_bank,
@@ -65,6 +69,10 @@ def recommend_quizzes(
     *,
     store: ProblemBankStore | None = None,
     catalog_path: Path | None = None,
+    embedding_store: ProblemEmbeddingStore | None = None,
+    client: EmbeddingClient | None = None,
+    keyword_weight: float = DEFAULT_KEYWORD_WEIGHT,
+    vector_weight: float = DEFAULT_VECTOR_WEIGHT,
     limit: int = DEFAULT_RECOMMENDATION_LIMIT,
     min_score: float = DEFAULT_MIN_SCORE,
 ) -> list[dict[str, Any]]:
@@ -89,6 +97,10 @@ def recommend_quizzes(
     hits = search_problem_bank(
         query,
         store=problem_store,
+        embedding_store=embedding_store,
+        client=client,
+        keyword_weight=keyword_weight,
+        vector_weight=vector_weight,
         limit=max(capped_limit * SEARCH_LIMIT_MULTIPLIER, capped_limit),
         min_score=min_score,
     )
@@ -103,6 +115,10 @@ def build_recommended_quizzes(
     *,
     store: ProblemBankStore | None = None,
     catalog_path: Path | None = None,
+    embedding_store: ProblemEmbeddingStore | None = None,
+    client: EmbeddingClient | None = None,
+    keyword_weight: float = DEFAULT_KEYWORD_WEIGHT,
+    vector_weight: float = DEFAULT_VECTOR_WEIGHT,
     limit: int = DEFAULT_RECOMMENDATION_LIMIT,
     min_score: float = DEFAULT_MIN_SCORE,
 ) -> list[dict[str, Any]]:
@@ -110,6 +126,10 @@ def build_recommended_quizzes(
         report,
         store=store,
         catalog_path=catalog_path,
+        embedding_store=embedding_store,
+        client=client,
+        keyword_weight=keyword_weight,
+        vector_weight=vector_weight,
         limit=limit,
         min_score=min_score,
     )

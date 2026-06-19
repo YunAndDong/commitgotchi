@@ -91,6 +91,30 @@ class ProblemRecord:
 
 
 @dataclass(frozen=True)
+class ProblemEmbeddingRecord:
+    problem_id: int
+    source_key: str
+    content_hash: str
+    model: str
+    output_dimensionality: int
+    source_path: str
+    heading_path: tuple[str, ...]
+    embedding: tuple[float, ...]
+
+    def to_json_dict(self) -> dict[str, Any]:
+        return {
+            "problemId": self.problem_id,
+            "sourceKey": self.source_key,
+            "contentHash": self.content_hash,
+            "model": self.model,
+            "outputDimensionality": self.output_dimensionality,
+            "sourcePath": self.source_path,
+            "headingPath": list(self.heading_path),
+            "embedding": list(self.embedding),
+        }
+
+
+@dataclass(frozen=True)
 class ConceptNeighbors:
     previous_chunk_id: str | None = None
     next_chunk_id: str | None = None

@@ -77,7 +77,6 @@ def generate_daily_report_result(
         DailyReportResult(
             status=analysis_result.status,
             score_delta=analysis_result.score_delta,
-            emotion=analysis_result.emotion,
             status_message=analysis_result.status_message,
             daily_report=analysis_result.daily_report,
             next_recommendation=analysis_result.next_recommendation,
@@ -132,12 +131,10 @@ def _result_without_quizzes(payload: Mapping[str, Any]) -> DailyReportResult:
     next_recommendation = _next_recommendation_from_payload(
         payload.get("nextRecommendation")
     )
-    emotion = _clean_text(payload.get("emotion"))
     status_message = _clean_text(payload.get("statusMessage"))
     if (
         daily_report is None
         or next_recommendation is None
-        or not emotion
         or not status_message
     ):
         return _fallback_result_model()
@@ -147,7 +144,6 @@ def _result_without_quizzes(payload: Mapping[str, Any]) -> DailyReportResult:
         score_delta=clamp_report_score_delta(
             _mapping_or_none(payload.get("scoreDelta"))
         ),
-        emotion=emotion,
         status_message=status_message,
         daily_report=daily_report,
         next_recommendation=next_recommendation,
@@ -284,7 +280,6 @@ def _fallback_result_model() -> DailyReportResult:
     return DailyReportResult(
         status="FALLBACK",
         score_delta=clamp_report_score_delta(fallback.get("scoreDelta")),
-        emotion=_clean_text(fallback.get("emotion")) or "SAD",
         status_message=_clean_text(fallback.get("statusMessage")),
         daily_report=daily_report or DailyReportAnalysis(text="", feedback=""),
         next_recommendation=next_recommendation

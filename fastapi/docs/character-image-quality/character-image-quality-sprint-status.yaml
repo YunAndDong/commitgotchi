@@ -1,0 +1,38 @@
+generated: 2026-06-17
+last_updated: 2026-06-17
+project: Commitgotchi FastAPI AI server
+tracking_system: file-system
+epic: character-image-quality
+epic_file: fastapi/docs/character-image-quality/character-image-quality-epic.md
+
+status_definitions:
+  epic:
+    - backlog
+    - in-progress
+    - done
+  story:
+    - backlog
+    - ready-for-dev
+    - in-progress
+    - review
+    - done
+  retrospective:
+    - optional
+    - done
+
+development_status:
+  character-image-quality-epic: in-progress
+  character-image-quality-1-background-removal-alpha: done
+  character-image-quality-2-frame-grid-normalization: done
+  character-image-quality-3-quality-gate-smoke-tests: in-progress
+  character-image-quality-retrospective: optional
+
+notes:
+  - 흐름 C 계약(§4.4/§7.6)과 spriteMeta를 준수. 진짜 알파만 READY 저장하는 안전규칙 유지.
+  - 후처리는 검증을 약화하지 않고 알파를 "만들어" 통과시킨다.
+  - 16/18px 균일 격자 정합이 어려우면 Story 2에서 계약 재협상 레버(옵션 B/C)를 결정 포인트로 문서화.
+  - 실제 Gemini/S3 호출 금지. 모든 테스트는 fake/합성 이미지.
+  - RAG 고도화와 무관한 별도 epic.
+  - POC를 정식 sprite_service에 통합 완료(배경제거+격자정규화+품질게이트). 캐논 프롬프트 v2로 경화.
+  - Story 3는 게이트 코어 구현 완료. 프로덕션 스모크 스크립트/셀 점유 보강은 후속.
+  - 엔드포인트 연결은 character-image epic Story 2 범위로 분리 유지.

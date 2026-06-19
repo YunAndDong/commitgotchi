@@ -1,20 +1,39 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+from typing import Iterable
 
 from .concept_store import ConceptCatalogStore
 from .schemas import ConceptChunkRecord, ConceptSearchHit, NeighborhoodEvidence
 from .text import extract_terms, term_counter
 
 
-NEIGHBORHOOD_REASON_ORDER = (
+SAME_SOURCE_REASON_ORDER = (
     "previous_chunk",
     "next_chunk",
     "parent_heading",
     "sibling_heading",
     "same_source_nearby",
-    "same_folder_related",
 )
+CROSS_SOURCE_REASON_ORDER = (
+    "same_folder_related",
+    "cross_source_related",
+)
+NEIGHBORHOOD_REASON_ORDER = SAME_SOURCE_REASON_ORDER + CROSS_SOURCE_REASON_ORDER
+COMMON_SIGNAL_FIELDS = {"framework", "cs"}
+METADATA_SIGNAL_TERMS = {
+    "chunk",
+    "field",
+    "fields",
+    "hint",
+    "hints",
+    "query",
+    "report",
+    "retrieval",
+    "text",
+    "topic",
+    "topics",
+} | COMMON_SIGNAL_FIELDS
 
 
 def build_source_neighborhood(
@@ -24,35 +43,45 @@ def build_source_neighborhood(
     query_terms: tuple[str, ...] = (),
     field_hints: tuple[str, ...] = (),
     max_chunks: int = 8,
+    max_same_source_neighbors: int | None = None,
+    min_cross_source: int = 2,
     max_chars: int = 6000,
     max_text_chars_per_item: int = 1200,
 ) -> list[NeighborhoodEvidence]:
     if max_chunks <= 0 or max_chars <= 0 or not hits or len(store) == 0:
         return []
 
+    same_source_cap = _resolve_same_source_cap(
+        max_chunks,
+        max_same_source_neighbors=max_same_source_neighbors,
+    )
+    cross_source_quota = max(0, min(min_cross_source, max_chunks))
     seeds = [hit.chunk for hit in hits]
     seed_ids = {chunk.chunk_id for chunk in seeds}
+    seed_source_paths = {chunk.source_path for chunk in seeds}
     seen_ids = set(seed_ids)
     used_chars = sum(
         len(_trim_text(hit.chunk.text, max_text_chars_per_item))
         for hit in hits
     )
-    query_term_set = set(query_terms)
-    matched_term_set = {term for hit in hits for term in hit.matched_terms}
+    query_term_set = _signal_term_set(query_terms)
+    matched_term_set = _signal_term_set(
+        term for hit in hits for term in hit.matched_terms
+    )
     signal_terms = query_term_set | matched_term_set
-    signal_fields = set(field_hints) - {"framework", "cs"}
+    signal_fields = set(field_hints) - COMMON_SIGNAL_FIELDS
 
     results: list[NeighborhoodEvidence] = []
 
-    def add_candidate(chunk: ConceptChunkRecord | None, reason: str) -> None:
+    def add_candidate(chunk: ConceptChunkRecord | None, reason: str) -> bool:
         nonlocal used_chars
         if chunk is None:
-            return
+            return False
         if chunk.chunk_id in seen_ids:
-            return
+            return False
         text = _trim_text(chunk.text, max_text_chars_per_item)
         if used_chars + len(text) > max_chars:
-            return
+            return False
         seen_ids.add(chunk.chunk_id)
         used_chars += len(text)
         results.append(
@@ -65,13 +94,12 @@ def build_source_neighborhood(
                 field_hints=chunk.field_hints,
             )
         )
+        return True
 
+    same_source_candidates: list[tuple[str, ConceptChunkRecord]] = []
+    cross_source_candidates: list[tuple[str, ConceptChunkRecord]] = []
     for reason in NEIGHBORHOOD_REASON_ORDER:
-        if len(results) >= max_chunks:
-            break
         for seed in seeds:
-            if len(results) >= max_chunks:
-                break
             for candidate in _candidates_for_reason(
                 seed,
                 reason,
@@ -79,10 +107,32 @@ def build_source_neighborhood(
                 signal_terms=signal_terms,
                 signal_fields=signal_fields,
                 seed_ids=seed_ids,
+                seed_source_paths=seed_source_paths,
             ):
-                if len(results) >= max_chunks:
-                    break
-                add_candidate(candidate, reason)
+                if reason in SAME_SOURCE_REASON_ORDER:
+                    same_source_candidates.append((reason, candidate))
+                else:
+                    cross_source_candidates.append((reason, candidate))
+
+    def add_candidates(
+        candidates: list[tuple[str, ConceptChunkRecord]],
+        *,
+        max_to_add: int,
+    ) -> int:
+        added = 0
+        for reason, candidate in candidates:
+            if len(results) >= max_chunks or added >= max_to_add:
+                break
+            if add_candidate(candidate, reason):
+                added += 1
+        return added
+
+    add_candidates(cross_source_candidates, max_to_add=cross_source_quota)
+    add_candidates(same_source_candidates, max_to_add=same_source_cap)
+    add_candidates(
+        cross_source_candidates,
+        max_to_add=max_chunks - len(results),
+    )
 
     return results
 
@@ -95,6 +145,7 @@ def _candidates_for_reason(
     signal_terms: set[str],
     signal_fields: set[str],
     seed_ids: set[str],
+    seed_source_paths: set[str],
 ) -> tuple[ConceptChunkRecord, ...]:
     if reason == "previous_chunk":
         chunk = store.get(seed.neighbors.previous_chunk_id or "")
@@ -140,9 +191,36 @@ def _candidates_for_reason(
             chunk
             for chunk in store.records
             if chunk.chunk_id not in seed_ids
-            and chunk.source_path != seed.source_path
+            and chunk.source_path not in seed_source_paths
             and PurePosixPath(chunk.source_path).parent.as_posix() == seed_folder
             and _has_related_signal(chunk, signal_terms=signal_terms, signal_fields=signal_fields)
+        ]
+        return tuple(
+            sorted(
+                candidates,
+                key=lambda chunk: (
+                    -_term_overlap_count(chunk, signal_terms),
+                    -len(set(chunk.field_hints).intersection(signal_fields)),
+                    chunk.source_path,
+                    chunk.chunk_index,
+                    chunk.chunk_id,
+                ),
+            )
+        )
+    if reason == "cross_source_related":
+        seed_folder = PurePosixPath(seed.source_path).parent.as_posix()
+        candidates = [
+            chunk
+            for chunk in store.records
+            if chunk.chunk_id not in seed_ids
+            and chunk.source_path not in seed_source_paths
+            and PurePosixPath(chunk.source_path).parent.as_posix() != seed_folder
+            and _has_related_signal(
+                chunk,
+                signal_terms=signal_terms,
+                signal_fields=signal_fields,
+                require_strong=True,
+            )
         ]
         return tuple(
             sorted(
@@ -164,11 +242,36 @@ def _has_related_signal(
     *,
     signal_terms: set[str],
     signal_fields: set[str],
+    require_strong: bool = False,
 ) -> bool:
-    if _term_overlap_count(chunk, signal_terms) > 0:
+    term_overlap = _term_overlap_count(chunk, signal_terms)
+    if term_overlap > 0:
         return True
-    candidate_fields = set(chunk.field_hints) - {"framework", "cs"}
-    return bool(candidate_fields.intersection(signal_fields))
+    candidate_fields = set(chunk.field_hints) - COMMON_SIGNAL_FIELDS
+    field_overlap = len(candidate_fields.intersection(signal_fields))
+    if require_strong:
+        return field_overlap >= 2
+    if signal_terms:
+        return False
+    return field_overlap > 0
+
+
+def _resolve_same_source_cap(
+    max_chunks: int,
+    *,
+    max_same_source_neighbors: int | None,
+) -> int:
+    if max_same_source_neighbors is not None:
+        return max(0, min(max_same_source_neighbors, max_chunks))
+    return max(1, max_chunks // 2)
+
+
+def _signal_term_set(terms: Iterable[str]) -> set[str]:
+    return {
+        term
+        for term in extract_terms(" ".join(terms))
+        if term not in METADATA_SIGNAL_TERMS
+    }
 
 
 def _term_overlap_count(chunk: ConceptChunkRecord, terms: set[str]) -> int:

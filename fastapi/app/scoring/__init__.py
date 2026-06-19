@@ -16,6 +16,7 @@ from .quiz_grader import (
 from .schemas import (
     DailyReportAnalysis,
     DailyReportResult,
+    EmotionStatus,
     NextRecommendation,
     QuizGradingResult,
     QuizGradingStatus,
@@ -40,6 +41,7 @@ __all__ = [
     "DEFAULT_GEMINI_REPORT_ANALYZER_MODEL",
     "DailyReportAnalysis",
     "DailyReportResult",
+    "EmotionStatus",
     "GeminiReportAnalysisModelClient",
     "GeminiReportAnalyzer",
     "GeminiGradingModelClient",

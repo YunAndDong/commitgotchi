@@ -7,7 +7,7 @@ from typing import Any
 from unittest.mock import patch
 
 from app.config import Settings
-from tests.image.png_fixtures import make_png_bytes
+from tests.image.png_fixtures import make_png_bytes, make_sprite_sheet_png_bytes
 
 
 class FakeImageClient:
@@ -17,7 +17,7 @@ class FakeImageClient:
         *,
         error: Exception | None = None,
     ) -> None:
-        self.png_bytes = make_png_bytes(width=96, height=64) if png_bytes is None else png_bytes
+        self.png_bytes = make_sprite_sheet_png_bytes() if png_bytes is None else png_bytes
         self.error = error
         self.calls: list[dict[str, Any]] = []
 
@@ -216,29 +216,65 @@ class SpriteGenerationServiceTest(unittest.TestCase):
         self.assertEqual(empty_result.fallback_reason, "EMPTY_IMAGE_BYTES")
         self.assertNotIn("api-key-like-secret", str(error_result.to_dict()))
 
-    def test_invalid_png_and_missing_alpha_are_not_stored(self) -> None:
+    def test_non_png_bytes_return_invalid_png_fallback(self) -> None:
         from app.image.sprite_service import generate_commitgotchi_sprite
 
-        invalid_storage = FakeStorage()
-        no_alpha_storage = FakeStorage()
-
-        invalid = generate_commitgotchi_sprite(
+        storage = FakeStorage()
+        result = generate_commitgotchi_sprite(
             design_keyword="커비",
             client=FakeImageClient(png_bytes=b"not-a-png"),
-            storage=invalid_storage,
-            settings=_fake_settings(),
-        )
-        no_alpha = generate_commitgotchi_sprite(
-            design_keyword="커비",
-            client=FakeImageClient(png_bytes=make_png_bytes(width=96, height=64, color_type=2)),
-            storage=no_alpha_storage,
+            storage=storage,
             settings=_fake_settings(),
         )
 
-        self.assertEqual(invalid.fallback_reason, "INVALID_PNG")
-        self.assertEqual(no_alpha.fallback_reason, "MISSING_ALPHA_CHANNEL")
-        self.assertEqual(invalid_storage.calls, [])
-        self.assertEqual(no_alpha_storage.calls, [])
+        self.assertEqual(result.fallback_reason, "INVALID_PNG")
+        self.assertEqual(storage.calls, [])
+
+    def test_non_sprite_sheet_image_returns_grid_normalization_fallback(self) -> None:
+        from app.image.sprite_service import generate_commitgotchi_sprite
+
+        storage = FakeStorage()
+        result = generate_commitgotchi_sprite(
+            design_keyword="커비",
+            client=FakeImageClient(png_bytes=make_png_bytes(width=96, height=64)),
+            storage=storage,
+            settings=_fake_settings(),
+        )
+
+        self.assertEqual(result.image_status, "FALLBACK")
+        self.assertEqual(result.fallback_reason, "GRID_NORMALIZATION_FAILED")
+        self.assertEqual(storage.calls, [])
+
+    def test_panel_background_sheet_fails_quality_gate(self) -> None:
+        from app.image.sprite_service import generate_commitgotchi_sprite
+
+        storage = FakeStorage()
+        result = generate_commitgotchi_sprite(
+            design_keyword="커비",
+            client=FakeImageClient(png_bytes=make_sprite_sheet_png_bytes(panels=True)),
+            storage=storage,
+            settings=_fake_settings(),
+        )
+
+        self.assertEqual(result.image_status, "FALLBACK")
+        self.assertEqual(result.fallback_reason, "QUALITY_GATE_FAILED")
+        self.assertEqual(storage.calls, [])
+
+    def test_rgb_sprite_sheet_is_repaired_to_transparent_ready(self) -> None:
+        from app.image.sprite_service import generate_commitgotchi_sprite
+
+        storage = FakeStorage()
+        result = generate_commitgotchi_sprite(
+            design_keyword="커비",
+            client=FakeImageClient(png_bytes=make_sprite_sheet_png_bytes(with_alpha=False)),
+            storage=storage,
+            settings=_fake_settings(),
+        )
+
+        # background removal adds a real alpha channel, so an alpha-less sheet is
+        # repaired instead of rejected, then stored as READY.
+        self.assertEqual(result.image_status, "READY")
+        self.assertEqual(len(storage.calls), 1)
 
     def test_storage_failure_returns_local_storage_fallback(self) -> None:
         from app.image.sprite_service import generate_commitgotchi_sprite
