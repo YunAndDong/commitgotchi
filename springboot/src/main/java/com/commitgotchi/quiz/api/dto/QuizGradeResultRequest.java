@@ -1,0 +1,36 @@
+package com.commitgotchi.quiz.api.dto;
+
+import com.commitgotchi.character.api.dto.FastApiScoreDelta;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+
+@JsonIgnoreProperties(ignoreUnknown = false)
+public record QuizGradeResultRequest(
+        @NotBlank
+        String submissionId,
+
+        @Positive
+        long userId,
+
+        @Positive
+        long quizId,
+
+        @NotNull
+        QuizGradeStatus status,
+
+        @Valid
+        @NotNull
+        FastApiScoreDelta scoreAllocation,
+
+        @Valid
+        @NotNull
+        FastApiScoreDelta scoreDelta,
+
+        String feedback,
+
+        String failedReason
+) {
+}

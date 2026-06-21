@@ -37,12 +37,40 @@ management:
         include: health,info
 
 commitgotchi:
+  internal-api:
+    secret: ${SPRING_INTERNAL_API_SECRET:}
+  auth:
+    refresh-cookie-secure: ${REFRESH_COOKIE_SECURE:false}
+  character:
+    image:
+      enabled: ${CHARACTER_IMAGE_ENABLED:false}
+      base-url: ${CHARACTER_IMAGE_BASE_URL:}
+      fallback-sprite-sheet-url: ${CHARACTER_IMAGE_FALLBACK_SPRITE_SHEET_URL:https://cdn.commitgotchi.local/sprites/fallback-default.png}
+      s3-object-prefix: ${CHARACTER_IMAGE_S3_OBJECT_PREFIX:s3://commitgotchi-character-images/sprites}
+      s3-presigned-url-enabled: ${CHARACTER_IMAGE_S3_PRESIGNED_URL_ENABLED:false}
+      s3-region: ${CHARACTER_IMAGE_S3_REGION:${AWS_REGION:ap-northeast-2}}
+      s3-access-key-id: ${CHARACTER_IMAGE_S3_ACCESS_KEY_ID:${AWS_ACCESS_KEY_ID:}}
+      s3-secret-access-key: ${CHARACTER_IMAGE_S3_SECRET_ACCESS_KEY:${AWS_SECRET_ACCESS_KEY:}}
+      s3-session-token: ${CHARACTER_IMAGE_S3_SESSION_TOKEN:${AWS_SESSION_TOKEN:}}
+      s3-endpoint-url: ${CHARACTER_IMAGE_S3_ENDPOINT_URL:}
+      s3-presigned-url-ttl: ${CHARACTER_IMAGE_S3_PRESIGNED_URL_TTL:PT10M}
+      connect-timeout: ${CHARACTER_IMAGE_CONNECT_TIMEOUT:PT2S}
+      read-timeout: ${CHARACTER_IMAGE_READ_TIMEOUT:PT5S}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   jwt:
     secret-base64: ${JWT_SECRET_BASE64}
     issuer: ${JWT_ISSUER:commitgotchi-springboot}
     access-token-ttl: PT15M
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "prod"
+commitgotchi:
+  auth:
+    refresh-cookie-secure: true
 
 ---
 spring:

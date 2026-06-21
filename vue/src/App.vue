@@ -1,28 +1,38 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { authState } from './stores/auth.js'
+import { gameState, clearNotice } from './stores/game.js'
+import AppNav from './components/AppNav.vue'
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-const backendStatus = ref('확인 중...')
-
-onMounted(async () => {
-  try {
-    const res = await fetch(`${apiBase}/api/health`)
-    backendStatus.value = res.ok ? '연결됨 ✅' : `오류 (${res.status})`
-  } catch (e) {
-    backendStatus.value = '연결 실패 ❌'
-  }
-})
+const route = useRoute()
 </script>
 
 <template>
-  <main>
-    <h1>🥚 Commit-Gotchi</h1>
-    <p>혼자 CS를 공부하는 사람의 매일 학습을 가상 캐릭터의 성장으로.</p>
-    <p>Backend 상태: <strong>{{ backendStatus }}</strong></p>
-  </main>
+  <div class="cg-app">
+    <AppNav v-if="!route.meta.public && authState.user" />
+
+    <main class="cg-main">
+      <RouterView v-slot="{ Component }">
+        <Transition name="fade">
+          <component :is="Component" :key="route.fullPath" />
+        </Transition>
+      </RouterView>
+    </main>
+
+    <Transition name="fade">
+      <div v-if="gameState.notice" class="toast cg-card row between" @click="clearNotice">
+        <span>{{ gameState.notice }}</span>
+        <button class="cg-btn cg-btn--sm cg-btn--ghost" aria-label="닫기">✕</button>
+      </div>
+    </Transition>
+  </div>
 </template>
 
-<style>
-body { font-family: system-ui, sans-serif; margin: 0; }
-main { max-width: 640px; margin: 4rem auto; padding: 0 1rem; text-align: center; }
+<style scoped>
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  z-index: 60; max-width: 560px; gap: var(--sp-4);
+  background: var(--popup-bg); border-color: var(--popup-edge);
+  box-shadow: 4px 4px 0 var(--shadow-hard); cursor: pointer;
+}
 </style>

@@ -1,5 +1,7 @@
 package com.commitgotchi.common.error;
 
+import com.commitgotchi.character.application.CharacterLimitExceededException;
+import com.commitgotchi.character.application.CharacterNotFoundException;
 import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
@@ -36,8 +38,14 @@ public class GlobalExceptionHandler {
         return response(ErrorCode.AUTH_REFRESH_TOKEN_REUSED);
     }
 
+    @ExceptionHandler(CharacterLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleCharacterLimitExceeded() {
+        return response(ErrorCode.CHARACTER_LIMIT_EXCEEDED);
+    }
+
     @ExceptionHandler({
             InvalidSignupException.class,
+            IllegalArgumentException.class,
             MethodArgumentNotValidException.class,
             HttpMessageNotReadableException.class
     })
@@ -49,6 +57,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
         if (DatabaseConstraint.isViolation(exception, "uq_users_email")) {
             return response(ErrorCode.USER_EMAIL_CONFLICT);
+        }
+        if (DatabaseConstraint.isViolation(exception, "uq_one_active_character_per_user")) {
+            return response(ErrorCode.VALIDATION_FAILED);
         }
         return response(ErrorCode.INTERNAL_SERVER_ERROR);
     }
@@ -65,6 +76,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound() {
+        return response(ErrorCode.NOT_FOUND);
+    }
+
+    @ExceptionHandler(CharacterNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCharacterNotFound() {
         return response(ErrorCode.NOT_FOUND);
     }
 

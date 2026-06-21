@@ -9,6 +9,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -21,6 +22,10 @@ class LocalSwaggerEnabledIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void localProfileExposesApiDocs() throws Exception {
-        mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
+                .andExpect(jsonPath("$.paths['/api/game/characters'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/game/characters/{id}/retry-image'].post.security[0].bearerAuth").exists());
     }
 }

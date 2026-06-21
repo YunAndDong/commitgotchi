@@ -22,7 +22,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/api/auth/signup",
             "/api/auth/login",
             "/api/auth/refresh",
-            "/api/auth/logout"
+            "/api/auth/refresh-cookie",
+            "/api/auth/logout",
+            "/api/auth/logout-cookie"
     );
 
     private final JwtTokenProvider tokenProvider;
@@ -48,6 +50,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         String authorization = request.getHeader("Authorization");
         if (authorization == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        if (SecurityContextHolder.getContext().getAuthentication() != null
+                || authorization.regionMatches(true, 0, "Internal ", 0, 9)) {
             filterChain.doFilter(request, response);
             return;
         }

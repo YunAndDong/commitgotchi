@@ -25,10 +25,10 @@ class DatabaseMigrationIntegrationTest extends PostgresIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void appliesOnlyVersionOneAndTwoAndJpaValidationStartsSuccessfully() {
+    void appliesAllVersionedMigrationsAndJpaValidationStartsSuccessfully() {
         assertThat(Arrays.stream(flyway.info().applied())
                 .map(info -> info.getVersion().toString()))
-                .containsExactly("1", "2");
+                .containsExactly("1", "2", "3", "4");
     }
 
     @Test

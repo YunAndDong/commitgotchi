@@ -1,10 +1,29 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="cozy">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Commit-Gotchi</title>
+    <!-- 확장 드롭다운 팝업으로 열렸을 때만 고정 크기를 적용 (웹/dev에는 영향 없음).
+         크롬은 팝업이 열리는 즉시 콘텐츠 크기를 재므로 크기 지정은 head 에서 첫 렌더 전에
+         적용돼야 한다. .is-ext-popup 클래스는 외부 ext-popup.js 가 붙인다 — MV3 CSP
+         (script-src 'self') 가 인라인 <script> 를 차단하므로 반드시 외부 파일이어야 한다.
+         (인라인 <style> 은 script-src 대상이 아니라 허용된다.) -->
+    <script src="/ext-popup.js"></script>
+    <style>
+      html.is-ext-popup, html.is-ext-popup body {
+        width: 780px; min-width: 780px; height: 600px; margin: 0;
+      }
+      html.is-ext-popup body { overflow-x: hidden; overflow-y: auto; }
+      html.is-ext-popup #app { width: 780px; }
+    </style>
+    <!-- Galmuri pixel font family (DESIGN.md typography SSOT) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/quiple/galmuri/dist/galmuri.css" />
+    <!-- Gasoek One — display/logo -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gasoek+One&family=Gothic+A1:wght@400;500;700&display=swap" />
   </head>
   <body>
     <div id="app"></div>

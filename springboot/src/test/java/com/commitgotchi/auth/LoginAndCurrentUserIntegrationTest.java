@@ -18,6 +18,7 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.mock.web.MockCookie;
 
 import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,6 +27,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -62,6 +64,11 @@ class LoginAndCurrentUserIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.accessTokenExpiresAt").isString())
                 .andExpect(jsonPath("$.refreshToken").value(org.hamcrest.Matchers.matchesPattern("[A-Za-z0-9_-]{43}")))
                 .andExpect(jsonPath("$.refreshTokenExpiresAt").isString())
+                .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.containsString("cg_refresh="),
+                        org.hamcrest.Matchers.containsString("HttpOnly"),
+                        org.hamcrest.Matchers.containsString("SameSite=Lax")
+                )))
                 .andReturn();
 
         String accessToken = com.jayway.jsonpath.JsonPath.read(
@@ -89,6 +96,34 @@ class LoginAndCurrentUserIntegrationTest extends PostgresIntegrationTest {
         mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + refreshedAccessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("person@example.com"));
+    }
+
+    @Test
+    void refreshAndLogoutSupportHttpOnlyCookieFlow() throws Exception {
+        signup();
+        MvcResult login = login("person@example.com", "very-secure-password");
+        String refreshToken = com.jayway.jsonpath.JsonPath.read(
+                login.getResponse().getContentAsString(), "$.refreshToken");
+
+        MvcResult refreshed = mockMvc.perform(post("/api/auth/refresh-cookie")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .cookie(new MockCookie("cg_refresh", refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("cg_refresh=")))
+                .andReturn();
+        String rotated = com.jayway.jsonpath.JsonPath.read(
+                refreshed.getResponse().getContentAsString(), "$.refreshToken");
+
+        mockMvc.perform(post("/api/auth/logout-cookie")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .cookie(new MockCookie("cg_refresh", rotated)))
+                .andExpect(status().isNoContent())
+                .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("Max-Age=0")));
+
+        mockMvc.perform(post("/api/auth/refresh-cookie")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .cookie(new MockCookie("cg_refresh", rotated)))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

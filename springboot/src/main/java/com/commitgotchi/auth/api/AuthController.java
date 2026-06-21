@@ -15,6 +15,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,10 +31,16 @@ public class AuthController {
 
     private final AuthService authService;
     private final RefreshTokenService refreshTokenService;
+    private final RefreshTokenCookie refreshTokenCookie;
 
-    public AuthController(AuthService authService, RefreshTokenService refreshTokenService) {
+    public AuthController(
+            AuthService authService,
+            RefreshTokenService refreshTokenService,
+            RefreshTokenCookie refreshTokenCookie
+    ) {
         this.authService = authService;
         this.refreshTokenService = refreshTokenService;
+        this.refreshTokenCookie = refreshTokenCookie;
     }
 
     @Operation(summary = "이메일과 비밀번호로 회원가입")
@@ -63,8 +73,8 @@ public class AuthController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @PostMapping("/login")
-    public TokenPairResponse login(@Valid @RequestBody LoginRequest request) {
-        return authService.login(request.email(), request.password());
+    public ResponseEntity<TokenPairResponse> login(@Valid @RequestBody LoginRequest request) {
+        return withRefreshCookie(authService.login(request.email(), request.password()));
     }
 
     @Operation(summary = "Refresh Token Rotation으로 Token Pair 재발급")
@@ -81,6 +91,13 @@ public class AuthController {
         return refreshTokenService.rotate(request.refreshToken());
     }
 
+    @PostMapping(path = "/refresh-cookie", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<TokenPairResponse> refreshCookie(
+            @CookieValue(name = RefreshTokenCookie.NAME) String refreshToken
+    ) {
+        return withRefreshCookie(refreshTokenService.rotate(refreshToken));
+    }
+
     @Operation(
             summary = "현재 Refresh Token 세션 로그아웃",
             description = "제출된 Refresh Token 세션을 멱등 종료합니다. 이후 해당 Refresh Token 재발급은 실패하지만, "
@@ -95,5 +112,21 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@Valid @RequestBody RefreshTokenRequest request) {
         refreshTokenService.revokeIfPresent(request.refreshToken());
+    }
+
+    @PostMapping(path = "/logout-cookie", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Void> logoutCookie(
+            @CookieValue(name = RefreshTokenCookie.NAME, required = false) String refreshToken
+    ) {
+        refreshTokenService.revokeIfPresent(refreshToken);
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.clear().toString())
+                .build();
+    }
+
+    private ResponseEntity<TokenPairResponse> withRefreshCookie(TokenPairResponse tokens) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.issue(tokens).toString())
+                .body(tokens);
     }
 }
