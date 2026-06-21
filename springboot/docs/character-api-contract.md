@@ -150,6 +150,42 @@ Bridge mutation 규칙:
 - Replacement active character가 있으면 pending future target만 repair한다. Historical `reports` entries는 일괄 재작성하지 않는다.
 - Replacement active character가 없거나 referenced row가 없으면 growth no-op/failure marker를 저장하고, missing row에 대한 success marker는 저장하지 않는다.
 
+## Internal AI Callback Contracts
+
+Internal callbacks require:
+
+```http
+Authorization: Internal <SPRING_INTERNAL_API_SECRET>
+```
+
+`Authorization` 원문과 secret 값은 로그, 오류 응답, 테스트 snapshot에 남기지 않는다. Bearer JWT 보호 API는 계속 `Authorization: Bearer <access-token>`만 사용자 인증으로 인정한다.
+
+### `POST /api/report`
+
+FastAPI 리포트 결과 콜백은 strict JSON DTO로 받는다. 허용 필드는 `requestId`, `userId`, `characterId`, `targetDate`, `status`, `scoreDelta`, `statusMessage`, `dailyReport`, `nextRecommendation`, `recommendedQuizzes`, 선택적 `failedStages`뿐이다. `emotion` 또는 그 밖의 unknown field는 `400 VALIDATION_FAILED`다.
+
+`scoreDelta`와 `recommendedQuizzes[].scoreAllocation`은 FastAPI internal stat keys만 허용한다:
+
+```json
+{ "db": 1, "algorithm": 2, "cs": 3, "network": 4, "framework": 5 }
+```
+
+Spring Boot는 이 값을 `CharacterCommandService.applyScoreDeltas(userId, characterId, db, algorithm, cs, network, framework, emotion, statusMessage)`의 DB-domain 순서로 명시 매핑한다. 리포트 콜백의 `statusMessage`는 사용할 수 있지만, 감정 결정과 저장은 Spring Boot 책임이다. FastAPI는 리포트 콜백에 `emotion`을 보내지 않는다.
+
+현재 증분은 `report_results` 멱등 저장소가 없으므로 valid callback에 `200 OK {"duplicate":false}`를 반환하는 DTO/endpoint/validation 계약까지만 고정한다. TODO: BE-3 report schema 도입 시 `requestId` unique 멱등 마커와 character growth write를 같은 트랜잭션으로 묶고, 이미 처리된 `requestId`에는 `200 OK {"duplicate":true}`를 반환한다.
+
+### `ReportRequestMessage`
+
+Spring Boot가 FastAPI로 보낼 리포트 요청 메시지는 `characterMetadata.emotion`을 `JOY | ANGRY | SAD` uppercase로 포함한다. `characterMetadata.currentStats`와 `userMetadata.reportDirection.scoreDeltaHint`는 FastAPI internal stat keys `db`, `algorithm`, `cs`, `network`, `framework`만 사용한다.
+
+### `POST /api/internal/quizzes/grade-result`
+
+정식 BE-3 퀴즈 채점 webhook 후보 endpoint다. 현재 `/api/game/quizzes/{id}/submit`은 keyword 기반 동기 채점 compatibility bridge로 유지하며, 이 webhook 계약과 섞지 않는다.
+
+허용 필드는 `submissionId`, `userId`, `quizId`, `status`, `scoreAllocation`, `scoreDelta`, `feedback`, 선택적 `failedReason`이다. `scoreAllocation`과 `scoreDelta`는 FastAPI internal stat keys `db`, `algorithm`, `cs`, `network`, `framework`를 사용하고, `scoreDelta[field] <= scoreAllocation[field]`여야 한다. `status=UNGRADED`는 `scoreDelta` 합이 0이어야 한다.
+
+AD-8 정합을 위해 퀴즈 webhook도 Spring Boot가 최종 감정과 status message를 결정한다. FastAPI는 `emotion`/`statusMessage`를 보내지 않으며, 해당 field가 포함되면 unknown field validation으로 실패한다.
+
 ## BE-3 Handoff Guardrails
 
 BE-3 학습 리포트와 성장 루프는 캐릭터 stats를 JSON mutation이나 raw SQL로 바꾸면 안 된다.
@@ -175,7 +211,7 @@ Recommended BE-3 write flow:
 dbDelta, algorithmDelta, csDelta, networkDelta, frameworkDelta
 ```
 
-The public API keys remain `db`, `algo`, `cs`, `net`, `fw`. BE-3 must map API/report keys to the service method deliberately instead of relying on positional guesses.
+The public Vue compatibility API keys remain `db`, `algo`, `cs`, `net`, `fw`. FastAPI internal report/quiz contract keys are `db`, `algorithm`, `cs`, `network`, `framework`. BE-3 must map every contract key to the service method deliberately instead of relying on positional guesses.
 
 Growth rules:
 

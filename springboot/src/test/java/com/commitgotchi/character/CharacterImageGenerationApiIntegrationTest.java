@@ -37,7 +37,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {
         "commitgotchi.character.image.enabled=true",
         "commitgotchi.character.image.base-url=http://fastapi.test",
-        "commitgotchi.character.image.fallback-sprite-sheet-url=https://cdn.commitgotchi.local/sprites/test-fallback.png"
+        "commitgotchi.character.image.fallback-sprite-sheet-url=https://cdn.commitgotchi.local/sprites/test-fallback.png",
+        "commitgotchi.character.image.s3-presigned-url-enabled=true",
+        "commitgotchi.character.image.s3-region=ap-northeast-2",
+        "commitgotchi.character.image.s3-access-key-id=test-access-key",
+        "commitgotchi.character.image.s3-secret-access-key=test-secret-key"
 })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -87,7 +91,11 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
         assertThat(request.userId()).isEqualTo(user.id());
         assertThat(request.characterId()).isEqualTo(characterId.longValue());
         assertThat(request.designKeyword()).isEqualTo("green study slime");
-        assertThat(request.s3ObjectUrl()).contains("/users/" + user.id() + "/characters/" + characterId + "/");
+        assertThat(request.s3ObjectUrl())
+                .startsWith("https://commitgotchi-character-images.s3.ap-northeast-2.amazonaws.com/sprites")
+                .contains("/users/" + user.id() + "/characters/" + characterId + "/")
+                .contains("X-Amz-Algorithm=AWS4-HMAC-SHA256")
+                .contains("X-Amz-Signature=");
         assertThat(request.prompt()).contains("green study slime", "2x3");
 
         Map<String, Object> stored = imageColumns(characterId);

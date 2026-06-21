@@ -78,6 +78,19 @@ class JwtAuthenticationFilterTest {
         org.mockito.Mockito.verifyNoInteractions(errorWriter);
     }
 
+    @Test
+    void internalAuthorizationHeaderIsLeftForInternalAuthFilter() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/report");
+        request.addHeader("Authorization", "Internal shared-secret");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter().doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(filterChain).doFilter(request, response);
+        org.mockito.Mockito.verifyNoInteractions(errorWriter, tokenProvider);
+    }
+
     private JwtAuthenticationFilter filter() {
         return new JwtAuthenticationFilter(tokenProvider, errorWriter);
     }

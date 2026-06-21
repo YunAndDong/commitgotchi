@@ -8,6 +8,7 @@ import com.commitgotchi.character.image.CharacterImageGenerationRequest;
 import com.commitgotchi.character.image.CharacterImageGenerationResult;
 import com.commitgotchi.character.image.CharacterImageProperties;
 import com.commitgotchi.character.image.CharacterImagePromptFactory;
+import com.commitgotchi.character.image.CharacterImageStorageUrlFactory;
 import com.commitgotchi.character.image.CharacterSpriteMetaFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +30,7 @@ public class CharacterImageService {
     private final CharacterImageClient imageClient;
     private final CharacterImageProperties imageProperties;
     private final CharacterImagePromptFactory promptFactory;
+    private final CharacterImageStorageUrlFactory storageUrlFactory;
     private final CharacterSpriteMetaFactory spriteMetaFactory;
     private final TransactionTemplate transactionTemplate;
 
@@ -37,6 +39,7 @@ public class CharacterImageService {
             CharacterImageClient imageClient,
             CharacterImageProperties imageProperties,
             CharacterImagePromptFactory promptFactory,
+            CharacterImageStorageUrlFactory storageUrlFactory,
             CharacterSpriteMetaFactory spriteMetaFactory,
             PlatformTransactionManager transactionManager
     ) {
@@ -44,6 +47,7 @@ public class CharacterImageService {
         this.imageClient = imageClient;
         this.imageProperties = imageProperties;
         this.promptFactory = promptFactory;
+        this.storageUrlFactory = storageUrlFactory;
         this.spriteMetaFactory = spriteMetaFactory;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -72,7 +76,7 @@ public class CharacterImageService {
                     userId,
                     character.getId(),
                     character.getDesignKeyword(),
-                    s3ObjectUrl(userId, character.getId()),
+                    storageUrlFactory.createStorageUrl(userId, character.getId()),
                     promptFactory.createPrompt(character.getDesignKeyword())
             ));
         } catch (RuntimeException exception) {
@@ -115,13 +119,5 @@ public class CharacterImageService {
             return;
         }
         character.markFallback(fallbackSpriteSheetUrl, fallbackSpriteMeta);
-    }
-
-    private String s3ObjectUrl(long userId, long characterId) {
-        return "%s/users/%d/characters/%d/commitgotchi.png".formatted(
-                imageProperties.normalizedS3ObjectPrefix(),
-                userId,
-                characterId
-        );
     }
 }

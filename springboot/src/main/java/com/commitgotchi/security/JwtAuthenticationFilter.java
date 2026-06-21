@@ -53,6 +53,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
+        if (SecurityContextHolder.getContext().getAuthentication() != null
+                || authorization.regionMatches(true, 0, "Internal ", 0, 9)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         if (!authorization.regionMatches(true, 0, "Bearer ", 0, 7) || authorization.length() == 7) {
             errorWriter.write(response, ErrorCode.AUTH_ACCESS_TOKEN_INVALID);
             return;
