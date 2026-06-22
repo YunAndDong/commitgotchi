@@ -31,9 +31,9 @@ _혼자 CS를 공부하는 사람의 학습을 캐릭터 성장으로 바꾸는 
 
 | 담당자 | 컴포넌트 | 핵심 책임 |
 |--------|----------|-----------|
-| **김윤석** | Spring Boot 서버 (System of Record) | 가입·로그인·JWT 인증, 사용자/캐릭터 CRUD, 활성 캐릭터 단일성 보장, 학습 리포트 저장, **퀴즈 채점 요청·웹훅 결과 수신**, **캐릭터 이미지 생성 동기 HTTP 요청**, 자정 리포트 SQS 요청 적재(Producer), AI 결과 수신(Internal API), 점수·전투력·진화·감정 반영 트랜잭션, 랭킹·대시보드 API, 공유 게시글·리뷰 CRUD |
+| **김윤석** | Spring Boot 서버 (System of Record) | 가입·로그인·JWT 인증, 사용자/캐릭터 CRUD, 활성 캐릭터 단일성 보장, 학습 리포트 저장, **퀴즈 채점 요청·웹훅 결과 수신**, **캐릭터 이미지 생성 동기 HTTP 요청**, 자정 리포트 SQS 요청 적재(Producer), AI 결과 수신(Internal API), 점수·전투력·진화·감정 반영 트랜잭션, 랭킹·대시보드 API, 캐릭터 리뷰 CRUD |
 | **신동운** | FastAPI AI 서버 (Intelligence) | **퀴즈 답안 비동기 채점·피드백 웹훅**, **캐릭터 스프라이트 이미지 동기 생성·S3 저장**, 리포트 SQS 메시지 단건 소비(Consumer), AI 일일 레포트 생성, 다음 학습 추천, 추천 퀴즈 생성, 결과를 Spring Boot Internal API로 콜백, 멱등성·실패 Fallback |
-| **공통 / 프런트엔드** | Vue SPA (목업 기반) | 대시보드·캐릭터·리포트·퀴즈·랭킹·게시판 화면, **스프라이트시트 프레임 선택·idle 애니메이션 렌더**, JWT 보관, Spring Boot Public API 소비 |
+| **공통 / 프런트엔드** | Vue SPA (목업 기반) | 대시보드·캐릭터(리뷰 통합)·리포트·퀴즈·랭킹 화면, **스프라이트시트 프레임 선택·idle 애니메이션 렌더**, JWT 보관, Spring Boot Public API 소비 |
 
 **경계 원칙**
 
@@ -45,7 +45,7 @@ _혼자 CS를 공부하는 사람의 학습을 캐릭터 성장으로 바꾸는 
 - 통신 모드는 흐름별로 다르다 `[RESOLVES Q1: 리포트는 자정 배치, 퀴즈 채점은 웹훅, 캐릭터 이미지는 동기 HTTP로 확정]`:
   - **흐름 A**는 비동기 단방향(자정 SQS → FastAPI → 콜백). 일 1회 윈도우(자정 적재 → 오전 9시 제공).
   - **흐름 B**는 **비동기 웹훅**. 사용자가 퀴즈 답안을 제출하면 Spring Boot가 제출을 저장하고 FastAPI에 채점 요청을 보낸다. FastAPI는 채점 완료 후 Spring Boot 웹훅으로 결과를 돌려준다.
-  - **흐름 C**는 **동기 HTTP**. 캐릭터 생성 시 Spring Boot가 FastAPI 이미지 생성 엔드포인트를 호출하고, FastAPI는 제공받은 S3 URL에 2x3 스프라이트시트를 저장한 뒤 성공/실패와 URL을 동기 응답한다.
+  - **흐름 C**는 **동기 HTTP**. 캐릭터 생성 시 Spring Boot가 FastAPI 이미지 생성 엔드포인트를 호출하고, FastAPI는 제공받은 S3 URL에 1x3 스프라이트시트를 저장한 뒤 성공/실패와 URL을 동기 응답한다.
 
 ---
 
@@ -55,7 +55,7 @@ _혼자 CS를 공부하는 사람의 학습을 캐릭터 성장으로 바꾸는 
 
 **기능 요구사항 (PRD FR-1~28)** 은 9개 기능군으로 묶이며, 아키텍처 관점에서 3개 책임 영역으로 재분류된다:
 
-- **Transactional / SoR (Spring Boot):** 회원·인증·인가(FR-1~2, FR-24~28), 캐릭터 CRUD·활성화(FR-3~7), 리포트 저장(FR-8), 요청 적재(FR-9), 점수 반영(FR-11), 결과 제공(FR-12), 능력치·전투력·진화·감정(FR-21~23), 랭킹·대시보드(FR-17~18), 공유·리뷰(FR-19~20).
+- **Transactional / SoR (Spring Boot):** 회원·인증·인가(FR-1~2, FR-24~28), 캐릭터 CRUD·활성화(FR-3~7), 리포트 저장(FR-8), 요청 적재(FR-9), 점수 반영(FR-11), 결과 제공(FR-12), 능력치·전투력·진화·감정(FR-21~23), 랭킹·대시보드(FR-17~18), 캐릭터 리뷰(FR-19~20).
 - **AI / Intelligence (FastAPI):** 일일 레포트 생성(FR-10), 추천 퀴즈(FR-13), **퀴즈 비동기 채점·피드백(FR-15)**, **스프라이트 이미지 생성(FR-3 내)**, Fallback 생성(FR-16).
 - **계약 모드 3종:**
   - **비동기 단방향(흐름 A):** 일일 리포트는 자정 SQS → FastAPI → 콜백(FR-9~12).
@@ -137,7 +137,7 @@ flowchart LR
 
   %% 흐름 C — 캐릭터 이미지(동기 HTTP)
   SB -->|C④ POST /api/ai/commitgotchi<br/>userId+s3ObjectUrl+prompt| FA
-  FA -->|2x3 sprite upload| S3
+  FA -->|1x3 sprite upload| S3
   FA -->|OK/FAIL + S3 URL| SB
 
   RQ -.->|maxReceiveCount 초과| DLQ
@@ -155,7 +155,7 @@ flowchart LR
 ```mermaid
 flowchart TB
   subgraph FE[Vue SPA · 프런트엔드]
-    UI[대시보드 / 캐릭터 / 리포트 / 퀴즈 / 랭킹 / 게시판]
+    UI[대시보드 / 캐릭터 / 리포트 / 퀴즈 / 랭킹 / 캐릭터 리뷰]
   end
 
   subgraph BE[Spring Boot · 김윤석 · System of Record]
@@ -167,7 +167,7 @@ flowchart TB
     IMGREQ[이미지 HTTP 클라이언트<br/>/api/ai/commitgotchi 호출]
     INTERNAL[Internal API<br/>리포트·퀴즈 결과 수신·반영]
     RANK[랭킹·대시보드]
-    BOARD[공유 게시판·리뷰]
+    REVIEW[캐릭터 리뷰<br/>공유 캐릭터 평점·코멘트]
   end
 
   subgraph AI[FastAPI · 신동운 · Intelligence]
@@ -175,15 +175,15 @@ flowchart TB
     GRADEASYNC[퀴즈 채점 API<br/>요청 수락 + 웹훅 송신]
     REPORT[일일 레포트·점수 변화량 생성]
     RECO[다음 학습 추천 · 추천 퀴즈 생성]
-    IMG[스프라이트 이미지 생성·S3 저장<br/>6프레임 2x3 시트]
+    IMG[스프라이트 이미지 생성·S3 저장<br/>3프레임 1x3 시트]
     FALLBACK[Fallback 핸들러]
   end
 
   DB[(PostgreSQL)]
   RQ[/report-request-queue/]
 
-  UI --> AUTH & CHAR & LOG & QUIZ & RANK & BOARD
-  AUTH & CHAR & LOG & QUIZ & RANK & BOARD --> DB
+  UI --> AUTH & CHAR & LOG & QUIZ & RANK & REVIEW
+  AUTH & CHAR & LOG & QUIZ & RANK & REVIEW --> DB
 
   %% 흐름 A — 리포트(자정 배치)
   BATCH --> RQ --> CONSUMER --> REPORT --> RECO --> INTERNAL
@@ -216,7 +216,7 @@ flowchart TB
 | FR-15 | **퀴즈 비동기 채점·피드백·점수 웹훅 반영(흐름 B)** | 퀴즈 모듈 ↔ 채점 API/웹훅 + 캐릭터 모듈 | 김윤석 ↔ 신동운 |
 | FR-16 | Fallback(리포트·채점·이미지 각각) | Fallback 핸들러 + Internal API/HTTP 응답 | 신동운 + 김윤석 |
 | FR-17,18 | 대시보드·랭킹 | 랭킹·대시보드 | 김윤석 |
-| FR-19,20 | 공유 게시글·리뷰 CRUD | 게시판 모듈 | 김윤석 |
+| FR-19,20 | 공유 캐릭터 리뷰 CRUD (캐릭터 상세 통합) | 리뷰 모듈 | 김윤석 |
 | FR-21,22,23 | 능력치·전투력·진화·감정 | 캐릭터 성장 규칙(Internal API 내) | 김윤석 |
 
 ---
@@ -266,6 +266,7 @@ flowchart TB
 ```
 
 - `requestId`: **멱등 키.** Spring Boot가 생성, FastAPI가 콜백 시 그대로 반환. (UUID, `userId+targetDate` 조합으로 결정적 생성 권장)
+- `characterMetadata.characterId`: **`user_character.id`** (유저 게임 인스턴스 PK). 공유 템플릿 `characters.id`가 아님에 주의. `name`, `emotion`, `currentStats`는 모두 `user_character` 행에서 조회하며, `personality`는 `characters` 테이블 JOIN으로 가져온다.
 - `reportDirection.scoreDeltaHint`: 최근 1주일 추세에서 도출한 리포트 방향. 예: `algorithm +3`, `network +1`.
 - `characterMetadata.emotion`: Spring Boot가 결정한 현재 캐릭터 감정. enum은 `JOY`(기쁨), `ANGRY`(화남), `SAD`(슬픔) 3개만 허용한다. FastAPI는 이 값을 새로 판정하지 않고 리포트 문장의 말투에만 반영한다.
 - `currentStats`: 진화 임계(1,000) 판정·점수 인플레 경계(SM-C1)를 위해 AI에 현재 능력치 컨텍스트로 제공. `[ASSUMPTION]`
@@ -311,6 +312,7 @@ Content-Type: application/json
 }
 ```
 
+- `characterId`: **`user_character.id`** (유저 게임 인스턴스 PK). Spring Boot는 이 값으로 어느 `user_character` 행에 점수를 반영할지 결정한다.
 - `scoreDelta`: **학습 리포트 분석분만.** 각 필드(`db`, `algorithm`, `cs`, `network`, `framework`)는 `0..10` 범위를 넘지 않는다.
 - `emotion`은 리포트 결과 콜백에 포함하지 않는다. 감정 상태 결정과 저장은 Spring Boot 책임이며, FastAPI는 4.1 요청의 `characterMetadata.emotion`을 문체 컨텍스트로만 소비한다.
 - `dailyReport`는 리포트 본문과 학습 피드백만 담는다. 퀴즈 채점·피드백은 흐름 B의 웹훅 결과가 단독 책임을 가진다.
@@ -380,6 +382,7 @@ Content-Type: application/json
 }
 ```
 
+- `characterId`: **`user_character.id`** (유저 게임 인스턴스 PK). `characterMetadata.personality`는 해당 `user_character`가 참조하는 `characters` 행에서 JOIN해 가져온다.
 - `question`, `modelAnswer`, `scoreAllocation`은 Spring Boot가 문제 DB와 §4.2의 추천 결과를 기준으로 전달한다.
 - `scoreAllocation`: 이 퀴즈의 필드별 최고 배점. 각 필드는 `0..10`이며, FastAPI는 이 배점을 초과하는 점수를 줄 수 없다.
 - `callbackUrl`: FastAPI가 채점 결과를 반환할 Spring Boot 웹훅 엔드포인트. MVP에서는 고정 URL이어도 되지만, 요청 바디에 포함해 협업 계약을 명확히 한다.
@@ -444,22 +447,22 @@ Content-Type: application/json
 
 ### 4.4 흐름 C · 계약 ④ — 캐릭터 이미지 생성 (동기 HTTP)
 
-캐릭터 생성 시 Spring Boot는 FastAPI의 임시 이미지 생성 엔드포인트를 동기 호출한다. FastAPI는 2단계 진화형 × 3감정(기쁨·슬픔·화남), 총 6개 프레임이 들어 있는 투명 PNG 스프라이트시트를 생성하고, Spring Boot가 전달한 S3 URL에 저장한 뒤 성공 여부와 저장 URL을 응답한다.
+캐릭터 생성 시 Spring Boot는 FastAPI의 임시 이미지 생성 엔드포인트를 동기 호출한다. FastAPI는 감정 3종(기쁨·슬픔·화남), 총 3개 프레임이 들어 있는 **1행 3열** 투명 PNG 스프라이트시트를 생성하고, Spring Boot가 전달한 S3 URL에 저장한 뒤 성공 여부와 저장 URL을 응답한다.
 
 **Spring Boot → FastAPI 요청 (`POST /api/ai/commitgotchi`):**
 
 ```json
 {
   "userId": 1,
-  "s3ObjectUrl": "s3://commitgotchi-sprites/users/1/commitgotchi-20260606.png",
-  "prompt": "A comprehensive retro Tamagotchi character design sheet ... design keyword \"작고 둥근 초록 슬라임\" ... --ar 16:9"
+  "s3ObjectUrl": "s3://commitgotchi-sprites/characters/42/sprite-sheet.png",
+  "prompt": "A retro Tamagotchi character design sheet ... design keyword \"작고 둥근 초록 슬라임\" ... --ar 3:1"
 }
 ```
 
 - `userId`: 향후 MQ 전환 시 메시지와 결과를 상관관계로 묶기 위한 필드.
-- `s3ObjectUrl`: FastAPI가 생성 결과를 저장해야 하는 대상 URL. 향후 MQ 전환 시에도 결과 위치를 명시하기 위해 요청·응답에 모두 포함한다.
+- `s3ObjectUrl`: FastAPI가 생성 결과를 저장해야 하는 대상 URL. `characters.id` 기반 경로(`characters/{characterId}/sprite-sheet.png`)를 사용한다. 스프라이트는 공유 템플릿 `characters`에 귀속되므로 `userId` 경로를 사용하지 않는다. 향후 MQ 전환 시에도 결과 위치를 명시하기 위해 요청·응답에 모두 포함한다.
 - `prompt`: §7.6의 이미지 생성 프롬프트에 사용자의 디자인 키워드를 주입한 최종 프롬프트.
-- `characterId`는 이 계약에서 사용하지 않는다.
+- `characterId`는 이 계약 바디에 포함하지 않는다. Spring Boot가 `s3ObjectUrl`에 `characters.id`를 이미 인코딩하므로 중복 전달이 불필요하다.
 
 **FastAPI → Spring Boot 응답 (성공):**
 
@@ -467,16 +470,16 @@ Content-Type: application/json
 {
   "userId": 1,
   "status": "OK",
-  "s3ObjectUrl": "s3://commitgotchi-sprites/users/1/commitgotchi-20260606.png",
-  "spriteSheetUrl": "https://cdn.example.com/sprites/users/1/commitgotchi-20260606.png",
+  "s3ObjectUrl": "s3://commitgotchi-sprites/characters/42/sprite-sheet.png",
+  "spriteSheetUrl": "https://cdn.example.com/sprites/characters/42/sprite-sheet.png",
   "spriteMeta": {
     "columns": 3,
-    "rows": 2,
+    "rows": 1,
     "frameMap": {
-      "baby":   { "joy": [0,0], "sad": [0,1], "angry": [0,2] },
-      "mature": { "joy": [1,0], "sad": [1,1], "angry": [1,2] }
+      "joy": [0, 0],
+      "sad": [0, 1],
+      "angry": [0, 2]
     },
-    "frame": { "babyPx": 16, "maturePx": 18 },
     "transparent": true
   }
 }
@@ -488,15 +491,15 @@ Content-Type: application/json
 {
   "userId": 1,
   "status": "FAIL",
-  "s3ObjectUrl": "s3://commitgotchi-sprites/users/1/commitgotchi-20260606.png",
+  "s3ObjectUrl": "s3://commitgotchi-sprites/characters/42/sprite-sheet.png",
   "spriteSheetUrl": null,
   "spriteMeta": null,
   "errorMessage": "IMAGE_GENERATION_FAILED"
 }
 ```
 
-- Spring Boot는 `status=OK`면 `spriteSheetUrl`/`spriteMeta`를 저장하고, `status=FAIL`이면 동일 2x3 레이아웃의 기본 스프라이트 세트로 대체한다(FR-16).
-- 프런트엔드는 저장된 `spriteSheetUrl`과 `spriteMeta`를 사용해 현재 `(is_evolved, emotion)`에 해당하는 프레임을 잘라 렌더한다.
+- Spring Boot는 `status=OK`면 `spriteSheetUrl`/`spriteMeta`를 **공유 템플릿 `characters` 행**에 저장하고, `status=FAIL`이면 동일 1×3 레이아웃의 기본 스프라이트 세트로 대체한다(FR-16). 이 스프라이트는 해당 `characters` 행을 참조하는 모든 `user_character`가 공유한다.
+- 프런트엔드는 `user_character` + `characters` JOIN 결과의 `spriteSheetUrl`과 `spriteMeta`를 사용해 현재 `(is_evolved, emotion)`에 해당하는 프레임을 잘라 렌더한다.
 
 ---
 
@@ -529,13 +532,14 @@ Content-Type: application/json
 ```mermaid
 erDiagram
   USERS ||--o{ REFRESH_TOKENS : owns
-  USERS ||--o{ CHARACTERS : owns
+  USERS ||--o{ USER_CHARACTER : has
+  CHARACTERS ||--o{ USER_CHARACTER : defines
   USERS ||--o{ STUDY_LOGS : writes
-  CHARACTERS ||--o{ QUIZZES : has
+  USER_CHARACTER ||--o{ STUDY_LOGS : uses
+  USER_CHARACTER ||--o{ QUIZZES : has
   QUIZZES ||--o| QUIZ_SUBMISSIONS : answered_by
   USERS ||--o{ REPORT_RESULTS : receives
-  CHARACTERS ||--o{ SHARED_POSTS : shared_as
-  SHARED_POSTS ||--o{ REVIEWS : has
+  CHARACTERS ||--o{ REVIEWS : reviewed_by
   USERS ||--o{ REVIEWS : writes
 
   USERS {
@@ -555,10 +559,18 @@ erDiagram
   }
   CHARACTERS {
     bigint id PK
-    bigint user_id FK
-    string name
     string personality
     string design_keyword "이미지 생성 프롬프트 주입용"
+    string sprite_sheet_url "3프레임 1x3 스프라이트시트 (공유)"
+    jsonb sprite_meta "프레임 매핑·셀 크기 (공유)"
+    string image_status "PENDING|READY|FALLBACK"
+    timestamptz created_at
+  }
+  USER_CHARACTER {
+    bigint id PK
+    bigint user_id FK
+    bigint character_id FK
+    string name
     int stat_db
     int stat_algorithm
     int stat_cs
@@ -568,23 +580,20 @@ erDiagram
     string emotion "JOY|SAD|ANGRY"
     string status_message
     boolean is_evolved "false=baby행 / true=mature행"
-    string sprite_sheet_url "6프레임 2x3 스프라이트시트"
-    jsonb sprite_meta "프레임 매핑·셀 크기"
-    string image_status "READY|FALLBACK"
     boolean is_active
     timestamptz created_at
   }
   STUDY_LOGS {
     bigint id PK
     bigint user_id FK
-    bigint character_id FK
+    bigint user_character_id FK
     date target_date
     string title
     text content
   }
   QUIZZES {
     bigint id PK
-    bigint character_id FK
+    bigint user_character_id FK
     bigint problem_id "문제 DB/RAG 매칭 번호, nullable"
     date recommended_for
     text question
@@ -607,7 +616,7 @@ erDiagram
     bigint id PK
     string request_id UK "멱등 키"
     bigint user_id FK
-    bigint character_id FK
+    bigint user_character_id FK
     date target_date
     string status "SUCCESS|FALLBACK"
     text report_text
@@ -615,17 +624,11 @@ erDiagram
     text next_recommendation
     timestamptz created_at
   }
-  SHARED_POSTS {
-    bigint id PK
-    bigint user_id FK
-    bigint character_id FK
-    string title
-    text content
-  }
   REVIEWS {
     bigint id PK
-    bigint post_id FK
+    bigint character_id FK "공유 템플릿 characters.id"
     bigint user_id FK
+    int rating "1..5 별점"
     text content
   }
 ```
@@ -634,23 +637,23 @@ erDiagram
 
 ### 5.2 핵심 제약 — 활성 캐릭터 단일성 (FR-7)
 
-PostgreSQL **부분 유니크 인덱스**로 DB 레벨에서 보장한다. 애플리케이션 로직 실수와 무관하게 "사용자당 활성 1개"가 깨질 수 없다.
+PostgreSQL **부분 유니크 인덱스**로 DB 레벨에서 보장한다. 애플리케이션 로직 실수와 무관하게 "사용자당 활성 1개"가 깨질 수 없다. 활성 상태는 공유 템플릿 `characters`가 아닌 유저 인스턴스 `user_character`에 있다.
 
 ```sql
 CREATE UNIQUE INDEX uq_one_active_character_per_user
-  ON characters (user_id)
+  ON user_character (user_id)
   WHERE is_active = true;
 ```
 
-- 새 활성 지정(FR-7)·첫 캐릭터 자동 활성(FR-3)·활성 캐릭터 삭제 후 재지정(FR-6)은 모두 단일 트랜잭션에서 기존 활성 해제 → 신규 활성 지정 순으로 수행.
+- 새 활성 지정(FR-7)·첫 캐릭터 자동 활성(FR-3)·활성 캐릭터 삭제 후 재지정(FR-6)은 모두 단일 트랜잭션에서 기존 `user_character` 행의 활성 해제 → 신규 `user_character` 행의 활성 지정 순으로 수행.
 
 ### 5.3 핵심 제약 — 점수 누적 정합성 (FR-11, FR-21)
 
 점수는 **두 출처**(흐름 A 리포트·흐름 B 퀴즈)에서 활성 캐릭터에 **일 단위 누적**된다(주간은 집계·표시용일 뿐 반영 단위 아님) `[RESOLVES Q5 / PRD §4.4]`. 두 경로 모두 동일한 트랜잭션 골격을 쓴다:
 
-- **흐름 A(자정 리포트):** ① `report_results` insert(멱등 체크) → ② 활성 캐릭터 `stat_*` 가산 → ③ `battle_power` 재계산(=5종 합) → ④ 진화 판정(§7.1) → ⑤ 감정·상태 메시지 갱신.
-- **흐름 B(퀴즈 웹훅):** ① `quiz_submissions` upsert(`submission_id` 멱등, 제출 시 `GRADING`) → ② 웹훅 수신 시 활성 캐릭터 `stat_*` 가산(이 퀴즈의 `score_delta`) → ③ `battle_power` 재계산 → ④ 진화 판정 → ⑤ 감정·상태 메시지 갱신. 부분 성공 없음.
-- **동시성:** 흐름 B는 낮 동안 여러 퀴즈가 빠르게 들어올 수 있으므로 활성 캐릭터 행에 **비관적 락(`SELECT ... FOR UPDATE`)** 또는 낙관적 버전 컬럼으로 합계 정합성을 보장한다. 흐름 A 콜백과 흐름 B 채점이 동시에 같은 캐릭터를 갱신해도 락으로 직렬화된다.
+- **흐름 A(자정 리포트):** ① `report_results` insert(멱등 체크) → ② 활성 `user_character`의 `stat_*` 가산 → ③ `battle_power` 재계산(=5종 합) → ④ 진화 판정(§7.1) → ⑤ 감정·상태 메시지 갱신.
+- **흐름 B(퀴즈 웹훅):** ① `quiz_submissions` upsert(`submission_id` 멱등, 제출 시 `GRADING`) → ② 웹훅 수신 시 활성 `user_character`의 `stat_*` 가산(이 퀴즈의 `score_delta`) → ③ `battle_power` 재계산 → ④ 진화 판정 → ⑤ 감정·상태 메시지 갱신. 부분 성공 없음.
+- **동시성:** 흐름 B는 낮 동안 여러 퀴즈가 빠르게 들어올 수 있으므로 활성 `user_character` 행에 **비관적 락(`SELECT ... FOR UPDATE`)** 또는 낙관적 버전 컬럼으로 합계 정합성을 보장한다. 흐름 A 콜백과 흐름 B 채점이 동시에 같은 `user_character`를 갱신해도 락으로 직렬화된다.
 - **이중계상 금지:** 퀴즈 점수는 흐름 B에서 1회만 반영, 리포트 콜백은 퀴즈 점수를 더하지 않는다(§4.5).
 
 ### 5.4 캐릭터 상세 페이지네이션 — 리포트/퀴즈 2-리스트 분리 (1.3 요구)
@@ -659,11 +662,28 @@ CREATE UNIQUE INDEX uq_one_active_character_per_user
 
 | 리스트 | 데이터 출처 | 조회 API | 한 행의 내용 |
 |--------|-------------|----------|--------------|
-| **리포트 리스트** | `STUDY_LOGS` + `REPORT_RESULTS` (targetDate 조인) | `GET /api/characters/{id}/reports?page=&size=` | 날짜·리포트 제목·요약·점수 변화량·감정 |
-| **퀴즈 리스트** | `QUIZZES` + `QUIZ_SUBMISSIONS` | `GET /api/characters/{id}/quizzes?page=&size=` | 추천일·질문·제출/채점 상태·필드별 획득 점수·피드백 |
+| **리포트 리스트** | `STUDY_LOGS` + `REPORT_RESULTS` (targetDate 조인) | `GET /api/characters/{id}/reports?page=&size=` (`{id}` = `user_character.id`) | 날짜·리포트 제목·요약·점수 변화량·감정 |
+| **퀴즈 리스트** | `QUIZZES` + `QUIZ_SUBMISSIONS` | `GET /api/characters/{id}/quizzes?page=&size=` (`{id}` = `user_character.id`) | 추천일·질문·제출/채점 상태·필드별 획득 점수·피드백 |
 
 - 두 API는 각자 `page`/`size`/`totalPages`를 반환한다. 프런트엔드는 탭 또는 좌우 2-섹션으로 배치하고 페이저를 분리 운용한다.
 - 리포트 리스트는 자정 배치 결과(흐름 A) 기준 정렬(최신일 우선), 퀴즈 리스트는 추천일·제출시각 기준 정렬. 채점 상태(`GRADING`/`GRADED`/`UNGRADED`)를 배지로 구분.
+
+### 5.5 캐릭터 리뷰 — 공유 캐릭터 상세 통합 (FR-19, FR-20)
+
+리뷰는 별도 공유 게시판이 아니라 **캐릭터 상세 화면에 통합**된다. 리뷰 대상은 유저 인스턴스(`user_character`)가 아니라 **공유 템플릿 `characters`**다. 같은 `characters` 행을 여러 유저가 재사용하므로, 리뷰는 그 공유 캐릭터 정의(스프라이트·성격 등)에 대한 평가가 된다.
+
+| 항목 | 결정 |
+|------|------|
+| 대상 | `reviews.character_id → characters.id` (공유 템플릿). 다른 계약의 `characterId`(=`user_character.id`)와 의미가 다름에 주의 |
+| 작성자 | `reviews.user_id → users.id` |
+| 필드 | `id`, `character_id`, `user_id`, `rating`(1..5 정수 별점), `content` |
+| 평점 집계 | 캐릭터 상세에서 해당 `characters`의 `AVG(rating)`·리뷰 수를 표시 |
+| 조회 API | `GET /api/characters/{characterId}/reviews?page=&size=` (`{characterId}` = `characters.id`, 페이지네이션) |
+| 쓰기 API | `POST/PATCH/DELETE /api/characters/{characterId}/reviews[/{reviewId}]`. 본인 리뷰만 수정·삭제 |
+
+- `rating`은 DB CHECK `rating BETWEEN 1 AND 5`로 강제한다.
+- `shared_posts` 테이블은 사용하지 않는다(폐기). 기존 게시판 개념의 "캐릭터 공유"는 N:M `characters` 카탈로그 재사용으로 대체된다.
+- `[ASSUMPTION]` 한 유저가 같은 캐릭터에 리뷰를 1개만 작성할지(유니크 `(character_id, user_id)`) 여부는 제품 결정으로 확정 필요.
 
 ---
 
@@ -675,7 +695,7 @@ CREATE UNIQUE INDEX uq_one_active_character_per_user
 commitgotchi/
 ├── frontend/                      # Vue SPA (공통/프런트)
 │   └── src/
-│       ├── views/                 # dashboard, character, studylog, quiz, ranking, board
+│       ├── views/                 # dashboard, character(리뷰 통합), studylog, quiz, ranking
 │       ├── api/                   # Spring Boot REST 클라이언트, JWT 인터셉터
 │       └── components/
 │
@@ -684,8 +704,10 @@ commitgotchi/
 │       ├── auth/                  # 가입·로그인·JWT·Refresh Token (FR-1,2,24,25)
 │       ├── user/                  # 사용자 조회·현재 사용자·Role (FR-26,27)
 │       ├── security/              # SecurityFilterChain·JWT 필터·EntryPoint·DeniedHandler
-│       ├── character/             # CRUD·활성 단일성·성장 반영·스프라이트 메타 (FR-3~7,21~23)
+│       ├── character/             # 공유 캐릭터 템플릿 도메인 (characters 테이블)
 │       │   └── image/             # 흐름 C: FastAPI 이미지 동기 HTTP 클라이언트
+│       ├── usercharacter/         # 유저 게임 인스턴스 도메인 (user_character 테이블)
+│       │   │                      # CRUD·활성 단일성·성장 반영 (FR-3~7,21~23)
 │       ├── studylog/              # 학습 리포트 (FR-8)
 │       ├── quiz/                  # 추천 퀴즈 제공·답안 저장·비동기 채점 요청 (FR-13,14,15)
 │       │   └── grading/           # 흐름 B: FastAPI 채점 요청 + grade-result 웹훅 반영
@@ -693,7 +715,7 @@ commitgotchi/
 │       │   ├── batch/             # 흐름 A: 자정 SQS Producer (FR-9)
 │       │   └── internal/          # POST /api/report (FR-11,12,16)
 │       ├── ranking/               # 랭킹·대시보드 (FR-17,18)
-│       ├── board/                 # 공유 게시글·리뷰 (FR-19,20)
+│       ├── review/                # 공유 캐릭터 리뷰 (FR-19,20, 캐릭터 상세 통합)
 │       └── common/                # 예외·트랜잭션·SQS(리포트)·HTTP 클라이언트·보안
 │   └── src/main/resources/db/migration/
 │       ├── V1__create_users.sql
@@ -720,7 +742,7 @@ commitgotchi/
 ### 7.1 진화 규칙 (FR-22) `[RESOLVES Q3]`
 
 - 전투력(5종 합) ≥ **1,000** 도달 시 진화, 캐릭터당 **최대 1회**(`is_evolved` 플래그).
-- 진화 시: 스프라이트시트의 **mature 행(행1)으로 전환** + `is_evolved = true`(별도 이미지 교체가 아니라 같은 시트의 아래 행 사용, §7.6). **추가 능력치 보너스 없음**(임계 통과 자체가 보상, SM-C1 인플레 경계 준수).
+- 진화 시: **baby 프리셋 URL → 자신이 생성한 evolved 스프라이트 URL로 전환** + `is_evolved = true` 설정(§7.6). 별도 이미지 재생성 없이 클라이언트가 참조하는 URL만 교체된다. **추가 능력치 보너스 없음**(임계 통과 자체가 보상, SM-C1 인플레 경계 준수).
 - 판정 위치: Internal API 점수 반영 트랜잭션 ④단계. 진화는 부수효과로 같은 트랜잭션에서 처리.
 
 ```mermaid
@@ -747,7 +769,7 @@ stateDiagram-v2
 
 | 흐름 | 실패 단계 | 대체 처리 | 사용자 표시 |
 |------|-----------|-----------|-------------|
-| C | 스프라이트 이미지 생성(FR-3) | 기본 스프라이트 세트 중 1개 배정(동일 6프레임 레이아웃), `image_status=FALLBACK`, 캐릭터 생성은 **성공** | 정상(기본 스프라이트) |
+| C | 스프라이트 이미지 생성(FR-3) | 기본 스프라이트 세트 중 1개 배정(동일 3프레임 1x3 레이아웃), `image_status=FALLBACK`, 캐릭터 생성은 **성공** | 정상(기본 스프라이트) |
 | A | 레포트 생성(FR-10) | `scoreDelta` 전부 0, `status=FALLBACK` | "오늘 분석 실패" 상태 안내 |
 | B | 퀴즈 웹훅 채점(FR-15) | 답안은 `GRADING`으로 저장, 실패 웹훅 또는 만료 시 `UNGRADED`, 점수 미반영 | "채점 잠시 후 재시도" + 다시 채점 버튼 |
 
@@ -769,41 +791,39 @@ stateDiagram-v2
 
 ### 7.6 캐릭터 스프라이트시트 (FR-3, 3번 요구) `[RESOLVES Q6]`
 
-캐릭터 이미지는 단일 이미지가 아니라 **6프레임 스프라이트시트**다. 한 장에 진화 2단계 × 감정 3종이 2×3 격자로 들어가고, 프런트엔드가 현재 `(is_evolved, emotion)`에 맞는 프레임을 골라 렌더 + idle 애니메이션(bob)을 입힌다("Sprite를 이용한 약간의 애니메이션").
+캐릭터 이미지는 단일 이미지가 아니라 **3프레임 스프라이트시트**다. 한 장에 감정 3종이 1×3 격자로 들어가고, 프런트엔드가 현재 `emotion`에 맞는 프레임을 골라 렌더 + idle 애니메이션(bob)을 입힌다("Sprite를 이용한 약간의 애니메이션"). 진화 단계(baby/mature)는 같은 시트의 행이 아니라 **서로 다른 `characters` 행(다른 스프라이트시트 URL)** 으로 표현된다.
 
-**레이아웃 (2행 3열, 투명 PNG):**
+**레이아웃 (1행 3열, 투명 PNG):**
 
 | | 열0 = 기쁨(joy) | 열1 = 슬픔(sad) | 열2 = 화남(angry) |
 |---|---|---|---|
-| **행0 = 유아형(baby, 16×16px)** | [0,0] | [0,1] | [0,2] |
-| **행1 = 진화형(mature, 18×18px)** | [1,0] | [1,1] | [1,2] |
+| **행0** | [0,0] | [0,1] | [0,2] |
 
-- 프레임 선택: `is_evolved=false` → 행0, `true` → 행1. `emotion` JOY/SAD/ANGRY → 열0/1/2. 매핑은 `characters.sprite_meta.frameMap`(§4.4)에 박제.
-- 진화(§7.1)는 곧 **행 전환**(baby행 → mature행)으로 표현된다. 별도 이미지 교체가 아니라 같은 시트의 아래 행을 쓴다.
+- 한 `characters` 스프라이트시트는 **한 진화 단계의 감정 3종**만 담는다. 매핑은 `characters.sprite_meta.frameMap`(§4.4)에 박제: `{ "joy":[0,0], "sad":[0,1], "angry":[0,2] }`.
+- **프레임 선택(열):** `emotion` JOY/SAD/ANGRY → 열0/1/2.
+- **진화 표현(시트 URL 전환, 클라이언트가 선택):** 프런트엔드가 `is_evolved`에 따라 두 후보 URL 중 하나를 고른다.
+  - `is_evolved=false` → **baby 프리셋 스프라이트.** `characters.id = (user_character.id % 3) + 1` 인 프리셋 baby 캐릭터의 `sprite_sheet_url`/`sprite_meta`를 사용한다. (프리셋 baby 3종은 `characters` 테이블에 id 1·2·3으로 사전 시딩.)
+  - `is_evolved=true` → **본인이 생성한 evolved 스프라이트.** 해당 `user_character.character_id`가 가리키는 `characters` 행의 `sprite_sheet_url`/`sprite_meta`를 사용한다.
+  - 따라서 캐릭터 상세/대시보드 응답은 두 후보(프리셋 baby URL·메타와 evolved URL·메타)를 모두 내려보내고, **클라이언트가 `is_evolved`로 최종 선택**한다(§AD-27).
+- 진화(§7.1)는 곧 **참조 URL 전환**(baby 프리셋 시트 → evolved 시트)으로 표현된다. 같은 시트 내 행 전환이 아니다.
 - 애니메이션은 프레임 교체가 아닌 **CSS bob/idle**(DESIGN.md `cg-spr`의 `bob`)로 구현. Reduce Motion 시 정적. 스프라이트시트는 어떤 프레임을 **보여줄지**만 결정한다.
 - 프런트 렌더: `background-image: url(spriteSheetUrl)` + 셀 크기/`background-position`으로 해당 프레임만 노출(나머지 잘라냄).
 
 **이미지 생성 프롬프트 (FastAPI `image/` 모듈에 박제, `designKeyword` 주입):**
 
 ```
-A comprehensive retro Tamagotchi character design sheet, presented on a clean transparent background, png style with alpha channel support. The sheet displays six distinct pixel art characters arranged in a precise 2x3 grid, representing two evolution stages and three emotional states.
+A retro Tamagotchi character design sheet, presented on a clean transparent background, png style with alpha channel support. The sheet displays three distinct pixel art characters arranged in a precise 1x3 horizontal grid, representing three emotional states of a single creature.
 
-Row 1: Stage 1 (16x16px size) 'baby' creatures.
-Column 1: Happy baby pixel art creature with a cheerful, smiling expression.
-Column 2: Sad baby pixel art creature with small tearful eyes and a downcast look.
-Column 3: Angry baby pixel art creature with a furrowed brow and a tiny steam puff.
+Column 1: Happy pixel art creature with a cheerful, smiling expression.
+Column 2: Sad pixel art creature with small tearful eyes and a downcast look.
+Column 3: Angry pixel art creature with a furrowed brow and a tiny steam puff.
 
-Row 2: Stage 2 (18x18px size) 'mature' evolved creatures.
-Column 1: Happy mature pixel art creature with a wide, confident smiling expression.
-Column 2: Sad mature pixel art creature with a downcast mouth and larger tear pixels.
-Column 3: Angry mature pixel art creature with narrowed eyes and a prominent 'fire' or 'steam' effect.
-
-All six characters are based on the design keyword "[사용자가 입력할 디자인 키워드]" and feature clean black outlines, a vibrant color palette, and a strict retro 8-bit handheld game aesthetic. This sheet functions as a game asset sprite sheet with no grid lines, no UI text, and is designed for easy extraction with an alpha channel. --ar 16:9
+All three characters are based on the design keyword "[사용자가 입력할 디자인 키워드]" and feature clean black outlines, a vibrant color palette, and a strict retro 8-bit handheld game aesthetic. This sheet functions as a game asset sprite sheet with no grid lines, no UI text, and is designed for easy extraction with an alpha channel. --ar 3:1
 ```
 
 - `[사용자가 입력할 디자인 키워드]` ← 사용자의 디자인 키워드로 치환하고, 최종 문자열을 §4.4의 `prompt`로 보낸다.
-- 생성 결과(2×3 시트)에서 셀 경계는 `sprite_meta`로 알려준다. AI가 격자선 없이 그리므로, 시트 픽셀 크기를 6등분한 셀 박스를 프런트가 사용.
-- 기본(Fallback) 스프라이트 세트도 **동일 6프레임 2×3 레이아웃**으로 미리 제작해, 실패 시 렌더 코드를 바꾸지 않고 교체만 한다.
+- 생성 결과(1×3 시트)에서 셀 경계는 `sprite_meta`로 알려준다. AI가 격자선 없이 그리므로, 시트 픽셀 너비를 3등분한 셀 박스를 프런트가 사용.
+- 기본(Fallback) 스프라이트 세트와 프리셋 baby 세트도 **동일 3프레임 1×3 레이아웃**으로 미리 제작해, 실패·미진화 시 렌더 코드를 바꾸지 않고 시트 URL만 교체한다.
 
 ---
 
@@ -892,7 +912,7 @@ sequenceDiagram
   SB->>FA: POST /api/ai/commitgotchi {userId, s3ObjectUrl, prompt}
   alt 생성 성공
     FA->>AI: 스프라이트시트 프롬프트, --ar 16:9
-    AI-->>FA: 2x3 투명 PNG 시트
+    AI-->>FA: 1x3 투명 PNG 시트
     FA->>S3: upload(sprite sheet)
     FA-->>SB: {status=OK, userId, s3ObjectUrl, spriteSheetUrl, spriteMeta}
     SB->>DB: 캐릭터 저장(image_status=READY, sprite_sheet_url, sprite_meta)
@@ -913,14 +933,14 @@ sequenceDiagram
 | AD-2 | 서버 간 계약은 3흐름·4계약(리포트 SQS+콜백, 퀴즈 웹훅, 이미지 동기 HTTP) | 독립 개발 가능 | 확정(개정) |
 | AD-3 | **리포트는 자정 배치, 퀴즈 채점은 비동기 웹훅, 이미지는 동기 HTTP로 분리** | 협업 계약 단순화, 채점 완료 시점 분리 | 확정(개정) `[RESOLVES Q1]` |
 | AD-4 | effectively-once = at-least-once/HTTP retry + 멱등키(requestId/submissionId/userId+s3ObjectUrl) | 중복 반영 방지 | 확정 `[RESOLVES Q5]` |
-| AD-5 | 활성 단일성은 부분 유니크 인덱스로 DB 강제 | 로직 무관 불변식 보장 | 확정 |
+| AD-5 | 활성 단일성은 `user_character(user_id) WHERE is_active=true` 부분 유니크 인덱스로 DB 강제 | 로직 무관 불변식 보장, 게임 상태 인스턴스 기준 | 확정(개정) |
 | AD-6 | 점수는 일 단위 누적, 주간은 집계·표시용 | PRD §4.4 정합 | 확정 |
 | AD-7 | 진화는 스프라이트 행 전환(baby→mature) + 플래그, 보너스 없음 | 점수 인플레 경계(SM-C1) | 제안 `[RESOLVES Q3]` |
 | AD-8 | 감정 상태 결정은 Spring Boot 책임, FastAPI는 입력 emotion을 말투 컨텍스트로만 소비 | FR-23, 계약 책임 분리 | 확정(개정) `[RESOLVES Q2]` |
 | AD-9 | Fallback은 흐름별 부분 실패 허용 | 흐름 무중단(SM-3) | 확정 `[RESOLVES Q4]` |
 | AD-10 | AI 모델 벤더는 FastAPI 내부에 캡슐화·교체 가능 | AI 품질 반복개선(SM-1) | 확정 |
 | AD-11 | **퀴즈/리포트 점수 출처 상호 배타(이중계상 금지)** | 같은 학습 2회 점수화 방지 | 확정 `[§4.5]` |
-| AD-12 | **캐릭터 이미지는 6프레임 2×3 스프라이트시트(진화 2×감정 3)** | 3번 요구, 진화·감정 프레임 전환 | 확정 `[RESOLVES Q6]` |
+| AD-12 | **캐릭터 이미지는 3프레임 1×3 스프라이트시트(감정 3종). 진화는 시트 내 행이 아니라 다른 `characters` 행(다른 시트 URL)으로 표현** | 3번 요구, 감정 프레임 전환 + 진화 URL 전환 | 확정(개정) `[RESOLVES Q6]` |
 | AD-13 | **MQ는 리포트 요청에만 사용, 퀴즈는 웹훅, 이미지는 동기 HTTP** | 흐름별 협업 계약을 단순화 | 확정 |
 | AD-14 | **캐릭터 상세는 리포트/퀴즈 독립 페이지네이션 2-리스트** | 1.3 요구 | 확정 `[§5.4]` |
 | AD-15 | **첫 구현 증분은 Spring Boot 인증·인가이며 `users`, `refresh_tokens`만 마이그레이션** | 인증 기반을 먼저 종단 검증, 범위 팽창 방지 | 확정 |
@@ -929,6 +949,9 @@ sequenceDiagram
 | AD-18 | **Refresh Token 256-bit opaque random, 30일, SHA-256 해시 저장, Rotation** | DB 원문 유출 방지와 탈취 토큰 재사용 차단 | 확정 |
 | AD-19 | **폐기 Refresh Token 재사용 탐지 시 해당 사용자의 모든 활성 Refresh Token 폐기** | 현재 스키마에 token-family가 없으므로 가능한 보수적 대응 | 확정 |
 | AD-20 | **이메일은 애플리케이션에서 trim+lowercase 후 저장하고 DB CHECK+UNIQUE로 강제** | 대소문자·공백에 의한 중복 계정 방지 | 확정 |
+| AD-26 | **`characters`(공유 캐릭터 정의 카탈로그) — `user_character`(유저별 게임 상태 인스턴스) N:M 정규화** | 스프라이트·성격은 한 번 생성 후 여러 유저가 재사용 가능. 게임 스탯·감정·이름 등 개인 상태는 `user_character`에 격리. 모든 계약의 `characterId`는 `user_character.id`를 의미한다(단 `reviews.character_id`는 `characters.id`) | 확정 |
+| AD-27 | **진화 스프라이트 선택은 클라이언트 책임. 응답에 baby 프리셋 시트와 evolved 시트 두 후보를 모두 내려보내고, 프런트가 `is_evolved`로 선택** | baby는 `(user_character.id % 3)+1` 프리셋 공유, evolved는 본인 생성분. 서버 분기 없이 렌더 계층에서 단순 선택 | 확정 |
+| AD-28 | **공유 게시판(`shared_posts`) 폐기, 리뷰는 공유 캐릭터(`characters`)에 직접 작성하고 캐릭터 상세에 통합. `reviews(character_id, user_id, rating 1..5, content)`** | N:M 공유 캐릭터 모델과 일치, 게시판 레이어 제거로 단순화 | 확정 `[§5.5]` |
 | AD-21 | **Role은 `varchar(20)` + CHECK(`USER`,`ADMIN`), 공개 가입은 항상 `USER`** | PostgreSQL enum 결합도를 피하면서 허용값 강제 | 확정 |
 | AD-22 | **초기 ADMIN은 Secret 기반 일회성 Flyway placeholder 마이그레이션이 아니라 운영 CLI/수동 SQL 절차로 프로비저닝** | 자격 증명과 해시를 Git/마이그레이션 이력에서 분리 | 확정 |
 | AD-23 | **공통 인증 오류 응답과 traceId를 EntryPoint·DeniedHandler·ControllerAdvice에서 동일 계약으로 제공** | 401/403/400/409 구분과 민감정보 비노출 | 확정 |
@@ -943,7 +966,7 @@ PRD FR-1~28 전부가 컴포넌트·계약·데이터 모델에 매핑됨(§3.2,
 
 - **FR-1~2, FR-24~28 (인증·인가):** 스키마, Spring Security 컴포넌트, API/오류 계약, 7개 보안 시퀀스, 테스트 전략을 §12에 확정.
 - **FR-15 (퀴즈 채점):** 자정 배치/동기 응답 → **비동기 웹훅 채점**(흐름 B)으로 변경. PRD/Addendum 동기화 필요(§아래 핸드오프).
-- **Q6 (기본 이미지 세트):** 스프라이트시트 6프레임 2×3 레이아웃으로 확정(§7.6). 기본 세트도 동일 레이아웃으로 N개 준비 후 Fallback 랜덤 배정. `[ASSUMPTION: N개수]`
+- **Q6 (기본 이미지 세트):** 스프라이트시트 3프레임 1×3 레이아웃으로 확정(§7.6). 기본(Fallback) 세트와 baby 프리셋 세트도 동일 레이아웃으로 준비. baby는 프리셋 3종(`characters` id 1·2·3) 사전 시딩, Fallback은 N개 준비 후 랜덤 배정. `[ASSUMPTION: N개수]`
 - **점수 이중계상:** 흐름 A·B 출처 분리로 해소(AD-11, §4.5).
 
 미해결로 남은 항목:
@@ -967,7 +990,7 @@ PRD FR-1~28 전부가 컴포넌트·계약·데이터 모델에 매핑됨(§3.2,
 
 ## 12. 첫 번째 구현 증분 — Spring Boot 인증·인가 아키텍처
 
-> **범위 SSOT:** 이 절은 FR-1~2, FR-24~28을 구현하기 위한 아키텍처 계약이다. 전체 MVP 아키텍처는 §0~11을 유지하지만, 첫 증분에서는 이 절에 명시된 `users`, `refresh_tokens`, 인증 API, 최소 검증 API만 구현한다. 캐릭터·리포트·퀴즈·게시판·Spring AI와 Access Token 블랙리스트는 제외한다.
+> **범위 SSOT:** 이 절은 FR-1~2, FR-24~28을 구현하기 위한 아키텍처 계약이다. 전체 MVP 아키텍처는 §0~11을 유지하지만, 첫 증분에서는 이 절에 명시된 `users`, `refresh_tokens`, 인증 API, 최소 검증 API만 구현한다. 캐릭터·리포트·퀴즈·리뷰·Spring AI와 Access Token 블랙리스트는 제외한다.
 
 ### 12.1 결정 요약과 구현 순서
 
@@ -1059,6 +1082,8 @@ CREATE INDEX idx_refresh_tokens_cleanup
 1. `V1__create_users.sql`: `users` 테이블과 제약 생성.
 2. `V2__create_refresh_tokens.sql`: FK 대상인 `users` 이후 `refresh_tokens`와 인덱스 생성.
 3. 인증 증분에서는 `V3` 이상의 도메인 테이블을 만들지 않는다.
+4. `V4__create_characters.sql`: 공유 캐릭터 정의 카탈로그 `characters` 테이블 생성 (§AD-26).
+5. `V5__create_user_character.sql`: 유저 게임 인스턴스 `user_character` 테이블 생성. `user_character(user_id) WHERE is_active=true` 부분 유니크 인덱스 포함 (§5.2).
 4. 모든 환경에서 Flyway가 먼저 실행되고 JPA는 `ddl-auto=validate`로 매핑 불일치만 탐지한다.
 5. 운영 초기 ADMIN은 Flyway 파일에 자격 증명을 넣지 않는다(§12.10).
 
