@@ -45,7 +45,7 @@ commitgotchi:
     image:
       enabled: ${CHARACTER_IMAGE_ENABLED:false}
       base-url: ${CHARACTER_IMAGE_BASE_URL:}
-      fallback-sprite-sheet-url: ${CHARACTER_IMAGE_FALLBACK_SPRITE_SHEET_URL:https://cdn.commitgotchi.local/sprites/fallback-default.png}
+      fallback-sprite-sheet-url: ${CHARACTER_IMAGE_FALLBACK_SPRITE_SHEET_URL:/character-assets/default_image1.png}
       s3-object-prefix: ${CHARACTER_IMAGE_S3_OBJECT_PREFIX:s3://commitgotchi-character-images/sprites}
       s3-presigned-url-enabled: ${CHARACTER_IMAGE_S3_PRESIGNED_URL_ENABLED:false}
       s3-region: ${CHARACTER_IMAGE_S3_REGION:${AWS_REGION:ap-northeast-2}}

@@ -122,7 +122,7 @@ components:
     dot: '8px 원형'
     map: 'joy 😊 / sad 😢 / angry 😠'
   cg-spr:
-    note: '캐릭터 픽셀 스프라이트. 6프레임 2x3 스프라이트시트(행: baby/mature · 열: joy/sad/angry)에서 (is_evolved, emotion) 프레임 선택. stage(baby<=1 / evolved=2) · emotion · grey(미획득) · bob(idle) 프로퍼티. 진화=행 전환. image PENDING 시 플레이스홀더. 그림자 spr-shadow.'
+    note: '캐릭터 픽셀 스프라이트. 3프레임 1x3 스프라이트시트(열: joy/sad/angry)에서 emotion 프레임 선택. 진화는 baby/evolved 시트 URL 전환으로 처리. emotion · grey(미획득) · bob(idle) 프로퍼티. image PENDING 시 플레이스홀더. 그림자 spr-shadow.'
   cg-radar:
     note: '5각형 레이더. 축 순서: 알고리즘 · CS · DB · 네트워크 · 프레임워크.'
 ---
@@ -172,7 +172,7 @@ Commit-Gotchi는 **Stardew Valley풍 코지 픽셀** 세계다. 따뜻한 크림
 
 목업에서 추출한 컴포넌트(`cg-*`). 동작 규칙은 `EXPERIENCE.md.Component Patterns`.
 
-- **cg-spr / cg-char** — 캐릭터 픽셀 스프라이트. **6프레임 2×3 스프라이트시트**(행0 baby / 행1 mature × 열0 joy / 열1 sad / 열2 angry)에서 `(is_evolved, emotion)`에 해당하는 프레임 1개를 `background-position`으로 노출. `stage`(baby≤1 / evolved=2)=진화 시 행 전환, `emotion`(joy/sad/angry)=열 선택, `grey`(도감 미획득=회색), `bob`(통통 idle 모션 — "Sprite를 이용한 약간의 애니메이션"), `spr-shadow`(바닥 그림자). 이미지 PENDING 동안 로딩 플레이스홀더. (메타: 아키텍처 §7.6 / `sprite_meta`)
+- **cg-spr / cg-char** — 캐릭터 픽셀 스프라이트. **3프레임 1×3 스프라이트시트**(열0 joy / 열1 sad / 열2 angry)에서 `emotion`에 해당하는 프레임 1개를 `background-position`으로 노출. 진화는 시트 내부 행 전환이 아니라 baby/evolved 스프라이트 URL 전환으로 처리한다. `emotion`(joy/sad/angry), `grey`(도감 미획득=회색), `bob`(통통 idle 모션 — "Sprite를 이용한 약간의 애니메이션"), `spr-shadow`(바닥 그림자). 이미지 PENDING 동안 로딩 플레이스홀더. (메타: 아키텍처 §7.6 / `sprite_meta`)
 - **cg-gauge** — 육아점수 진척 게이지. track(2px edge 보더, radius 7px, height 12px) + head 11px 라벨/수치.
 - **cg-radar** — 5각형 능력치 레이더. 축: 알고리즘·CS·DB·네트워크·프레임워크.
 - **cg-stattile** — 능력치 타일(개별 스탯 수치).

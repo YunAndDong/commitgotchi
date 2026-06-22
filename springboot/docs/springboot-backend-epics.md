@@ -39,8 +39,8 @@ inputDocuments:
 
 ## 구현 전 결정 필요 사항
 
-1. 캐릭터 이미지 생성 방식: PRD는 생성 응답을 즉시 완료하고 이미지 상태를 `PENDING`으로 두는 비동기-즉시 흐름을 말하지만, 아키텍처 문서는 Spring Boot가 FastAPI 이미지 엔드포인트를 동기 HTTP로 호출하는 흐름을 말한다.
-2. 퀴즈 채점 방식: 마스터 에픽의 추가 요구사항은 최신 PRD/Addendum과 아키텍처 사이의 동기 채점/웹훅 충돌을 구현 전 정합화해야 한다고 기록한다.
+1. 캐릭터 이미지 생성 방식: `architecture.md`를 SSOT로 잠그고, Spring Boot가 FastAPI `POST /api/ai/commitgotchi`를 동기 HTTP로 호출하는 흐름을 따른다.
+2. 퀴즈 채점 방식: `architecture.md`의 비동기 요청 수락 + `POST /api/internal/quizzes/grade-result` 웹훅 계약을 따른다. FastAPI webhook의 `emotion`/`statusMessage`는 Spring Boot가 수락한다.
 3. 능력치 키 이름: BE-2.6 기준 공개 API는 `algo`, `cs`, `db`, `net`, `fw`를 유지하고 DB 컬럼은 `stat_algorithm`, `stat_cs`, `stat_db`, `stat_network`, `stat_framework`로 매핑한다.
 4. API 경로: BE-2 공개 계약은 `/api/game/**` facade로 고정되었다. `/api/characters` 같은 신규 경로는 별도 ADR/마이그레이션 스토리 없이는 정식 계약으로 소개하지 않는다.
 

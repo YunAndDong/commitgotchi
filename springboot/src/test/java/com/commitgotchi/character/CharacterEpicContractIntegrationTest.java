@@ -155,7 +155,7 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
         retryImage(user.bearer(), firstId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.spriteSheetUrl").isNotEmpty())
-                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.baby.joy[0]").value(0));
+                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.joy[0]").value(0));
         assertStoredCharactersEmpty(user.id());
         assertStoredStateDoesNotContain(user.id(), "spriteMeta");
 
@@ -214,7 +214,7 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.characters[0].id").value(secondId))
                 .andExpect(jsonPath("$.state.characters[0].spriteSheetUrl").isNotEmpty())
-                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.mature.angry[1]").value(2));
+                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.angry[1]").value(2));
     }
 
     @Test

@@ -95,8 +95,8 @@ _혼자 CS를 공부하는 사람의 학습을 캐릭터 성장으로 바꾸는 
 | 레이어 | 기술 | 버전(권장) | 근거 |
 |--------|------|-----------|------|
 | Frontend | Vue 3 + Vite | Vue 3.4+, Vite 5+ | 목업이 이미 Vue로 작성됨(`docs/Commit-Gotchi 목업 (Vue)`). SPA로 Spring Boot REST 소비. |
-| Backend (SoR) | Spring Boot (Java 17 LTS) | Spring Boot 3.3.x | 담당자(김윤석) 역량, JPA/트랜잭션·Security 성숙도, 정합성 요구에 적합. |
-| ORM/DB 접근 | Spring Data JPA + Hibernate | — | 활성 단일성·점수 누적 트랜잭션을 선언적으로 표현. |
+| Backend (SoR) | Spring Boot (Java 17 LTS) | Spring Boot 3.3.x | 담당자(김윤석) 역량, MyBatis/트랜잭션·Security 성숙도, 정합성 요구에 적합. |
+| SQL 매퍼/DB 접근 | MyBatis (`mybatis-spring-boot-starter`) | 3.0.x | 활성 단일성·점수 누적 트랜잭션을 명시적 SQL 매퍼(XML/애노테이션)로 표현. 부분 유니크·`FOR UPDATE`·soft delete 필터를 SQL로 직접 제어. |
 | AI Service | FastAPI (Python 3.11+) | FastAPI 0.11x | 담당자(신동운) 역량, AI/LLM 생태계(SDK)와의 친화성. |
 | Database | PostgreSQL | 16 | 단일 RDB로 충분. 부분 유니크 인덱스로 활성 단일성 보장(§5.2). |
 | Message Queue | AWS SQS (Standard) | — | Addendum 명시. 자정 배치 적재·단건 소비·DLQ 지원. |
@@ -695,7 +695,7 @@ CREATE UNIQUE INDEX uq_one_active_character_per_user
 |------|------|
 | 이메일 재사용 | **불가.** `users.email`은 전역 UNIQUE(`uq_users_email`)를 유지해, soft delete된 계정의 이메일도 영구 예약된다. 부분 유니크로 완화하지 않는다. |
 | 연쇄 삭제 | **연쇄 soft delete.** 유저 soft delete 시 그 유저의 `user_character`·`refresh_tokens`를 함께 비활성/폐기하고, `user_character` soft delete 시 그 인스턴스의 `reports`·`quizzes`·`report_results`·`quiz_submissions` 조회를 차단한다. FK `ON DELETE CASCADE`는 물리 삭제용이라 soft delete에서는 발동하지 않으므로, 연쇄는 애플리케이션 트랜잭션이 책임진다. |
-| 조회 기본 필터 | 모든 일반 조회·카운트·유니크 판정은 `deleted_at IS NULL`만 대상으로 한다(Hibernate `@SQLRestriction` 등). 캐릭터 보유 개수(최대 3개)·활성 단일성·로그인 인증 모두 살아있는 행만 본다. |
+| 조회 기본 필터 | 모든 일반 조회·카운트·유니크 판정은 `deleted_at IS NULL`만 대상으로 한다. MyBatis 매퍼 SQL에 `deleted_at IS NULL` 조건을 명시(공통 `WHERE` 조각 `<sql>`/`<include>`로 재사용)한다. 캐릭터 보유 개수(최대 3개)·활성 단일성·로그인 인증 모두 살아있는 행만 본다. |
 | 토큰 | 유저 soft delete 시 활성 `refresh_tokens`를 즉시 폐기(`revoked_at`)해 재발급을 차단한다. 발급된 Access Token은 만료(최대 15분)까지 기술적으로 유효할 수 있다. |
 | 인증 | soft delete된 유저는 로그인·토큰 재발급·보호 API 접근이 모두 거부된다. |
 
@@ -975,7 +975,7 @@ sequenceDiagram
 | AD-22 | **초기 ADMIN은 Secret 기반 일회성 Flyway placeholder 마이그레이션이 아니라 운영 CLI/수동 SQL 절차로 프로비저닝** | 자격 증명과 해시를 Git/마이그레이션 이력에서 분리 | 확정 |
 | AD-23 | **공통 인증 오류 응답과 traceId를 EntryPoint·DeniedHandler·ControllerAdvice에서 동일 계약으로 제공** | 401/403/400/409 구분과 민감정보 비노출 | 확정 |
 | AD-24 | **BCrypt cost 12, 운영에서 기준 장비 성능 검증 후 상향 가능** | 안전한 기본값과 구현 단순성의 균형 | 확정 |
-| AD-25 | **인증 증분 DB 변경은 Flyway만 사용하고 Hibernate `ddl-auto=validate`** | 재현 가능한 실행 순서와 스키마 드리프트 방지 | 확정 |
+| AD-25 | **DB 스키마는 Flyway 마이그레이션이 단일 진실. MyBatis는 스키마를 생성/검증하지 않으며(자동 DDL 없음), 매퍼 SQL은 Flyway가 만든 스키마에 정합해야 한다** | 재현 가능한 실행 순서와 스키마 드리프트 방지 | 확정(개정) |
 
 ---
 
@@ -1025,11 +1025,12 @@ PRD FR-1~28 전부가 컴포넌트·계약·데이터 모델에 매핑됨(§3.2,
 | Role | `USER`, `ADMIN`; 공개 회원가입은 항상 `USER` |
 | 세션/CSRF | `STATELESS`, 세션 미사용, Bearer 토큰 기반 API의 CSRF 비활성화 |
 | CORS | 환경변수 allowlist, 운영에서 wildcard 금지 |
-| 마이그레이션 | Flyway 전용, `V1 users` → `V2 refresh_tokens`, Hibernate `ddl-auto=validate` |
+| 마이그레이션 | Flyway 전용, `V1 users` → `V2 refresh_tokens`. MyBatis 자동 DDL 미사용(스키마는 Flyway가 단독 소유) |
+| 영속성 접근 | MyBatis 매퍼 인터페이스 + XML/애노테이션 SQL. 도메인 객체 ↔ resultMap 매핑, 자동 변경 감지(dirty checking) 없음 → 갱신은 명시적 `UPDATE` 매퍼 호출 |
 
-**구현 순서:** Flyway/엔티티 → 공통 오류 계약 → SecurityFilterChain/JWT → 회원가입 → 로그인 → 재발급 Rotation → 로그아웃 → 현재 사용자/관리자 API → 통합 테스트.
+**구현 순서:** Flyway/도메인·매퍼 → 공통 오류 계약 → SecurityFilterChain/JWT → 회원가입 → 로그인 → 재발급 Rotation → 로그아웃 → 현재 사용자/관리자 API → 통합 테스트.
 
-**필수 Spring 의존성 계약:** 기존 Web/JPA/PostgreSQL에 `spring-boot-starter-security`, `spring-boot-starter-validation`, `spring-security-oauth2-jose`(Spring Security의 `JwtEncoder`/`JwtDecoder` 사용), `flyway-core`, PostgreSQL용 Flyway 모듈을 추가한다. 테스트에는 `spring-security-test`, Testcontainers PostgreSQL을 사용한다. Spring Boot dependency management가 관리하는 버전을 사용하고 JWT 서명/파싱 암호 로직을 직접 구현하지 않는다.
+**필수 Spring 의존성 계약:** 기존 Web/PostgreSQL JDBC에 `spring-boot-starter-security`, `spring-boot-starter-validation`(Bean Validation, JPA와 무관), `spring-security-oauth2-jose`(Spring Security의 `JwtEncoder`/`JwtDecoder` 사용), `mybatis-spring-boot-starter`, `flyway-core`, PostgreSQL용 Flyway 모듈을 추가한다. **Spring Data JPA/Hibernate 스타터는 사용하지 않는다.** 테스트에는 `spring-security-test`, `mybatis-spring-boot-starter-test`, Testcontainers PostgreSQL을 사용한다. Spring Boot dependency management가 관리하는 버전을 사용하고 JWT 서명/파싱 암호 로직을 직접 구현하지 않는다.
 
 ### 12.2 PostgreSQL 스키마 계약
 
@@ -1102,8 +1103,8 @@ CREATE INDEX idx_refresh_tokens_cleanup
 2. `V2__create_refresh_tokens.sql`: FK 대상인 `users` 이후 `refresh_tokens`와 인덱스 생성.
 3. 인증 증분에서는 `V3` 이상의 도메인 테이블을 만들지 않는다.
 4. `V4__create_characters.sql`: 공유 캐릭터 정의 카탈로그 `characters` 테이블 생성 (§AD-26).
-5. `V5__create_user_character.sql`: 유저 게임 인스턴스 `user_character` 테이블 생성. `user_character(user_id) WHERE is_active=true` 부분 유니크 인덱스 포함 (§5.2).
-4. 모든 환경에서 Flyway가 먼저 실행되고 JPA는 `ddl-auto=validate`로 매핑 불일치만 탐지한다.
+5. `V5__create_user_character.sql`: 유저 게임 인스턴스 `user_character` 테이블 생성. `user_character(user_id) WHERE is_active=true AND deleted_at IS NULL` 부분 유니크 인덱스 포함 (§5.2).
+4. 모든 환경에서 Flyway가 스키마를 단독으로 생성·관리한다. MyBatis는 자동 DDL을 수행하지 않으며, 매퍼 SQL과 스키마 정합은 통합 테스트(Testcontainers + Flyway)로 검증한다.
 5. 운영 초기 ADMIN은 Flyway 파일에 자격 증명을 넣지 않는다(§12.10).
 
 ### 12.3 Spring Security 컴포넌트 구조
@@ -1145,8 +1146,8 @@ flowchart LR
 | `AccessDeniedHandler` | 인증됐으나 Role 부족을 공통 `403` 응답으로 변환 | 401과 혼용 금지 |
 | `AuthController` | 가입·로그인·재발급·로그아웃 DTO/API 계약 | Repository 직접 접근 금지 |
 | `AuthService` | 유스케이스 조정과 트랜잭션 경계 | SecurityContext 직접 조작 금지 |
-| `UserRepository` | 사용자 저장·정규화 이메일 조회 | 인증 정책 로직 금지 |
-| `RefreshTokenRepository` | 해시 조회, 행 잠금, 활성 토큰 폐기/정리 | 원문 토큰 인자/반환 금지 |
+| `UserRepository` (MyBatis Mapper) | 사용자 저장·정규화 이메일 조회. 매퍼 SQL에 `deleted_at IS NULL` 필터 | 인증 정책 로직 금지 |
+| `RefreshTokenRepository` (MyBatis Mapper) | 해시 조회, 행 잠금(`SELECT ... FOR UPDATE`), 활성 토큰 폐기/정리 | 원문 토큰 인자/반환 금지 |
 
 **현재 인증 사용자 조회:** 보호 Controller는 `@AuthenticationPrincipal AuthPrincipal principal`을 사용한다. `AuthPrincipal`은 최소 `userId`, `email`, `role`만 가진 불변 객체다. Controller/Service가 JWT Claim을 다시 파싱하거나 이메일로 사용자를 재식별하지 않는다. DB 최신 Role이 반드시 필요한 관리자성 변경 작업은 Service에서 `userId`로 재조회한다.
 
@@ -1492,13 +1493,13 @@ springboot/
 │   │   │   ├── AuthService.java
 │   │   │   └── RefreshTokenService.java
 │   │   └── domain/
-│   │       ├── RefreshToken.java
-│   │       └── RefreshTokenRepository.java
+│   │       ├── RefreshToken.java           # 도메인 객체(POJO, @Entity 아님)
+│   │       └── RefreshTokenRepository.java # MyBatis @Mapper 인터페이스
 │   ├── user/
 │   │   ├── api/UserController.java
-│   │   ├── domain/User.java
+│   │   ├── domain/User.java                # 도메인 객체(POJO, @Entity 아님)
 │   │   ├── domain/UserRole.java
-│   │   └── domain/UserRepository.java
+│   │   └── domain/UserRepository.java      # MyBatis @Mapper 인터페이스
 │   ├── admin/api/AdminController.java
 │   ├── security/
 │   │   ├── SecurityConfig.java
@@ -1514,6 +1515,8 @@ springboot/
 │       └── GlobalExceptionHandler.java
 ├── src/main/resources/
 │   ├── application.yml
+│   ├── mybatis/
+│   │   └── mapper/                 # MyBatis 매퍼 XML (UserMapper.xml, RefreshTokenMapper.xml ...)
 │   └── db/migration/
 │       ├── V1__create_users.sql
 │       └── V2__create_refresh_tokens.sql
@@ -1524,7 +1527,9 @@ springboot/
     └── support/
 ```
 
-**의존 방향:** API → application → domain/repository. `security`는 사용자 읽기 어댑터와 공통 오류만 의존한다. Repository는 Controller에 노출하지 않는다. 인증 증분은 다른 도메인 패키지에 의존하지 않는다.
+**의존 방향:** API → application → domain/repository(MyBatis @Mapper). `security`는 사용자 읽기 어댑터와 공통 오류만 의존한다. Repository(매퍼)는 Controller에 노출하지 않는다. 인증 증분은 다른 도메인 패키지에 의존하지 않는다.
+
+**MyBatis 영속성 규약:** 도메인 객체는 `@Entity`가 아닌 POJO이며, 매핑은 매퍼 XML의 `resultMap` 또는 애노테이션으로 한다. 자동 변경 감지가 없으므로 모든 갱신은 명시적 `UPDATE` 매퍼 호출이다. soft delete 필터(`deleted_at IS NULL`)·부분 유니크·`SELECT ... FOR UPDATE` 잠금은 매퍼 SQL에 직접 작성한다. 트랜잭션 경계는 application 계층의 `@Transactional`로 둔다.
 
 ### 12.10 운영 Secret과 초기 ADMIN
 

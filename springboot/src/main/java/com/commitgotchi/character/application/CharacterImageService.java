@@ -7,7 +7,6 @@ import com.commitgotchi.character.image.CharacterImageClient;
 import com.commitgotchi.character.image.CharacterImageGenerationRequest;
 import com.commitgotchi.character.image.CharacterImageGenerationResult;
 import com.commitgotchi.character.image.CharacterImageProperties;
-import com.commitgotchi.character.image.CharacterImagePromptFactory;
 import com.commitgotchi.character.image.CharacterImageStorageUrlFactory;
 import com.commitgotchi.character.image.CharacterSpriteMetaFactory;
 import org.slf4j.Logger;
@@ -29,7 +28,6 @@ public class CharacterImageService {
     private final LearningCharacterRepository characterRepository;
     private final CharacterImageClient imageClient;
     private final CharacterImageProperties imageProperties;
-    private final CharacterImagePromptFactory promptFactory;
     private final CharacterImageStorageUrlFactory storageUrlFactory;
     private final CharacterSpriteMetaFactory spriteMetaFactory;
     private final TransactionTemplate transactionTemplate;
@@ -38,7 +36,6 @@ public class CharacterImageService {
             LearningCharacterRepository characterRepository,
             CharacterImageClient imageClient,
             CharacterImageProperties imageProperties,
-            CharacterImagePromptFactory promptFactory,
             CharacterImageStorageUrlFactory storageUrlFactory,
             CharacterSpriteMetaFactory spriteMetaFactory,
             PlatformTransactionManager transactionManager
@@ -46,7 +43,6 @@ public class CharacterImageService {
         this.characterRepository = characterRepository;
         this.imageClient = imageClient;
         this.imageProperties = imageProperties;
-        this.promptFactory = promptFactory;
         this.storageUrlFactory = storageUrlFactory;
         this.spriteMetaFactory = spriteMetaFactory;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -77,7 +73,7 @@ public class CharacterImageService {
                     character.getId(),
                     character.getDesignKeyword(),
                     storageUrlFactory.createStorageUrl(userId, character.getId()),
-                    promptFactory.createPrompt(character.getDesignKeyword())
+                    character.getDesignKeyword()
             ));
         } catch (RuntimeException exception) {
             log.warn(

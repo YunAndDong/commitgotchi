@@ -25,7 +25,8 @@ const podiumOrder = computed(() => {
       <div v-for="r in podiumOrder" :key="r.id"
            class="podium__col" :class="['p' + r.rank, { me: r.me }]">
         <div class="medal">{{ ['🥇','🥈','🥉'][r.rank - 1] }}</div>
-        <CgSprite :size="r.rank === 1 ? 96 : 76" :emotion="r.emotion" :evolved="r.isEvolved" :bob="false" />
+        <CgSprite :size="r.rank === 1 ? 96 : 76" :emotion="r.emotion" :evolved="r.isEvolved"
+                  :sprite-sheet-url="r.spriteSheetUrl" :sprite-meta="r.spriteMeta" :bob="false" />
         <strong>{{ r.name }}</strong>
         <span class="tiny faint">@{{ r.owner }}</span>
         <CgEmo :emotion="r.emotion" />
@@ -41,7 +42,8 @@ const podiumOrder = computed(() => {
       <div v-for="r in rest" :key="r.id" class="lrow row between" :class="{ me: r.me }">
         <div class="row" style="gap:12px">
           <span class="mono rank">#{{ r.rank }}</span>
-          <CgSprite :size="34" :emotion="r.emotion" :evolved="r.isEvolved" :bob="false" />
+          <CgSprite :size="34" :emotion="r.emotion" :evolved="r.isEvolved"
+                    :sprite-sheet-url="r.spriteSheetUrl" :sprite-meta="r.spriteMeta" :bob="false" />
           <div class="col" style="gap:0">
             <strong>{{ r.name }}<span v-if="r.me" class="cg-badge cg-badge--ok meb">나</span></strong>
             <span class="tiny faint">@{{ r.owner }}</span>
