@@ -8,14 +8,14 @@
 - **D2 — 점수 누적 모델:** 일 단위 누적. 주간 점수 변화량은 표시·통계·AI 컨텍스트 용도로만 집계. 점수 출처는 흐름 A(학습 리포트)·흐름 B(퀴즈)로 분리하며 상호 배타(이중계상 금지). (brief 애드덤 Open Question 2 해소)
 - **D3 — 진화 규칙:** 전투력 1,000점 도달 시 1회 진화. MVP는 스프라이트시트 행 전환(유아형→진화형) + 진화 상태 플래그만, 추가 능력치 보너스 없음(제안값). (brief 애드덤 Open Question 3 일부 해소)
 - **D4 — 퀴즈 제출 처리 [개정]:** 제출 시 답안 저장(동기) → 곧바로 FastAPI 동기 채점 호출 → 점수 즉시 반영. 자정 배치는 퀴즈 채점을 하지 않고, 그날 채점된 결과를 종합 코멘트에만 활용.
-- **D5 — 캐릭터 이미지 생성 [신규]:** 캐릭터 생성 직후 전용 큐로 비동기-즉시 처리(자정 배치 아님). 6프레임 2×3 스프라이트시트(진화 2 × 감정 3). 실패 시 기본 스프라이트 세트.
+- **D5 — 캐릭터 이미지 생성 [개정]:** 캐릭터 생성 요청 안에서 Spring Boot가 FastAPI `POST /api/ai/commitgotchi`를 동기 HTTP로 호출한다(자정 배치 아님). 3프레임 1×3 스프라이트시트(감정 3종)를 사용하고, 진화는 baby/evolved 시트 URL 전환으로 처리한다. 실패 시 기본 스프라이트 세트.
 
 ## 시스템 구성 및 담당
 
 - **PostgreSQL** — 전체 MVP에서는 사용자, 캐릭터, 학습 리포트, 퀴즈 및 모범답안, 퀴즈 제출 결과, 공유 게시글, 리뷰를 저장한다. 단, **첫 번째 인증·인가 구현 증분에서는 `users`, `refresh_tokens` 테이블만 생성한다.**
-- **Spring Boot 서버 (담당: 김윤석)** — 가입·로그인·JWT 인증, 사용자/캐릭터 관리, 활성 캐릭터 단일성 보장, 학습 기록 저장, **퀴즈 즉시 채점 중계(동기)**, **캐릭터 이미지 생성 요청 적재(비동기-즉시)**, 자정 리포트 SQS 적재, FastAPI 처리 결과 수신, 캐릭터 능력치·감정·진화 반영, 랭킹·대시보드 API, 게시글·리뷰 CRUD.
-- **FastAPI AI 서버 (담당: 신동운)** — 리포트 SQS 단건 처리·AI 일일 레포트 생성·다음 학습 추천·퀴즈 추천(흐름 A), **퀴즈 답안 즉시 채점·피드백(동기, 흐름 B)**, **캐릭터 스프라이트 이미지 생성(비동기-즉시, 흐름 C)**, 결과를 Spring Boot API로 전달.
-- **AWS SQS** — 큐 2종: `report-request-queue`(자정 리포트), `character-image-queue`(이미지 생성). 퀴즈 채점은 큐 없이 동기 HTTP.
+- **Spring Boot 서버 (담당: 김윤석)** — 가입·로그인·JWT 인증, 사용자/캐릭터 관리, 활성 캐릭터 단일성 보장, 학습 기록 저장, **퀴즈 채점 요청 중계 + 웹훅 수신(흐름 B)**, **캐릭터 이미지 동기 HTTP 호출(흐름 C)**, 자정 리포트 SQS 적재, FastAPI 처리 결과 수신, 캐릭터 능력치·감정·진화 반영, 랭킹·대시보드 API, 게시글·리뷰 CRUD.
+- **FastAPI AI 서버 (담당: 신동운)** — 리포트 SQS 단건 처리·AI 일일 레포트 생성·다음 학습 추천·퀴즈 추천(흐름 A), **퀴즈 답안 채점 후 Spring Boot 웹훅 호출(흐름 B)**, **캐릭터 스프라이트 이미지 생성·저장 동기 응답(흐름 C)**, 결과를 Spring Boot API로 전달.
+- **AWS SQS** — 큐는 `report-request-queue`(자정 리포트)에만 사용한다. 퀴즈 채점은 웹훅, 캐릭터 이미지는 동기 HTTP로 처리한다.
 
 ## 캐릭터 시스템 규칙
 
@@ -70,14 +70,14 @@
 }
 ```
 
-> 흐름 B(퀴즈 즉시 채점, `POST /api/internal/quizzes/grade`)와 흐름 C(이미지 생성, `character-image-queue` + `POST /api/internal/characters/image-result`)의 상세 스키마는 **아키텍처 §4.3·§4.4**에 확정돼 있다.
+> 흐름 B(퀴즈 채점 요청 `POST /api/internal/quizzes/grade` + 결과 웹훅)와 흐름 C(이미지 생성 `POST /api/ai/commitgotchi`)의 상세 스키마는 **아키텍처 §4.3·§4.4**에 확정돼 있다.
 
 ## 핵심 계약 — Architecture 단계에서 확정됨 (아키텍처 §4 참조)
 
 - ✅ `POST /api/internal/reports/result` 요청/응답 스키마(흐름 A).
-- ✅ 퀴즈 즉시 채점 동기 계약 `POST /api/internal/quizzes/grade`(흐름 B).
-- ✅ 캐릭터 이미지 생성 계약: 큐 메시지 + `POST /api/internal/characters/image-result`(흐름 C).
-- ✅ SQS 큐 2종 구성, 재시도·DLQ·멱등성(requestId/submissionId/imageRequestId).
+- ✅ 퀴즈 채점 요청 + 결과 웹훅 계약 `POST /api/internal/quizzes/grade` / `POST /api/internal/quizzes/grade-result`(흐름 B).
+- ✅ 캐릭터 이미지 생성 계약: `POST /api/ai/commitgotchi` 동기 HTTP(흐름 C).
+- ✅ 흐름별 재시도·멱등성(requestId/submissionId/userId+s3ObjectUrl).
 - ✅ 점수 반영 트랜잭션·활성 단일성·이중계상 금지(흐름 A·B 출처 분리).
 - ✅ Fallback 정책(이미지/채점/리포트 흐름별 구체 동작).
 
@@ -145,4 +145,4 @@ erDiagram
 - 감정 산정 임계 + 흐름 A·B 동시 갱신 시 최종 감정 우선순위.
 - 진화 시 능력치 보너스 구체값(MVP 보너스 없음 제안).
 - 퀴즈 답안 재제출 마감·점수 롤백 정책(당일 자정 잠금 제안).
-- 기본 스프라이트 세트의 개수(레이아웃은 6프레임 2×3로 확정).
+- 기본 스프라이트 세트의 개수(레이아웃은 3프레임 1×3로 확정).

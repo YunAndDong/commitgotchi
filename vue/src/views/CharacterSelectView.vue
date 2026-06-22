@@ -48,7 +48,8 @@ async function choose(character) {
 
         <div class="gotchi__stage cg-screen center">
           <CgSprite :size="150" :emotion="character.emotion" :evolved="character.isEvolved"
-                    :pending="character.imageStatus === 'PENDING'" :failed="character.imageStatus === 'FAILED'" />
+                    :sprite-sheet-url="character.spriteSheetUrl" :sprite-meta="character.spriteMeta"
+                    :pending="character.imageStatus === 'PENDING'" :failed="['FALLBACK', 'FAILED'].includes(character.imageStatus)" />
         </div>
 
         <p class="bubble">“{{ character.message }}”</p>

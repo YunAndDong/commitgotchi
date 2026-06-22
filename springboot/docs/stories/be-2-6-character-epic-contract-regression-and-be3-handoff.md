@@ -148,7 +148,7 @@ so that BE-3 학습 리포트와 성장 루프가 안정적인 활성 캐릭터 
 - Architecture §5.2는 활성 캐릭터 단일성을 PostgreSQL partial unique index로 보장하라고 고정한다.
 - Architecture §5.3은 리포트/퀴즈 점수 반영이 동일한 캐릭터 성장 규칙을 공유해야 하며 중복 반영을 막아야 한다고 정의한다.
 - Architecture §6은 Spring Boot 실제 루트를 `springboot/`로 고정하고 `character/`, `character/image/`, `studylog/`, `quiz/`, `report/` 모듈 경계를 제시한다.
-- Architecture §7.6은 sprite sheet가 2x3 frame map이며 진화는 같은 sprite sheet의 mature row 전환이라고 정의한다.
+- Architecture §7.6은 sprite sheet가 1x3 frame map이며 진화는 baby/evolved sprite sheet URL 전환이라고 정의한다.
 
 ### Developer Context
 
@@ -294,7 +294,7 @@ springboot/src/test/java/com/commitgotchi/swagger/
 - BE-2.3 fixed not-found behavior and daily report/pending report repair after delete. BE-2.6 should preserve those edge cases in smoke coverage.
 - BE-2.4 introduced bounded concurrency testing for active switching. Reuse the bounded pattern.
 - BE-2.5 moved image generation behind `CharacterImageClient` and made fallback the normal local/test outcome when adapter is disabled. BE-2.6 should not depend on real FastAPI.
-- BE-2.5 review fixed FastAPI sprite metadata validation. Contract docs should mention required `frameMap.baby/mature.joy/sad/angry` shape.
+- BE-2.5 review fixed FastAPI sprite metadata validation. Contract docs should mention required top-level `frameMap.joy/sad/angry` shape.
 
 ### Git Intelligence Summary
 

@@ -55,9 +55,8 @@ public class CharacterImageStorageUrlFactory {
     }
 
     private String s3ObjectUrl(long userId, long characterId) {
-        return "%s/users/%d/characters/%d/commitgotchi.png".formatted(
+        return "%s/characters/%d/sprite-sheet.png".formatted(
                 properties.normalizedS3ObjectPrefix(),
-                userId,
                 characterId
         );
     }

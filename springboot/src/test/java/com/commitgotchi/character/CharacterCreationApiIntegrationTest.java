@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -61,6 +62,13 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void servesDefaultCharacterAssetWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/character-assets/default_image1.png"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.IMAGE_PNG));
+    }
+
+    @Test
     void createsFirstCharacterAsActiveNormalizedProjection() throws Exception {
         AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
 
@@ -78,8 +86,8 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.item.emotion").value("joy"))
                 .andExpect(jsonPath("$.item.isEvolved").value(false))
                 .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/fallback-default.png"))
-                .andExpect(jsonPath("$.item.spriteMeta.frameMap.baby.joy[0]").value(0))
+                .andExpect(jsonPath("$.item.spriteSheetUrl").value("/character-assets/default_image1.png"))
+                .andExpect(jsonPath("$.item.spriteMeta.frameMap.joy[0]").value(0))
                 .andExpect(jsonPath("$.item.active").value(true))
                 .andExpect(jsonPath("$.item.message").value("Ready to learn"))
                 .andExpect(jsonPath("$.item.createdAt").isString())
@@ -101,8 +109,8 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.characters[0].id").value(characterId))
                 .andExpect(jsonPath("$.state.characters[0].imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.state.characters[0].spriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/fallback-default.png"))
-                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.mature.angry[1]").value(2))
+                .andExpect(jsonPath("$.state.characters[0].spriteSheetUrl").value("/character-assets/default_image1.png"))
+                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.angry[1]").value(2))
                 .andExpect(jsonPath("$.state.characters[0].active").value(true));
     }
 

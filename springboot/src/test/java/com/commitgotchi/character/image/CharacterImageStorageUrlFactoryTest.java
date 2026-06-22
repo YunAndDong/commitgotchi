@@ -29,7 +29,7 @@ class CharacterImageStorageUrlFactoryTest {
                 .createStorageUrl(7L, 12L);
 
         assertThat(storageUrl)
-                .isEqualTo("s3://commitgotchi-character-images/sprites/users/7/characters/12/commitgotchi.png");
+                .isEqualTo("s3://commitgotchi-character-images/sprites/characters/12/sprite-sheet.png");
     }
 
     @Test
@@ -45,7 +45,7 @@ class CharacterImageStorageUrlFactoryTest {
 
         assertThat(uri.getScheme()).isEqualTo("https");
         assertThat(uri.getHost()).isEqualTo("commitgotchi-character-images.s3.ap-northeast-2.amazonaws.com");
-        assertThat(uri.getPath()).isEqualTo("/sprites/users/7/characters/12/commitgotchi.png");
+        assertThat(uri.getPath()).isEqualTo("/sprites/characters/12/sprite-sheet.png");
         assertThat(query)
                 .containsEntry("X-Amz-Algorithm", "AWS4-HMAC-SHA256")
                 .containsEntry("X-Amz-Credential", "test-access-key/20260619/ap-northeast-2/s3/aws4_request")
@@ -73,7 +73,7 @@ class CharacterImageStorageUrlFactoryTest {
         assertThat(uri.getHost()).isEqualTo("localhost");
         assertThat(uri.getPort()).isEqualTo(9000);
         assertThat(uri.getPath())
-                .isEqualTo("/minio/commitgotchi-character-images/sprites/users/7/characters/12/commitgotchi.png");
+                .isEqualTo("/minio/commitgotchi-character-images/sprites/characters/12/sprite-sheet.png");
         assertThat(query).containsEntry("X-Amz-Security-Token", "session/token+value");
     }
 

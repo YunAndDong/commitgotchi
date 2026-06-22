@@ -33,7 +33,9 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
                                   "status":"GRADED",
                                   "scoreAllocation":{"db":0,"algorithm":3,"cs":0,"network":0,"framework":0},
                                   "scoreDelta":{"db":0,"algorithm":2,"cs":0,"network":0,"framework":0},
-                                  "feedback":"원인은 맞췄으나 해결책이 빠졌습니다."
+                                  "feedback":"원인은 맞췄으나 해결책이 빠졌습니다.",
+                                  "emotion":"JOY",
+                                  "statusMessage":"좋아요, 핵심은 잡았어요!"
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -42,7 +44,7 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void gradeResultEndpointRejectsFastApiEmotionAndStatusMessageHints() throws Exception {
+    void gradeResultEndpointAcceptsFastApiEmotionAndStatusMessage() throws Exception {
         mockMvc.perform(post("/api/internal/quizzes/grade-result")
                         .header("Authorization", "Internal test-internal-secret")
                         .contentType("application/json")
@@ -59,7 +61,8 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
                                   "statusMessage":"FastAPI hint"
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(true))
+                .andExpect(jsonPath("$.duplicate").value(false));
     }
 }

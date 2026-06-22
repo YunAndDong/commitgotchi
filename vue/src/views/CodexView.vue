@@ -28,7 +28,9 @@ function offset(i) { return i - idx.value }
              :class="{ active: i === idx, owned: it.owned }"
              :style="{ transform: `translateX(${offset(i) * 130}px) scale(${i === idx ? 1 : 0.78})`, zIndex: 100 - Math.abs(offset(i)), opacity: Math.abs(offset(i)) > 2 ? 0 : 1 }"
              @click="idx = i">
-          <CgSprite :size="120" :emotion="it.emotion" :evolved="it.isEvolved" :grey="!it.owned" :bob="i === idx && it.owned" />
+          <CgSprite :size="120" :emotion="it.emotion" :evolved="it.isEvolved"
+                    :sprite-sheet-url="it.spriteSheetUrl" :sprite-meta="it.spriteMeta"
+                    :grey="!it.owned" :bob="i === idx && it.owned" />
         </div>
       </div>
       <button class="navbtn right" @click="move(1)" aria-label="다음">›</button>

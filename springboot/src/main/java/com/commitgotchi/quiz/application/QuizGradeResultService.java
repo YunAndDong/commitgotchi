@@ -29,8 +29,10 @@ public class QuizGradeResultService {
                 delta.csDelta(),
                 delta.networkDelta(),
                 delta.frameworkDelta(),
-                decideEmotion(request.status(), allocation, delta),
-                decideStatusMessage(request.status(), allocation, delta)
+                request.emotion() != null
+                        ? request.emotion()
+                        : decideEmotion(request.status(), allocation, delta),
+                request.statusMessage()
         );
     }
 
@@ -57,13 +59,6 @@ public class QuizGradeResultService {
             return CharacterEmotion.SAD;
         }
         return delta.sum() * 10 >= maxScore * 6 ? CharacterEmotion.JOY : CharacterEmotion.SAD;
-    }
-
-    private String decideStatusMessage(QuizGradeStatus status, FastApiScoreDelta allocation, FastApiScoreDelta delta) {
-        if (decideEmotion(status, allocation, delta) == CharacterEmotion.JOY) {
-            return "좋아요, 핵심은 잡았어요!";
-        }
-        return "괜찮아요, 답을 다듬으면서 크는 중이에요.";
     }
 
     public record QuizGrowthDecision(

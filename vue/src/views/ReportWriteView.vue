@@ -86,7 +86,8 @@ async function submit() {
 
     <aside class="cg-screen col center preview">
       <span class="tiny muted">캐릭터 반응 미리보기</span>
-      <CgSprite :size="150" :emotion="form.mood" :evolved="c?.isEvolved" />
+      <CgSprite :size="150" :emotion="form.mood" :evolved="c?.isEvolved"
+                :sprite-sheet-url="c?.spriteSheetUrl" :sprite-meta="c?.spriteMeta" />
       <p class="bubble">“{{ reaction }}”</p>
     </aside>
   </div>

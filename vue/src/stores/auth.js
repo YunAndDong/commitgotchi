@@ -117,6 +117,7 @@ export function demoLogin() {
   state.tokens = fake
   state.user = DEMO_USER
   state.status = 'ready'
+  resetGameState()
   publishAuthenticatedGotchi()
   return state.user
 }

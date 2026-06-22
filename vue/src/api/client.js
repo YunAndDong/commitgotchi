@@ -12,6 +12,7 @@
  */
 
 const BASE = import.meta.env?.VITE_API_BASE_URL || ''
+const NORMALIZED_BASE = String(BASE || '').replace(/\/+$/, '')
 const TOKENS_KEY = 'cg.tokens'
 const REQUEST_TIMEOUT_MS = 15000
 let memoryTokens = null
@@ -51,6 +52,17 @@ export function clearAuthSession() {
   authGeneration += 1
   refreshPromise = null
   saveTokens(null)
+}
+
+export function apiAssetUrl(path) {
+  if (typeof path !== 'string') return path
+  const value = path.trim()
+  if (!value || !value.startsWith('/') || !NORMALIZED_BASE) return value
+  if (/^[a-z][a-z\d+\-.]*:/i.test(value) || value.startsWith('//')) return value
+  if (/^https?:\/\//i.test(NORMALIZED_BASE)) {
+    return new URL(value, NORMALIZED_BASE).toString()
+  }
+  return `${NORMALIZED_BASE}${value}`
 }
 
 export class ApiError extends Error {

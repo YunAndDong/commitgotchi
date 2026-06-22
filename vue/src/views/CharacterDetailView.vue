@@ -60,7 +60,8 @@ async function activate() {
       <div class="cg-screen col center charcol">
         <CgEmo :emotion="c.emotion" />
         <CgSprite :size="190" :emotion="c.emotion" :evolved="c.isEvolved"
-                  :pending="c.imageStatus === 'PENDING'" :failed="c.imageStatus === 'FAILED'" />
+                  :sprite-sheet-url="c.spriteSheetUrl" :sprite-meta="c.spriteMeta"
+                  :pending="c.imageStatus === 'PENDING'" :failed="['FALLBACK', 'FAILED'].includes(c.imageStatus)" />
         <h1 class="cg-section-title big">{{ c.name }}</h1>
         <p class="tiny faint mono">{{ c.keyword || '기본 디자인' }}</p>
         <span class="cg-badge" :class="c.active ? 'cg-badge--ok' : 'cg-badge--warn'">

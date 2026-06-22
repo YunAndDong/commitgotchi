@@ -50,7 +50,8 @@ const recentActivity = computed(() => [
 
       <div class="stage__char">
         <CgSprite :size="200" :emotion="c.emotion" :evolved="c.isEvolved"
-                  :pending="c.imageStatus === 'PENDING'" :failed="c.imageStatus === 'FAILED'" />
+                  :sprite-sheet-url="c.spriteSheetUrl" :sprite-meta="c.spriteMeta"
+                  :pending="c.imageStatus === 'PENDING'" :failed="['FALLBACK', 'FAILED'].includes(c.imageStatus)" />
       </div>
 
       <p class="bubble">“{{ c.message }}”</p>

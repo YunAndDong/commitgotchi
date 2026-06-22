@@ -143,7 +143,7 @@ so that 후속 캐릭터 생성, 활성화, 성장, 랭킹 기능을 `game_state
 - 현재 `GameController`는 `/api/game/**` 엔드포인트를 제공하고 `GameService`는 사용자별 `game_states.state_json`에 캐릭터, 리포트, 퀴즈, 게시판 상태를 JSON으로 저장한다. 이 JSON 저장소는 프로토타입 어댑터이며 새 핵심 도메인 규칙을 더하지 않는다.
 - `GameService`의 현재 stat key는 프런트 호환을 위해 `algo`, `cs`, `db`, `net`, `fw`다. DB 내부 표준은 PRD/Architecture의 5종 능력치에 맞춰 `stat_algorithm`, `stat_cs`, `stat_db`, `stat_network`, `stat_framework`로 둔다. 후속 projection에서 `algorithm -> algo`, `network -> net`, `framework -> fw` 매핑을 맡는다.
 - 마스터 BMad `Story 2.1`은 "첫 캐릭터 생성 및 자동 활성화"지만, Spring Boot 전용 `BE-2.1`은 "캐릭터 정규화 스키마와 도메인 모델 도입"이다. 이 스토리는 Spring Boot 전용 epics를 SSOT로 삼고, 실제 생성 API는 BE-2.2로 넘긴다.
-- PRD는 이미지 생성을 비동기-즉시 `PENDING` 흐름으로 설명하고, Architecture는 동기 HTTP `READY|FALLBACK` 흐름으로 확정했다고 설명한다. BE-2.1은 enum 수용 폭만 열어두고 상태 전이와 FastAPI 계약 구현은 BE-2.5에서 확정한다.
+- 이전 PRD는 이미지 생성을 지연 완료되는 `PENDING` 흐름으로 설명하고, Architecture는 동기 HTTP `READY|FALLBACK` 흐름으로 확정했다고 설명한다. BE-2.1은 enum 수용 폭만 열어두고 상태 전이와 FastAPI 계약 구현은 BE-2.5에서 확정한다.
 - 기존 공통 오류 응답은 `ErrorCode`와 `GlobalExceptionHandler`가 처리한다. BE-2.1은 공개 API가 없으므로 새 오류 코드를 서두르지 않는다. BE-2.2에서 생성 제한/소유권/검증 API 오류 계약을 추가한다.
 - 기존 DB 테스트는 `PostgresIntegrationTest`의 PostgreSQL 16 Testcontainer와 실제 Flyway/JPA validation을 사용한다. 같은 방식으로 검증한다.
 

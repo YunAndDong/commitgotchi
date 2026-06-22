@@ -15,7 +15,7 @@ const route = useRoute()
 const char = computed(() => gameState.characters.find(c => String(c.id) === String(route.params.id)) || null)
 const ready = computed(() => char.value?.imageStatus === 'READY')
 // FE-10 AC4: 이미지 실패해도 기본 모습으로 생성은 성공 — 흐름을 막지 않는다.
-const failed = computed(() => char.value?.imageStatus === 'FAILED')
+const failed = computed(() => ['FALLBACK', 'FAILED'].includes(char.value?.imageStatus))
 const usable = computed(() => ready.value || failed.value)
 const celebrate = ref(!!char.value)
 
@@ -30,6 +30,7 @@ watch(usable, (v) => { if (v) celebrate.value = true }, { immediate: true })
       <span class="tiny muted">{{ ready ? '생성 완료!' : failed ? '생성 완료 (기본 모습)' : '캐릭터를 빚는 중…' }}</span>
       <div :class="{ pop: usable }">
         <CgSprite :size="220" :emotion="char.emotion" :evolved="char.isEvolved"
+                  :sprite-sheet-url="char.spriteSheetUrl" :sprite-meta="char.spriteMeta"
                   :pending="!usable" :failed="failed" />
       </div>
       <h1 class="title">🎉 {{ char.name }} 탄생!</h1>

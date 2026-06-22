@@ -5,7 +5,7 @@
  */
 import { ref, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { login, signup, authMessage } from '../stores/auth.js'
+import { login, signup, authMessage, demoLogin } from '../stores/auth.js'
 import CgSprite from '../components/CgSprite.vue'
 
 const route = useRoute()
@@ -38,6 +38,11 @@ async function submit() {
   } finally {
     busy.value = false
   }
+}
+
+function enterDemo() {
+  demoLogin()
+  router.push({ name: 'character-select', query: route.query.redirect ? { redirect: route.query.redirect } : {} })
 }
 
 </script>
@@ -89,6 +94,9 @@ async function submit() {
 
         <button class="cg-btn cg-btn--primary cg-btn--block" :disabled="busy">
           {{ busy ? '잠시만요…' : (mode === 'login' ? '로그인' : '가입하고 시작하기') }}
+        </button>
+        <button type="button" class="cg-btn cg-btn--block" :disabled="busy" @click="enterDemo">
+          데모로 보기
         </button>
       </form>
 

@@ -53,7 +53,8 @@ watch(pages, value => { page.value = Math.min(page.value, value) })
       <article v-for="p in shown" :key="p.id" class="bcard cg-card col">
         <RouterLink :to="`/board/${p.id}`" class="col">
           <div class="bcard__top cg-screen center">
-            <CgSprite :size="120" :emotion="p.emotion" :evolved="p.isEvolved" :bob="false" />
+            <CgSprite :size="120" :emotion="p.emotion" :evolved="p.isEvolved"
+                      :sprite-sheet-url="p.spriteSheetUrl" :sprite-meta="p.spriteMeta" :bob="false" />
           </div>
           <div class="bcard__bot col">
             <div class="row between">
