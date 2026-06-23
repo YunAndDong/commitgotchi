@@ -18,12 +18,11 @@
 ## 1. 범위
 
 - 이 문서는 Commit-Gotchi를 **단일 EC2 small 인스턴스**에 이미지 기반으로 배포/운영하기 위한 MVP 계획이다.
-- 다루는 것: 목표 아키텍처, 런타임 선택, dev/prod 환경 분리, AWS 리소스, IAM, CI/CD 흐름, Nginx, 로드맵, 위험.
+- 다루는 것: 목표 아키텍처, 런타임 선택, **.env local/prod 통합**, AWS 리소스, IAM, **aws-cli 부트스트랩**, CI/CD 흐름, Nginx, 로드맵, 위험.
+- **리소스 생성 방식(확정):** AWS 리소스(ECR·SQS·S3·EC2·IAM)는 사용자의 풀권한 IAM 계정으로 **aws-cli 멱등 스크립트**를 통해 생성한다(§6.0). Terraform/CDK 같은 IaC는 후속 고도화 옵션으로 둔다.
 - **다루지 않는 것(후속 작업으로 둠):**
   - ⏭ 실제 GitHub Actions workflow YAML 구현
-  - ⏭ Terraform/CDK 등 IaC 구현
-  - ⏭ `docker-compose.prod.yml` 실제 작성
-  - ⏭ Nginx config 실제 작성 (단, 팀 runbook에 prod 예시 server block이 이미 있음)
+  - ⏭ Terraform/CDK 등 IaC 전환
   - ⏭ Chrome 확장프로그램 빌드/스토어 게시 (파이프라인 밖, §2.1.1)
 
 ---
@@ -139,20 +138,34 @@ flowchart LR
 
 ---
 
-## 5. 환경 분리 전략
+## 5. 환경 분리 전략 (.env 통합)
 
-✅ dev와 prod를 분리한다. dev는 로컬 의존성 유지, prod는 AWS 리소스·환경변수를 별도 관리. 운영 origin 모델은 **Option A same-origin reverse proxy**(COR-1.2).
+✅ **dev와 prod는 같은 변수 이름 집합을 쓰고, 값만 환경별로 분리**한다. 통합 실행의 기준 env는 **루트 `.env` 하나(SSOT)**다. 운영 origin 모델은 **Option A same-origin reverse proxy**(COR-1.2).
 
-| 구분 | dev | prod |
-|------|-----|------|
-| 환경변수 출처 | 로컬 `.env` / `fastapi/.env` / `vue/.env.local` | **SSM Parameter Store** |
-| 오케스트레이션 | `docker-compose.yml` (local) | ⏭ `docker-compose.prod.yml` |
+### 5.0 env 파일 구조
+
+| 파일 | 용도 | 비고 |
+|------|------|------|
+| `.env` | **로컬 통합 실행(docker compose) 기준 SSOT** | 커밋 금지, `.env.example` 템플릿 제공 |
+| `.env.prod` | prod 값(EC2 배포 시 SSM에서 생성/주입) | 커밋 금지, `.env.prod.example` 템플릿 |
+| `fastapi/.env`, `vue/.env.local` | 각 앱 **단독(비도커) 개발용** | 통합 실행에는 쓰지 않음 |
+
+| 구분 | dev (`.env`) | prod (`.env.prod`) |
+|------|--------------|--------------------|
+| 오케스트레이션 | `docker-compose.yml` | `docker-compose.yml` + `docker-compose.prod.yml` overlay |
+| 값 출처 | 로컬 직접 입력 | **SSM Parameter Store**에서 배포 시점 주입 |
 | 자격증명 | 로컬 값/개발 키 | EC2 instance role |
 | 진입점 | 각 포트 직접 접근 | Nginx 443 단일 진입점(same-origin) + HTTPS |
-| Vue 웹 빌드 | `VITE_API_BASE_URL=http://localhost:8080` | **빈 값**(상대 `/api/**`) |
-| Vue 확장 빌드 | (로컬 테스트) | `VITE_API_BASE_URL=https://app.example.com` (파이프라인 밖) |
-| CORS | `http://localhost:5173` | `CORS_ALLOWED_ORIGINS=https://app.example.com` (Spring 소유, 아래) |
 | Spring 프로필 | `local` | `prod` (Swagger 비활성, CORS fail-fast, refresh cookie `Secure;SameSite=None`) |
+| Vue 웹 빌드 | `VITE_API_BASE_URL=http://localhost:8080` | 빈 값(상대 `/api/**`) |
+| Vue 확장 빌드 | (로컬 테스트) | `VITE_API_BASE_URL=https://app.example.com` (파이프라인 밖) |
+| CORS | `http://localhost:5173` | `CORS_ALLOWED_ORIGINS=https://app.example.com` |
+| SQS | **기존 `fastapi/.env`의 큐 재사용**(§6.7) | **동일 스펙 prod 전용 큐**(§6.7) |
+| S3 | **공용 버킷 + `dev/` prefix**(§6.5) | **공용 버킷 + `prod/` prefix** |
+| AI 키 | `GEMINI_API_KEY`(로컬 값) | `GEMINI_API_KEY`(SSM SecureString) |
+
+> ⚠️ **실측 갭:** 현재 `docker-compose.yml`의 `fastapi` 서비스 env에 `GEMINI_API_KEY`가 주입되지 않는다.
+> 통합 실행에서 AI(이미지 생성·퀴즈 채점)가 동작하려면 `.env`/compose에 `GEMINI_API_KEY`를 추가해야 한다(INFRA-1).
 
 ### 5.1 CORS는 Spring Boot가 소유 (확정·구현 완료)
 
@@ -178,16 +191,26 @@ flowchart LR
 | `/commitgotchi/prod/spring/CHARACTER_IMAGE_ENABLED` | String | `CHARACTER_IMAGE_ENABLED` |
 | `/commitgotchi/prod/fastapi/GEMINI_API_KEY` | **SecureString** | `fastapi/.env` `GEMINI_API_KEY` |
 | `/commitgotchi/prod/fastapi/AWS_REGION` | String | `AWS_REGION` |
-| `/commitgotchi/prod/fastapi/S3_BUCKET_NAME` | String | (향후) S3 연동 |
-| `/commitgotchi/prod/shared/REPORT_REQUEST_QUEUE_URL` | String | `REPORT_REQUEST_QUEUE_URL` (SQS) |
+| `/commitgotchi/prod/shared/S3_BUCKET_NAME` | String | **공용 버킷명**(dev/prod 동일, §6.5) |
+| `/commitgotchi/prod/shared/S3_OBJECT_PREFIX` | String | `prod/` (dev는 로컬에서 `dev/`) |
+| `/commitgotchi/prod/shared/REPORT_REQUEST_QUEUE_URL` | String | **prod 전용 큐** URL (§6.7) |
 
 > SQS 관련 다수 변수(`REPORT_REQUEST_QUEUE_*`, `AWS_*`)는 `REPORT_REQUEST_QUEUE_ENABLED=true`로 켤 때 한 묶음으로 SSM 적재.
-> **`VITE_API_BASE_URL`은 SSM 대상이 아니다** — Vue 빌드 시점 baked-in(웹=빈 값, 확장=절대 URL). 백엔드 런타임 env가 아님.
-> dev도 동일 트리(`/commitgotchi/dev/...`)를 쓸지, dev는 로컬 `.env`만 쓸지는 🔶 확정 필요.
+> **SQS는 local/prod 분리:** local은 기존 `fastapi/.env`의 큐를 재사용하고(SSM 미사용), prod는 동일 스펙의 **새 prod 전용 큐**를 만들어 SSM에 적재한다(§6.7).
+> **S3는 dev/prod 공용 버킷 1개**를 쓰되 `S3_OBJECT_PREFIX`(`dev/`·`prod/`)로 객체 경로를 분리한다(§6.5).
+> **`VITE_API_BASE_URL`은 SSM 대상이 아니다** — Vue 빌드 시점 baked-in(웹=빈 값, 확장=절대 URL).
+> dev도 동일 트리(`/commitgotchi/dev/...`)를 쓸지, dev는 로컬 `.env`만 쓸지는 🔶 확정 필요(현재 제안: dev=로컬 `.env`).
 
 ---
 
 ## 6. AWS 리소스 계획
+
+### 6.0 생성 방식 = aws-cli 부트스트랩 ✅
+- 모든 AWS 리소스(ECR·SQS·S3·EC2·IAM·SSM)는 **aws-cli 멱등 스크립트**로 생성한다(`scripts/aws/`).
+- 사용자의 **풀권한 IAM 계정**으로 최초 부트스트랩을 실행한다(§7.1 보안 주의 적용).
+- 스크립트는 **멱등**해야 한다: 이미 있으면 생성하지 않고 통과(예: `describe-* || create-*` 패턴).
+- 리전 기본값 `ap-northeast-2`. 생성 결과(큐 URL, 버킷명 등)는 SSM(`/commitgotchi/prod/...`)에 적재한다.
+- 🔶 Terraform/CDK는 후속 고도화 옵션(상태관리·드리프트 감지가 필요해질 때).
 
 ### 6.1 ECR repositories ✅
 - `commitgotchi-springboot`
@@ -209,12 +232,22 @@ flowchart LR
 - `22` (SSH): 가능하면 닫고 **SSM Session Manager** 우선. 열면 내 IP 제한.
 - 앱 포트(8080/8000/5432, vue 80): **외부 비공개**. Nginx가 내부 프록시.
 
-### 6.5 S3 bucket ⏭
-- FastAPI 최종 이미지 생성 API 완성 시 연결(§11.2). asset CORS는 API CORS와 분리(runbook).
+### 6.5 S3 bucket ✅ (dev/prod 공용, prefix 분리)
+- **dev와 prod가 같은 버킷 1개**를 공용한다(aws-cli로 생성, §6.0). 비용·운영 단순화 목적.
+- 객체 경로를 **prefix로 분리**: dev=`dev/characters/...`, prod=`prod/characters/...` (`S3_OBJECT_PREFIX`).
+- 퍼블릭 접근 차단 + Presigned URL 또는 same-origin 프록시. asset CORS는 API CORS와 분리(runbook).
+- ⚠️ **위험(§13 #9):** 공용 버킷이라 dev가 prod 객체를 덮어쓸 수 있다 → prefix 경계를 코드/IAM에서 강제하고, prod prefix는 dev 자격증명으로 쓰기 금지하는 방향을 후속 검토.
+- FastAPI storage adapter가 이 버킷에 1×3 sprite를 업로드(INFRA-5). 미완성 동안은 Spring `/character-assets/**` 기본 sprite.
 
 ### 6.6 PostgreSQL ✅(MVP) / ⏭(후속)
 - MVP: EC2 내부 컨테이너 + named volume(`postgres-data`).
 - 후속: 관리형 **RDS** 전환 후보.
+
+### 6.7 SQS (report-request) — local/prod 분리 ✅
+- **local:** 기존 `fastapi/.env`의 SQS 설정(`REPORT_REQUEST_QUEUE_URL` 등)을 **그대로 재사용**한다. 새로 만들지 않는다.
+- **prod:** local과 **동일 스펙의 prod 전용 큐**(+ DLQ)를 aws-cli로 새로 생성하고, URL을 SSM(`/commitgotchi/prod/shared/REPORT_REQUEST_QUEUE_URL`)에 적재한다.
+- 두 환경의 큐를 분리해 로컬 테스트 메시지가 prod 소비자에 섞이지 않게 한다.
+- 🔶 report consumer 워커 기동 방식(통합 compose의 별도 서비스 vs 수동/별도 프로세스)은 INFRA-1에서 결정.
 
 ---
 
@@ -318,12 +351,12 @@ flowchart LR
 
 | Phase | 내용 | 상태 |
 |-------|------|------|
-| **Phase 1** | 문서/계획 정리 (이 문서) | ✅ 본 PR |
-| **Phase 2** | `docker-compose.prod.yml` 초안 + Nginx config(runbook 기반) | ⏭ Story INFRA-1 |
-| **Phase 3** | ECR repo 생성 + GitHub Actions **CI** (test + build + push) | ⏭ INFRA-2 |
-| **Phase 4-5** | EC2 프로비저닝 + SSM env 주입 + **수동 배포** 검증 | ⏭ INFRA-3 |
-| **Phase 6** | GitHub Actions **CD** (OIDC + 배포 + 롤백) | ⏭ INFRA-4 |
-| **Phase 7-8** | FastAPI **S3 이미지 저장** + RDS/ECS 등 고도화 후보 | ⏭ INFRA-5 |
+| **Phase 1** | 문서/계획 정리 (이 문서) | ✅ |
+| **Phase 2** | **.env 통합** + GEMINI 갭 수정 + **로컬 통합 실행** + `docker-compose.prod.yml` overlay **prod 드라이런** + Nginx config(runbook 기반) | ⏭ INFRA-1 (이 브랜치) |
+| **Phase 3** | **aws-cli 부트스트랩** — ECR·SQS(prod 큐)·S3(공용 버킷)·IAM·EC2 생성 + SSM 적재 | ⏭ INFRA-2 |
+| **Phase 4** | EC2 prod 배포(SSM env 주입) + **수동 배포** 검증 | ⏭ INFRA-3 |
+| **Phase 5** | GitHub Actions **CI/CD** (OIDC + ECR push + 배포 + 롤백) | ⏭ INFRA-4 |
+| **Phase 6** | FastAPI **S3 이미지 저장** 연동(공용 버킷 prefix) + RDS/ECS 등 고도화 후보 | ⏭ INFRA-5 |
 
 ---
 
@@ -339,21 +372,23 @@ flowchart LR
 | 6 | **Spring Boot 기능 미완성** | 전체 기능 배포 불가 | 점진 배포 |
 | 7 | **secret rotation 미구현** | 장기 노출 위험 | SSM 기반 rotation 후속 |
 | 8 | **rollback 자동화 미흡** | 복구 지연 | MVP 수동 롤백 허용, 후속 자동화 |
+| 9 | **S3 dev/prod 공용 버킷** | dev가 prod 객체를 덮어쓸 위험(blast radius) | `S3_OBJECT_PREFIX`(`dev/`·`prod/`)로 경로 분리 강제. 후속: prod prefix를 dev 자격증명으로 쓰기 금지(IAM), 또는 버킷 분리 |
+| 10 | **부트스트랩 aws-cli 멱등성** | 재실행 시 중복 생성/충돌 | `describe \|\| create` 패턴으로 멱등 보장, 생성 결과는 SSM에 적재 |
 
 ---
 
 ## 14. 후속 작업 체크리스트
 
-- [ ] `docker-compose.prod.yml` 설계 (Nginx + Vue 웹 + Spring Boot + FastAPI + PostgreSQL, 앱 포트 비공개, ECR 이미지 참조)
-- [ ] `.github/workflows/ci.yml` (PR/main: 백엔드+웹 test + build (+ push))
-- [ ] `.github/workflows/deploy.yml` (OIDC AssumeRole + ECR push + EC2 배포)
-- [ ] ECR repository 3개 생성 (springboot, fastapi, vue 웹)
-- [ ] SSM parameter naming 확정 + 값 적재 (SecureString; `SPRING_INTERNAL_API_SECRET`, SQS 묶음 포함)
-- [ ] EC2 bootstrap script (docker/compose, SSM agent, ECR login, instance role)
+- [ ] **.env 통합** — `.env.example`/`.env.prod.example` 정리, `GEMINI_API_KEY` compose 주입(INFRA-1)
+- [ ] `docker-compose.prod.yml` overlay (Nginx + 앱 포트 비공개, prod는 ECR 이미지 / 드라이런은 build)
 - [ ] Nginx config — 팀 runbook server block 기반(`/`→Vue, `/api/**`·`/character-assets/**`→Spring, TLS/Certbot, FastAPI 비프록시)
+- [ ] **aws-cli 부트스트랩 스크립트**(`scripts/aws/`, 멱등) — ECR×3, prod SQS 큐(+DLQ), S3 공용 버킷, IAM role, SSM 적재
+- [ ] SSM parameter naming 확정 + 값 적재 (SecureString; `SPRING_INTERNAL_API_SECRET`, `GEMINI_API_KEY`, SQS/S3 포함)
+- [ ] EC2 bootstrap script (docker/compose, SSM agent, ECR login, instance role)
+- [ ] `.github/workflows/ci.yml` + `deploy.yml` (OIDC AssumeRole + ECR push + EC2 배포)
 - [ ] prod health check + 팀 runbook **Smoke Tests / Release CORS Matrix** release gate 연결
-- [ ] FastAPI S3 storage adapter (이미지 업로드/Presigned URL) + asset CORS(전환 시)
-- [ ] (파이프라인 밖) Chrome 확장 빌드(`VITE_API_BASE_URL=https://app.example.com`)/스토어 게시 — runbook extension 체크리스트 따름
+- [ ] FastAPI S3 storage adapter (공용 버킷 + `S3_OBJECT_PREFIX`, 업로드/Presigned URL) + asset CORS(전환 시)
+- [ ] (파이프라인 밖) Chrome 확장 빌드/스토어 게시 — runbook extension 체크리스트 따름
 
 ---
 
