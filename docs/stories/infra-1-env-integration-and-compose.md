@@ -57,6 +57,6 @@ so that 배포 전에 prod 프로필/설정 오류를 로컬에서 싸게 잡고
 ## 검증 / 보류
 - 로컬 통합 스모크: 회원가입→로그인→캐릭터 생성(이미지 §4.4)→퀴즈. 배포 검증은 팀 runbook Smoke Tests 재사용.
 - 한계: TLS·secure 쿠키·실 S3/SQS·`chrome-extension` origin은 로컬 100% 재현 불가. 드라이런 목적은 "config/프로필 오류 조기 발견".
-- 🔶 report consumer 워커를 통합 compose에 별도 서비스로 띄울지(localstack) vs 수동 실행 — 결정 후 반영.
+- report consumer 워커 배선은 **INFRA-0**이 선행한다(별도 프로세스 + 별도 compose 서비스). 이 스토리는 그 worker 서비스를 prod overlay에도 포함할지만 결정.
 - 🔶 HTTPS는 Certbot(runbook). Vue 웹을 vue 컨테이너 proxy vs 호스트 static root.
 </content>

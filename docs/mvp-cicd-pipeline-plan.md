@@ -208,6 +208,7 @@ flowchart LR
 ### 6.0 생성 방식 = aws-cli 부트스트랩 ✅
 - 모든 AWS 리소스(ECR·SQS·S3·EC2·IAM·SSM)는 **aws-cli 멱등 스크립트**로 생성한다(`scripts/aws/`).
 - 사용자의 **풀권한 IAM 계정**으로 최초 부트스트랩을 실행한다(§7.1 보안 주의 적용).
+- **aws-cli 프로필: `default` 금지.** 이 프로젝트 전용으로 **새로 만든 named 프로필**(예: `commitgotchi`)을 사용한다. 스크립트/명령은 항상 `--profile commitgotchi`(또는 `AWS_PROFILE=commitgotchi`)를 명시한다. → 다른 계정 오작동 방지 + 자격증명 격리. 프로필명 🔶 확정.
 - 스크립트는 **멱등**해야 한다: 이미 있으면 생성하지 않고 통과(예: `describe-* || create-*` 패턴).
 - 리전 기본값 `ap-northeast-2`. 생성 결과(큐 URL, 버킷명 등)는 SSM(`/commitgotchi/prod/...`)에 적재한다.
 - 🔶 Terraform/CDK는 후속 고도화 옵션(상태관리·드리프트 감지가 필요해질 때).
@@ -247,7 +248,7 @@ flowchart LR
 - **local:** 기존 `fastapi/.env`의 SQS 설정(`REPORT_REQUEST_QUEUE_URL` 등)을 **그대로 재사용**한다. 새로 만들지 않는다.
 - **prod:** local과 **동일 스펙의 prod 전용 큐**(+ DLQ)를 aws-cli로 새로 생성하고, URL을 SSM(`/commitgotchi/prod/shared/REPORT_REQUEST_QUEUE_URL`)에 적재한다.
 - 두 환경의 큐를 분리해 로컬 테스트 메시지가 prod 소비자에 섞이지 않게 한다.
-- 🔶 report consumer 워커 기동 방식(통합 compose의 별도 서비스 vs 수동/별도 프로세스)은 INFRA-1에서 결정.
+- report consumer 워커 기동(별도 프로세스 + 별도 compose 서비스)은 **INFRA-0**이 담당한다. VisibilityTimeout은 리포트 생성+Spring callback 시간보다 길게(큐 생성 시 INFRA-2).
 
 ---
 
@@ -352,6 +353,7 @@ flowchart LR
 | Phase | 내용 | 상태 |
 |-------|------|------|
 | **Phase 1** | 문서/계획 정리 (이 문서) | ✅ |
+| **Phase 2 (앞단)** | **report consumer 워커 배선** — 별도 프로세스 entrypoint + 별도 compose 서비스 | ⏭ INFRA-0 |
 | **Phase 2** | **.env 통합** + GEMINI 갭 수정 + **로컬 통합 실행** + `docker-compose.prod.yml` overlay **prod 드라이런** + Nginx config(runbook 기반) | ⏭ INFRA-1 (이 브랜치) |
 | **Phase 3** | **aws-cli 부트스트랩** — ECR·SQS(prod 큐)·S3(공용 버킷)·IAM·EC2 생성 + SSM 적재 | ⏭ INFRA-2 |
 | **Phase 4** | EC2 prod 배포(SSM env 주입) + **수동 배포** 검증 | ⏭ INFRA-3 |
@@ -379,7 +381,9 @@ flowchart LR
 
 ## 14. 후속 작업 체크리스트
 
+- [ ] **report consumer 워커 entrypoint + 별도 compose 서비스**(별도 프로세스, uvicorn 미탑재)(INFRA-0)
 - [ ] **.env 통합** — `.env.example`/`.env.prod.example` 정리, `GEMINI_API_KEY` compose 주입(INFRA-1)
+- [ ] **aws-cli 전용 named 프로필**(`default` 금지) 생성·사용 명시(INFRA-2)
 - [ ] `docker-compose.prod.yml` overlay (Nginx + 앱 포트 비공개, prod는 ECR 이미지 / 드라이런은 build)
 - [ ] Nginx config — 팀 runbook server block 기반(`/`→Vue, `/api/**`·`/character-assets/**`→Spring, TLS/Certbot, FastAPI 비프록시)
 - [ ] **aws-cli 부트스트랩 스크립트**(`scripts/aws/`, 멱등) — ECR×3, prod SQS 큐(+DLQ), S3 공용 버킷, IAM role, SSM 적재
