@@ -1,13 +1,12 @@
-"""Frame grid normalization for generated sprite sheets.
+"""Frame atlas normalization for generated sprite sheets.
 
-POC implementation for character-image-quality Story 2 (option A): take a
-transparent sprite sheet, segment the 6 sprites with alpha projection bands,
-crop each to its bounding box, and re-place them centered on a uniform 3x2 cell
-grid so the frontend can slice frames with a single fixed cell size.
+Take a transparent generated sheet, segment the 3 sprites with alpha projection
+bands, crop each to its bounding box, and re-place them on a uniform 1x3 atlas
+so the frontend can slice frames with a single fixed cell size.
 
-If the projection does not resolve into the expected 2 rows x 3 columns, the
-caller is told (success=False) and should keep the un-normalized image / mark a
-quality flag instead of forcing a broken grid.
+If the projection does not resolve into the expected 1 row x 3 columns, the
+caller is told (success=False) and should fall back instead of forcing a broken
+grid.
 """
 
 from __future__ import annotations
@@ -18,11 +17,12 @@ from dataclasses import dataclass
 from PIL import Image
 
 
-EXPECTED_ROWS = 2
+EXPECTED_ROWS = 1
 EXPECTED_COLUMNS = 3
 ALPHA_THRESHOLD = 16
 MIN_CELL_PX = 18  # png_validation MIN_FRAME_DIMENSION_PX
-CELL_PADDING = 2
+MIN_CELL_PADDING_PX = 4
+CELL_PADDING_FRACTION = 0.07
 # Detached marks (anger puffs, sweat drops, leftover speckles) produce thin
 # projection bands. Bands smaller than this fraction of the axis are treated as
 # noise so they do not inflate the row/column count.
@@ -52,7 +52,10 @@ def normalize_sprite_grid(png_bytes: bytes) -> FrameNormalizationResult:
         min_size=_min_band(height),
     )
     if len(row_bands) != EXPECTED_ROWS:
-        return _failure(png_bytes, f"expected {EXPECTED_ROWS} row bands, found {len(row_bands)}")
+        return _failure(
+            png_bytes,
+            f"expected {EXPECTED_ROWS} row bands, found {len(row_bands)}",
+        )
 
     cells: list[tuple[int, int, int, int]] = []
     for top, bottom in row_bands:
@@ -71,16 +74,25 @@ def normalize_sprite_grid(png_bytes: bytes) -> FrameNormalizationResult:
                 return _failure(png_bytes, "empty cell detected during segmentation")
             cells.append(bbox)
 
-    cell_width = max(MIN_CELL_PX, max(r - l for (l, _t, r, _b) in cells) + 2 * CELL_PADDING)
-    cell_height = max(MIN_CELL_PX, max(b - t for (_l, t, _r, b) in cells) + 2 * CELL_PADDING)
+    max_sprite_width = max(r - l for (l, _t, r, _b) in cells)
+    max_sprite_height = max(b - t for (_l, t, _r, b) in cells)
+    padding = max(
+        MIN_CELL_PADDING_PX,
+        int(max(max_sprite_width, max_sprite_height) * CELL_PADDING_FRACTION),
+    )
+    cell_size = max(MIN_CELL_PX, max(max_sprite_width, max_sprite_height) + 2 * padding)
 
-    sheet = Image.new("RGBA", (cell_width * EXPECTED_COLUMNS, cell_height * EXPECTED_ROWS), (0, 0, 0, 0))
+    sheet = Image.new(
+        "RGBA",
+        (cell_size * EXPECTED_COLUMNS, cell_size * EXPECTED_ROWS),
+        (0, 0, 0, 0),
+    )
     for index, (left, top, right, bottom) in enumerate(cells):
         row = index // EXPECTED_COLUMNS
         col = index % EXPECTED_COLUMNS
         sprite = image.crop((left, top, right, bottom))
-        dest_x = col * cell_width + (cell_width - sprite.width) // 2
-        dest_y = row * cell_height + (cell_height - sprite.height) // 2
+        dest_x = col * cell_size + (cell_size - sprite.width) // 2
+        dest_y = row * cell_size + cell_size - padding - sprite.height
         sheet.alpha_composite(sprite, (dest_x, dest_y))
 
     buffer = io.BytesIO()
@@ -90,8 +102,8 @@ def normalize_sprite_grid(png_bytes: bytes) -> FrameNormalizationResult:
         png_bytes=buffer.getvalue(),
         columns=EXPECTED_COLUMNS,
         rows=EXPECTED_ROWS,
-        cell_width=cell_width,
-        cell_height=cell_height,
+        cell_width=cell_size,
+        cell_height=cell_size,
     )
 
 
@@ -107,7 +119,9 @@ def _projection(
         counts = []
         for y in range(height):
             base = y * width
-            counts.append(sum(1 for x in range(width) if alpha_bytes[base + x] > ALPHA_THRESHOLD))
+            counts.append(
+                sum(1 for x in range(width) if alpha_bytes[base + x] > ALPHA_THRESHOLD)
+            )
         return counts
     top, bottom = y_range if y_range is not None else (0, height)
     counts = [0] * width

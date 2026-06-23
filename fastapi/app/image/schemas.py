@@ -23,7 +23,7 @@ FallbackReason = Literal[
 @dataclass(frozen=True)
 class SpriteMetadata:
     columns: int = 3
-    rows: int = 2
+    rows: int = 1
     transparent: bool = True
 
     def to_dict(self) -> dict[str, Any]:
@@ -31,10 +31,11 @@ class SpriteMetadata:
             "columns": self.columns,
             "rows": self.rows,
             "frameMap": {
-                "baby": {"happy": [0, 0], "sad": [0, 1], "angry": [0, 2]},
-                "mature": {"happy": [1, 0], "sad": [1, 1], "angry": [1, 2]},
+                "joy": [0, 0],
+                "happy": [0, 0],
+                "sad": [0, 1],
+                "angry": [0, 2],
             },
-            "frame": {"babyPx": 16, "maturePx": 18},
             "transparent": self.transparent,
         }
 

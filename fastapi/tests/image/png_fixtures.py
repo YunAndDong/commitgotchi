@@ -78,17 +78,17 @@ def make_sprite_sheet_png_bytes(
     bg_color: tuple[int, int, int] = (255, 0, 255),
     with_alpha: bool = False,
     panels: bool = False,
-    sprite_count: int = 6,
+    sprite_count: int = 3,
 ) -> bytes:
-    """Build a synthetic 2x3 creature sprite sheet for post-processing tests.
+    """Build a synthetic 1x3 creature sprite sheet for post-processing tests.
 
-    Defaults to a solid magenta background with six centered blobs (with interior
+    Defaults to a solid magenta background with three centered blobs (with interior
     black detail) separated by gaps, which survives background removal + grid
     normalization + quality gate. Options reproduce known failure shapes:
 
     - ``panels=True``: each cell is filled by an opaque backdrop -> quality gate
       should flag ``panel_background``.
-    - ``sprite_count<6``: a missing creature -> grid normalization should fail.
+    - ``sprite_count<3``: a missing creature -> grid normalization should fail.
     - ``with_alpha=False``: RGB sheet with no alpha -> pipeline must add alpha.
     """
 
@@ -96,7 +96,7 @@ def make_sprite_sheet_png_bytes(
 
     from PIL import Image, ImageDraw
 
-    columns, rows = 3, 2
+    columns, rows = 3, 1
     width, height = cell * columns, cell * rows
     mode = "RGBA" if with_alpha else "RGB"
     base_bg = bg_color + ((255,) if with_alpha else ())

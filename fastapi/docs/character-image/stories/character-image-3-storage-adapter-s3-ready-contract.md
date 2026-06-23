@@ -121,7 +121,13 @@ sprites/users/{userId}/{imageRequestId}.png
   "contentType": "image/png",
   "spriteMeta": {
     "columns": 3,
-    "rows": 2,
+    "rows": 1,
+    "frameMap": {
+      "joy": [0, 0],
+      "happy": [0, 0],
+      "sad": [0, 1],
+      "angry": [0, 2]
+    },
     "transparent": true
   }
 }
