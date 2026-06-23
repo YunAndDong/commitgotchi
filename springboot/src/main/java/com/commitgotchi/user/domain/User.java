@@ -14,6 +14,8 @@ public class User {
 
     private Instant createdAt;
 
+    private Instant deletedAt;
+
     protected User() {
     }
 
@@ -46,5 +48,13 @@ public class User {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
     }
 }

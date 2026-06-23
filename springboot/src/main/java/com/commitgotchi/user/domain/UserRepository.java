@@ -2,6 +2,7 @@ package com.commitgotchi.user.domain;
 
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -49,6 +50,10 @@ public class UserRepository {
 
     public User saveAndFlush(User user) {
         return save(user);
+    }
+
+    public int softDeleteById(long id, Instant deletedAt) {
+        return mapper.softDeleteById(id, deletedAt);
     }
 
     public void deleteAll() {

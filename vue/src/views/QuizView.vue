@@ -5,12 +5,16 @@
  * FE-10: 채점 실패 시 Fallback(답안 보존 + 잠시 후 재시도, 점수 미반영) — 흐름 유지.
  */
 import { ref, watch } from 'vue'
-import { activeQuizzes, submitQuiz, STAT_LABELS } from '../stores/game.js'
+import { useRouter } from 'vue-router'
+import { activeCharacter, activeQuizzes, submitQuiz, STAT_LABELS } from '../stores/game.js'
 import { LOADING, FALLBACK } from '../constants/aiStates.js'
 import CgConfetti from '../components/CgConfetti.vue'
 import CgState from '../components/CgState.vue'
+import CgSprite from '../components/CgSprite.vue'
 
 const quizzes = activeQuizzes
+const c = activeCharacter
+const router = useRouter()
 const grading = ref({})      // quizId -> bool
 const answers = ref({})
 const evolved = ref(false)
@@ -27,6 +31,14 @@ function answerFor(q) {
   return String(answers.value[q.id] || '').trim()
 }
 
+function goBack() {
+  if (router.options.history.state.back) {
+    router.back()
+    return
+  }
+  router.push({ name: 'dashboard' })
+}
+
 async function submit(q) {
   const answer = answerFor(q)
   if (!answer) return
@@ -41,16 +53,28 @@ async function submit(q) {
 <template>
   <div class="quiz">
     <CgConfetti v-if="evolved" :count="80" />
-    <header class="row between">
-      <h1 class="cg-section-title big">오늘의 추천 퀴즈</h1>
-      <span class="tiny muted">제출 즉시 채점돼요 · 채점 완료 후 결과가 고정돼요</span>
+    <header class="quiz-head row between wrap">
+      <div class="quiz-title row">
+        <button type="button" class="quiz-back cg-btn cg-btn--sm" aria-label="이전 화면으로 돌아가기" @click="goBack">←</button>
+        <h1 class="cg-section-title big">오늘의 추천 퀴즈</h1>
+      </div>
+      <span class="quiz-subcopy tiny muted">제출 즉시 채점돼요 · 채점 완료 후 결과가 고정돼요</span>
     </header>
 
     <label class="demo tiny muted">
       <input type="checkbox" v-model="failNext" /> 데모: 다음 채점 실패 재현(Fallback)
     </label>
 
-    <p v-if="!quizzes.length" class="cg-card muted">오늘 도착한 추천 퀴즈가 없어요. 리포트를 쓰면 내일 새 퀴즈가 도착해요.</p>
+    <div v-if="!quizzes.length" class="empty-quiz cg-card center col" role="status" aria-live="polite">
+      <CgSprite
+        :size="148"
+        emotion="sad"
+        :evolved="c?.isEvolved"
+        :sprite-sheet-url="c?.spriteSheetUrl"
+        :sprite-meta="c?.spriteMeta"
+      />
+      <p class="empty-copy muted">오늘 도착한 퀴즈가 없어요..</p>
+    </div>
 
     <article v-for="(q, qi) in quizzes" :key="q.id" class="cg-card col qcard">
       <div class="row between">
@@ -101,7 +125,30 @@ async function submit(q) {
 
 <style scoped>
 .quiz { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--sp-4); }
+.quiz-head { align-items: center; }
+.quiz-title { min-width: 0; gap: var(--sp-2); }
+.quiz-back {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  font-size: 18px;
+}
+.quiz-subcopy {
+  margin-left: auto;
+  text-align: right;
+}
 .demo { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; align-self: flex-start; }
+.empty-quiz {
+  min-height: 300px;
+  padding: var(--sp-6) var(--sp-5);
+  gap: var(--sp-4);
+  text-align: center;
+}
+.empty-copy {
+  font-family: var(--font-head);
+  font-size: 16px;
+  margin: 0;
+}
 .qcard { gap: var(--sp-3); }
 .qtext { font-family: var(--font-head); font-size: 17px; line-height: 1.6; }
 .answer { min-height: 132px; resize: vertical; }
@@ -110,4 +157,12 @@ async function submit(q) {
 .submitted { color: var(--muted); }
 .feedback--ok { background: var(--badge-ok-bg); border-color: var(--badge-ok-edge); color: var(--badge-ok-fg); }
 .feedback--no { background: var(--surface-2); }
+@media (max-width: 560px) {
+  .quiz-head { align-items: flex-start; }
+  .quiz-subcopy {
+    width: 100%;
+    margin-left: 44px;
+    text-align: left;
+  }
+}
 </style>

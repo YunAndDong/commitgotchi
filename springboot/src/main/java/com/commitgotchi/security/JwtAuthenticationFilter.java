@@ -1,6 +1,8 @@
 package com.commitgotchi.security;
 
 import com.commitgotchi.common.error.ErrorCode;
+import com.commitgotchi.user.domain.User;
+import com.commitgotchi.user.domain.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,10 +31,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
     private final SecurityErrorResponseWriter errorWriter;
+    private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(JwtTokenProvider tokenProvider, SecurityErrorResponseWriter errorWriter) {
+    public JwtAuthenticationFilter(
+            JwtTokenProvider tokenProvider,
+            SecurityErrorResponseWriter errorWriter,
+            UserRepository userRepository
+    ) {
         this.tokenProvider = tokenProvider;
         this.errorWriter = errorWriter;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -76,10 +84,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        User user = userRepository.findById(principal.userId()).orElse(null);
+        if (user == null) {
+            SecurityContextHolder.clearContext();
+            errorWriter.write(response, ErrorCode.AUTH_ACCESS_TOKEN_INVALID);
+            return;
+        }
+        AuthPrincipal currentPrincipal = new AuthPrincipal(user.getId(), user.getEmail(), user.getRole());
         var authentication = new UsernamePasswordAuthenticationToken(
-                principal,
+                currentPrincipal,
                 null,
-                List.of(new SimpleGrantedAuthority("ROLE_" + principal.role().name()))
+                List.of(new SimpleGrantedAuthority("ROLE_" + currentPrincipal.role().name()))
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
         filterChain.doFilter(request, response);

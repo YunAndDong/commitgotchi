@@ -157,7 +157,12 @@ function normalizeSpriteSheetUrl(raw) {
   return value.startsWith('/character-assets/') ? apiAssetUrl(value) : value
 }
 
+function isDeletedCharacter(raw) {
+  return !!(raw?.deletedAt || raw?.deleted_at)
+}
+
 function normalizeCharacter(raw) {
+  if (isDeletedCharacter(raw)) return null
   if (!raw || raw.id == null) return null
   const name = String(raw.name || '').trim()
   if (!name) return null
@@ -405,6 +410,12 @@ function openCharacterEventSubscription(characterId) {
 }
 
 function applyCharacterSnapshot(payload) {
+  if (isDeletedCharacter(payload)) {
+    const index = state.characters.findIndex(item => String(item.id) === String(payload.id))
+    if (index >= 0) state.characters.splice(index, 1)
+    syncActiveGotchi()
+    return null
+  }
   const character = normalizeCharacter(payload)
   if (!character) return null
   const index = state.characters.findIndex(item => String(item.id) === String(character.id))

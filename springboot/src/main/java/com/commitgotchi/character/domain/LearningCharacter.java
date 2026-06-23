@@ -52,6 +52,8 @@ public class LearningCharacter {
 
     private Instant updatedAt;
 
+    private Instant deletedAt;
+
     protected LearningCharacter() {
     }
 
@@ -144,6 +146,12 @@ public class LearningCharacter {
     }
 
     public void deactivate() {
+        this.active = false;
+        touch();
+    }
+
+    public void markDeleted(Instant deletedAt) {
+        this.deletedAt = Objects.requireNonNull(deletedAt, "deletedAt must not be null");
         this.active = false;
         touch();
     }
@@ -268,5 +276,13 @@ public class LearningCharacter {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
     }
 }

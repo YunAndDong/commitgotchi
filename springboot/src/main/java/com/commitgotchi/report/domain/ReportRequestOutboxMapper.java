@@ -116,6 +116,18 @@ public interface ReportRequestOutboxMapper {
             FROM report_request_outbox
             WHERE status = 'PENDING'
               AND available_at <= #{now}
+              AND EXISTS (
+                  SELECT 1
+                  FROM users
+                  WHERE users.id = report_request_outbox.user_id
+                    AND users.deleted_at IS NULL
+              )
+              AND EXISTS (
+                  SELECT 1
+                  FROM characters
+                  WHERE characters.id = report_request_outbox.character_id
+                    AND characters.deleted_at IS NULL
+              )
             ORDER BY available_at ASC, id ASC
             LIMIT #{limit}
             FOR UPDATE SKIP LOCKED

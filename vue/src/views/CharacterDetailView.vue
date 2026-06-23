@@ -34,6 +34,7 @@ const studyRecords = computed(() => {
   const reportRecords = reports.value.map((r, index) => ({
     key: `report-${r.id}`,
     type: 'report',
+    to: { name: 'report-detail', params: { id: r.id } },
     order: index,
     date: r.date,
     title: r.title,
@@ -44,6 +45,7 @@ const studyRecords = computed(() => {
   const quizRecords = quizzes.value.map((q, index) => ({
     key: `quiz-${q.id}`,
     type: 'quiz',
+    to: { name: 'quiz-detail', params: { id: q.id } },
     order: reports.value.length + index,
     date: q.date,
     title: q.question,
@@ -69,6 +71,9 @@ const radarStats = computed(() => [
 
 const editing = ref(false)
 const editError = ref('')
+const deleteDialogOpen = ref(false)
+const deletePending = ref(false)
+const deleteError = ref('')
 const form = reactive({ name: '' })
 watch(c, value => {
   if (!value) return
@@ -101,9 +106,28 @@ function cancelNameEdit() {
   editing.value = false
 }
 async function remove() {
-  if (!window.confirm(`${c.value.name}을(를) 삭제할까요?`)) return
-  await deleteCharacter(c.value.id)
-  router.push('/')
+  if (!c.value) return
+  deleteError.value = ''
+  deleteDialogOpen.value = true
+}
+function cancelRemove() {
+  if (deletePending.value) return
+  deleteDialogOpen.value = false
+  deleteError.value = ''
+}
+async function confirmRemove() {
+  if (!c.value || deletePending.value) return
+  deletePending.value = true
+  deleteError.value = ''
+  try {
+    await deleteCharacter(c.value.id)
+    deleteDialogOpen.value = false
+    router.push('/')
+  } catch (e) {
+    deleteError.value = e?.message || '캐릭터를 삭제하지 못했어요.'
+  } finally {
+    deletePending.value = false
+  }
 }
 
 async function activate() {
@@ -115,6 +139,7 @@ async function activate() {
   <div v-if="c" class="detail">
     <div class="detail-toolbar">
       <RouterLink to="/select" class="detail-back cg-btn cg-btn--sm" aria-label="캐릭터 선택 화면으로 돌아가기">←</RouterLink>
+      <span class="detail-title">캐릭터 상세 화면</span>
     </div>
 
     <section class="detail-grid">
@@ -139,6 +164,7 @@ async function activate() {
             {{ c.active ? '활성 캐릭터' : '비활성 캐릭터' }}
           </span>
           <RouterLink to="/report" class="cg-btn cg-btn--sm cg-btn--primary cg-btn--block">📓 리포트 작성</RouterLink>
+          <RouterLink to="/quiz" class="cg-btn cg-btn--sm cg-btn--accent cg-btn--block">🧩 퀴즈 풀기</RouterLink>
         </div>
 
         <div class="char-actions col">
@@ -149,7 +175,10 @@ async function activate() {
 
       <div class="side col">
         <div class="cg-card col radar-card">
-          <div class="cg-section-title">세부 능력치</div>
+          <div class="radar-head">
+            <div class="cg-section-title">세부 능력치</div>
+            <CgGauge class="radar-gauge" :value="nurtureScore(c)" :max="1000" label="육아점수" />
+          </div>
           <div class="radar-body">
             <ul class="stat-list">
               <li v-for="item in radarStats" :key="item.key">
@@ -157,9 +186,8 @@ async function activate() {
                 <strong>{{ item.value }}</strong>
               </li>
             </ul>
-            <div class="center"><CgRadar :stats="c.stats" :size="220" /></div>
+            <div class="radar-visual"><CgRadar :stats="c.stats" :size="220" /></div>
           </div>
-          <CgGauge :value="nurtureScore(c)" :max="1000" label="육아점수" />
         </div>
 
         <section class="lists">
@@ -175,13 +203,15 @@ async function activate() {
             <p v-if="!studyRecords.length" class="muted tiny">해당 기록이 없어요.</p>
             <ul class="rows col">
               <li v-for="record in paged(studyRecords, studyPage)" :key="record.key" class="rowitem">
-                <div class="row between">
-                  <strong :class="{ qline: record.type === 'quiz' }">{{ record.title }}</strong>
-                  <span class="cg-badge" :class="record.badgeClass">{{ record.badge }}</span>
-                </div>
-                <div class="tiny faint mono">
-                  {{ record.date }}<span v-if="record.meta"> · {{ record.meta }}</span>
-                </div>
+                <RouterLink :to="record.to" class="rowitem-link" :aria-label="`${record.title} 상세 보기`">
+                  <div class="row between">
+                    <strong :class="{ qline: record.type === 'quiz' }">{{ record.title }}</strong>
+                    <span class="cg-badge" :class="record.badgeClass">{{ record.badge }}</span>
+                  </div>
+                  <div class="tiny faint mono">
+                    {{ record.date }}<span v-if="record.meta"> · {{ record.meta }}</span>
+                  </div>
+                </RouterLink>
               </li>
             </ul>
             <div class="pager row center" v-if="pages(studyRecords) > 1">
@@ -193,6 +223,24 @@ async function activate() {
         </section>
       </div>
     </section>
+
+    <Transition name="fade">
+      <div v-if="deleteDialogOpen" class="modal-backdrop" @click.self="cancelRemove">
+        <section class="delete-dialog cg-card col" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
+          <div class="col dialog-copy">
+            <h2 id="delete-dialog-title" class="cg-section-title">캐릭터 삭제</h2>
+            <p class="tiny muted">{{ c.name }}을(를) 삭제할까요?</p>
+          </div>
+          <p v-if="deleteError" class="err tiny" role="alert">{{ deleteError }}</p>
+          <div class="row dialog-actions">
+            <button type="button" class="cg-btn cg-btn--sm cg-btn--ghost" :disabled="deletePending" @click="cancelRemove">취소</button>
+            <button type="button" class="cg-btn cg-btn--sm danger-btn" :disabled="deletePending" @click="confirmRemove">
+              {{ deletePending ? '삭제 중...' : '삭제' }}
+            </button>
+          </div>
+        </section>
+      </div>
+    </Transition>
   </div>
 
   <div v-else class="cg-card center col">
@@ -206,9 +254,15 @@ async function activate() {
 .detail-toolbar {
   display: flex;
   align-items: center;
+  gap: var(--sp-2);
   min-height: 36px;
   margin-top: calc(var(--sp-4) * -1);
   margin-bottom: var(--sp-2);
+}
+.detail-title {
+  font-family: var(--font-head);
+  font-size: 16px;
+  color: var(--ink);
 }
 .detail-back {
   width: 36px;
@@ -261,11 +315,26 @@ async function activate() {
 }
 .side { align-items: flex-end; width: 100%; }
 .radar-card, .lists { width: min(100%, 520px); }
+.radar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.radar-gauge {
+  flex: 0 1 260px;
+  width: 260px;
+}
 .radar-body {
   display: grid;
   grid-template-columns: 140px minmax(0, 1fr);
   gap: var(--sp-3);
   align-items: center;
+}
+.radar-visual {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
 }
 .stat-list {
   display: grid;
@@ -290,10 +359,55 @@ async function activate() {
 .study-head { gap: var(--sp-3); align-items: center; }
 .study-filter { width: 116px; min-height: 36px; padding: 6px 10px; font-size: 13px; }
 .rows { gap: 8px; list-style: none; }
-.rowitem { border: 2px solid var(--surface-edge); border-radius: var(--r); padding: 10px 12px; background: var(--surface-2); }
+.rowitem {
+  border: 2px solid var(--surface-edge);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  transition: transform .06s ease, box-shadow .06s ease, border-color .15s ease;
+}
+.rowitem:hover {
+  transform: translate(-1px, -1px);
+  border-color: var(--primary-d);
+  box-shadow: 3px 3px 0 var(--shadow-hard);
+}
+.rowitem:focus-within {
+  border-color: var(--primary-d);
+}
+.rowitem-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+}
 .qline { font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pager { gap: 10px; margin-top: 4px; }
 .danger { color: var(--angry); }
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  background: rgba(20, 20, 20, .42);
+}
+.delete-dialog {
+  width: min(100%, 360px);
+  gap: var(--sp-3);
+  background: var(--popup-bg);
+  border-color: var(--popup-edge);
+  box-shadow: 6px 6px 0 var(--shadow-hard);
+}
+.dialog-copy { gap: 6px; }
+.dialog-actions {
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.danger-btn {
+  background: var(--badge-fire-bg);
+  border-color: var(--badge-fire-edge);
+  color: var(--badge-fire-fg);
+}
 .err { color: var(--angry); }
 @media (max-width: 680px) {
   .detail-grid { grid-template-columns: 1fr; }
@@ -301,6 +415,11 @@ async function activate() {
   .side { align-items: stretch; }
 }
 @media (max-width: 440px) {
+  .radar-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .radar-gauge { width: 100%; }
   .radar-body { grid-template-columns: 1fr; }
 }
 </style>

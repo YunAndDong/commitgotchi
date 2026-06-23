@@ -47,9 +47,10 @@ class CharacterDatabaseMigrationIntegrationTest extends PostgresIntegrationTest 
                     'is_active',
                     'created_at',
                     'updated_at',
-                    'version'
+                    'version',
+                    'deleted_at'
                   )
-                """, Integer.class)).isEqualTo(21);
+                """, Integer.class)).isEqualTo(22);
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT data_type
                 FROM information_schema.columns
@@ -92,6 +93,35 @@ class CharacterDatabaseMigrationIntegrationTest extends PostgresIntegrationTest 
                 "SELECT count(*) FROM characters WHERE is_active = true",
                 Integer.class
         )).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    void activeCharacterPartialUniqueIndexIgnoresSoftDeletedRows() {
+        long userId = insertUser();
+        long deletedActiveId = insertCharacter(userId, "deleted-active", true);
+        jdbcTemplate.update(
+                "UPDATE characters SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+                deletedActiveId
+        );
+
+        long replacementId = insertCharacter(userId, "replacement-active", true);
+
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                        SELECT count(*)
+                        FROM characters
+                        WHERE user_id = ?
+                          AND is_active = true
+                          AND deleted_at IS NULL
+                        """,
+                Integer.class,
+                userId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT deleted_at IS NULL FROM characters WHERE id = ?",
+                Boolean.class,
+                replacementId
+        )).isTrue();
     }
 
     @Test

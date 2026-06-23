@@ -69,6 +69,28 @@ docker compose up --build
 Spring Boot는 `http://localhost:${SPRING_PORT:-8080}`, Vue는
 `http://localhost:${VUE_PORT:-5173}`에서 접근한다.
 
+### 운영 Origin 모델
+
+운영 기본안은 **same-origin reverse proxy**다. `https://app.example.com` 하나에서 Vue 정적 파일과
+Spring Boot `/api/**`를 함께 제공하고, public Nginx가 `/api/**`를 Spring Boot로 프록시한다.
+
+| 선택지 | 장점 | 단점 | 결정 |
+| --- | --- | --- | --- |
+| Option A: same-origin reverse proxy | 웹 Vue가 `/api/**` 상대 경로를 호출하므로 CORS 의존도가 작고 쿠키/프록시 진단이 단순하다. | public Nginx가 Vue와 Spring Boot 라우팅을 함께 책임져야 한다. | 운영 기본안 |
+| Option B: cross-origin API | `app`과 `api`를 독립적으로 스케일링하거나 외부 API 도메인을 명확히 분리하기 쉽다. | `VITE_API_BASE_URL`, `CORS_ALLOWED_ORIGINS`, TLS, 쿠키 정책이 모두 어긋나기 쉬워 초기 운영 부담이 크다. | 보류 |
+
+| 환경 | Expected origin | `VITE_API_BASE_URL` | `CORS_ALLOWED_ORIGINS` | `SPRING_PROFILES_ACTIVE` | Refresh cookie |
+| --- | --- | --- | --- | --- | --- |
+| Local Docker Compose | `http://localhost:5173` | `http://localhost:8080` | `http://localhost:5173` | `local` | secure false, `SameSite=Lax` |
+| Local Vite dev | `http://localhost:5173` | `http://localhost:8080` | `http://localhost:5173` | `local` | secure false, `SameSite=Lax` |
+| Production web | `https://app.example.com` | empty string | `https://app.example.com` | `prod` | secure true, `SameSite=None` |
+| Production extension | `chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn` | `https://app.example.com` | `https://app.example.com` + 고정 extension origin | `prod` | secure true, `SameSite=None` |
+
+운영 웹 Vue build는 `VITE_API_BASE_URL`을 비워 `/api/**`를 현재 origin으로 호출한다. 운영 extension build는
+상대 경로를 사용할 수 없으므로 `VITE_API_BASE_URL=https://app.example.com`처럼 절대 origin을 넣는다.
+상세 public Nginx 설정과 smoke test는
+[`public-nginx-reverse-proxy-runbook.md`](springboot/docs/public-nginx-reverse-proxy-runbook.md)를 따른다.
+
 ### Spring Boot 로컬 실행
 
 PostgreSQL이 실행 중이고 환경변수가 설정된 상태에서:
@@ -116,8 +138,17 @@ Refresh Token 요청 예시는 항상 placeholder를 사용한다.
 - 로그아웃은 제출된 Refresh Token 세션 하나만 종료한다.
 - 로그아웃 후에도 기존 Access Token은 만료 전 최대 15분 동안 기술적으로 유효할 수 있다.
 - Access Token blacklist와 즉시 무효화는 현재 범위가 아니다.
-- CORS는 `/api/**`에 대해 `GET`, `POST`, `OPTIONS`와 `Authorization`,
-  `Content-Type`만 허용하며 credentials/cookie CORS는 비활성화한다.
+- CORS source of truth는 Spring Boot의 `CommitgotchiCorsConfiguration`이며,
+  Spring Security가 이 설정을 `/api/**`에만 적용한다.
+- 허용 origin은 `CORS_ALLOWED_ORIGINS`의 exact origin 목록과 고정 Chrome 확장 origin
+  `chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn`을 합친 값이다. 운영 `prod`
+  프로필은 최소 하나의 HTTPS origin을 요구하고 wildcard, origin pattern, path/query/fragment를 거부한다.
+- CORS는 `/api/**`에 대해 `GET`, `POST`, `PATCH`, `DELETE`, `OPTIONS`와
+  `Authorization`, `Content-Type`만 허용하며 `Access-Control-Allow-Credentials: true`를
+  반환한다. credentials가 활성화되어 있으므로 `Access-Control-Allow-Origin: *`는 사용하지 않는다.
+- 브라우저-facing API는 Spring Boot가 소유한다. Vue는 FastAPI를 직접 호출하지 않으며,
+  FastAPI에는 browser CORS를 선제적으로 추가하지 않는다. 브라우저가 FastAPI를 직접 호출해야 하는
+  요구가 생기면 별도 결정 기록과 회귀 테스트를 먼저 추가한다.
 - 응답과 기본 로그에는 비밀번호, token 원문/hash, Authorization 헤더, JWT Secret,
   DB 자격 증명, 내부 예외 상세와 stack trace를 노출하지 않는다.
 

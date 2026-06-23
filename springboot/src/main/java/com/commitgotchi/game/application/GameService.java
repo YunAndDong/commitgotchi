@@ -158,7 +158,7 @@ public class GameService {
         applyCharacterProjection(userId, state);
         if (deletion.newActive().isPresent()) {
             replaceDailyReportCharacter(state, deletion.newActive().get().getId());
-        } else if (deletion.removed().isActive()) {
+        } else if (deletion.wasActive()) {
             clearActiveCharacter(state);
         } else {
             syncDailyReportAfterDeletedReference(state, deletion.removed().getId());

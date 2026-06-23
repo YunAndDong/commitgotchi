@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.UUID;
@@ -53,6 +54,32 @@ class LearningCharacterRepositoryIntegrationTest extends PostgresIntegrationTest
         assertThat(characterRepository.findAllByUserIdOrderByCreatedAtDesc(user.getId()))
                 .extracting(LearningCharacter::getName)
                 .containsExactly("second", "first");
+    }
+
+    @Test
+    void softDeletedCharactersAreExcludedFromNormalRepositoryQueries() {
+        User user = saveUser();
+        LearningCharacter visible = characterRepository.save(
+                LearningCharacter.create(user, "visible", "visible-design", "visible-personality")
+        );
+        LearningCharacter deleted = characterRepository.save(
+                LearningCharacter.create(user, "deleted", "deleted-design", "deleted-personality")
+        );
+        deleted.markDeleted(Instant.now());
+        characterRepository.delete(deleted);
+        characterRepository.flush();
+
+        assertThat(characterRepository.findById(deleted.getId())).isEmpty();
+        assertThat(characterRepository.findByIdAndUserId(deleted.getId(), user.getId())).isEmpty();
+        assertThat(characterRepository.countByUserId(user.getId())).isEqualTo(1);
+        assertThat(characterRepository.findAllByUserIdOrderByCreatedAtDesc(user.getId()))
+                .extracting(LearningCharacter::getId)
+                .containsExactly(visible.getId());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT deleted_at IS NOT NULL FROM characters WHERE id = ?",
+                Boolean.class,
+                deleted.getId()
+        )).isTrue();
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.commitgotchi.character.domain;
 
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,7 +34,7 @@ public class LearningCharacterRepository {
 
     public void delete(LearningCharacter character) {
         if (character.getId() != null) {
-            mapper.deleteById(character.getId());
+            mapper.update(character);
         }
     }
 
@@ -47,6 +48,10 @@ public class LearningCharacterRepository {
 
     public long countByUserId(long userId) {
         return mapper.countByUserId(userId);
+    }
+
+    public int softDeleteAllByUserId(long userId, Instant deletedAt) {
+        return mapper.softDeleteAllByUserId(userId, deletedAt);
     }
 
     public Optional<LearningCharacter> findByIdAndUserId(Long id, long userId) {

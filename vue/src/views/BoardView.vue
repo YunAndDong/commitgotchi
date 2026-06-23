@@ -13,6 +13,9 @@ const router = useRouter()
 const draft = ref('')
 const rating = ref(5)
 const previewEmotion = ref('joy')
+const saving = ref(false)
+const savedDialogOpen = ref(false)
+const savedTargetId = ref(null)
 const emotions = [
   { value: 'joy', label: '기쁨' },
   { value: 'sad', label: '슬픔' },
@@ -35,14 +38,25 @@ function goBack() {
 
 async function create() {
   const target = character.value
-  if (!target || !draft.value.trim()) return
-  const post = await createBoardPost(draft.value)
-  if (!post) return
-  const review = await addReview(post.id, rating.value, draft.value)
-  if (!review) return
-  draft.value = ''
-  window.alert('리뷰가 저장되었습니다!')
-  router.push({ name: 'codex', query: { characterId: target.id } })
+  if (!target || !draft.value.trim() || saving.value) return
+  saving.value = true
+  try {
+    const post = await createBoardPost(draft.value)
+    if (!post) return
+    const review = await addReview(post.id, rating.value, draft.value)
+    if (!review) return
+    draft.value = ''
+    savedTargetId.value = target.id
+    savedDialogOpen.value = true
+  } finally {
+    saving.value = false
+  }
+}
+function closeSavedDialog() {
+  savedDialogOpen.value = false
+  const targetId = savedTargetId.value
+  savedTargetId.value = null
+  if (targetId) router.push({ name: 'codex', query: { characterId: targetId } })
 }
 </script>
 
@@ -94,9 +108,25 @@ async function create() {
         </div>
         <textarea id="post-desc" v-model="draft" class="cg-textarea"
                   placeholder="커밋고치와 함께한 학습 여정을 리뷰로 남겨 주세요."></textarea>
-        <button class="cg-btn cg-btn--primary" :disabled="!character || !draft.trim()" @click="create">리뷰 작성</button>
+        <button class="cg-btn cg-btn--primary" :disabled="saving || !character || !draft.trim()" @click="create">
+          {{ saving ? '저장 중...' : '리뷰 작성' }}
+        </button>
       </section>
     </div>
+
+    <Transition name="fade">
+      <div v-if="savedDialogOpen" class="modal-backdrop" @click.self="closeSavedDialog">
+        <section class="save-dialog cg-card col" role="dialog" aria-modal="true" aria-labelledby="save-dialog-title">
+          <div class="col dialog-copy">
+            <h2 id="save-dialog-title" class="cg-section-title">리뷰 저장 완료</h2>
+            <p class="tiny muted">작성한 리뷰가 저장되었습니다.</p>
+          </div>
+          <div class="row dialog-actions">
+            <button type="button" class="cg-btn cg-btn--sm cg-btn--primary" @click="closeSavedDialog">확인</button>
+          </div>
+        </section>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -196,6 +226,27 @@ async function create() {
 }
 .star-btn.active {
   color: var(--gold);
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  background: rgba(20, 20, 20, .42);
+}
+.save-dialog {
+  width: min(100%, 360px);
+  gap: var(--sp-3);
+  background: var(--popup-bg);
+  border-color: var(--popup-edge);
+  box-shadow: 6px 6px 0 var(--shadow-hard);
+}
+.dialog-copy { gap: 6px; }
+.dialog-actions {
+  justify-content: flex-end;
+  gap: var(--sp-2);
 }
 @media (max-width: 680px) {
   .review-layout { grid-template-columns: 1fr; }

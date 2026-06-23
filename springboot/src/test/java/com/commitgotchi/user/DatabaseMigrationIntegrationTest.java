@@ -28,7 +28,27 @@ class DatabaseMigrationIntegrationTest extends PostgresIntegrationTest {
     void appliesAllVersionedMigrationsAndJpaValidationStartsSuccessfully() {
         assertThat(Arrays.stream(flyway.info().applied())
                 .map(info -> info.getVersion().toString()))
-                .containsExactly("1", "2", "3", "4", "5");
+                .containsExactly("1", "2", "3", "4", "5", "6");
+    }
+
+    @Test
+    void createsSoftDeleteColumnsAndKeepsDeletedUserEmailReserved() {
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE (table_name = 'users' AND column_name = 'deleted_at')
+                   OR (table_name = 'characters' AND column_name = 'deleted_at')
+                """, Integer.class)).isEqualTo(2);
+
+        insertUser("soft-delete-email@example.com", "USER");
+        jdbcTemplate.update("""
+                UPDATE users
+                SET deleted_at = CURRENT_TIMESTAMP
+                WHERE email = 'soft-delete-email@example.com'
+                """);
+
+        assertThatThrownBy(() -> insertUser("soft-delete-email@example.com", "USER"))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

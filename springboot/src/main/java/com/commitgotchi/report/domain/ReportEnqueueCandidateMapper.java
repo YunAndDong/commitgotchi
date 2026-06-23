@@ -21,10 +21,12 @@ public interface ReportEnqueueCandidateMapper {
                    gs.state_json,
                    report.report_json::text AS report_json
             FROM (
-                SELECT user_id,
-                       state_json,
-                       state_json::jsonb AS state_doc
-                FROM game_states
+                SELECT gs.user_id,
+                       gs.state_json,
+                       gs.state_json::jsonb AS state_doc
+                FROM game_states gs
+                JOIN users u ON u.id = gs.user_id
+                 AND u.deleted_at IS NULL
                 WHERE state_json IS JSON
             ) gs
             CROSS JOIN LATERAL jsonb_array_elements(

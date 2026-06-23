@@ -1,6 +1,5 @@
 package com.commitgotchi.character.domain;
 
-import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
@@ -10,6 +9,7 @@ import org.apache.ibatis.annotations.Results;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import java.time.Instant;
 import java.util.List;
 
 @Mapper
@@ -36,7 +36,8 @@ public interface LearningCharacterMapper {
             is_active,
             version,
             created_at,
-            updated_at
+            updated_at,
+            deleted_at
             """;
 
     @Results(id = "LearningCharacterResult", value = {
@@ -63,13 +64,15 @@ public interface LearningCharacterMapper {
             @Result(property = "active", column = "is_active"),
             @Result(property = "version", column = "version"),
             @Result(property = "createdAt", column = "created_at"),
-            @Result(property = "updatedAt", column = "updated_at")
+            @Result(property = "updatedAt", column = "updated_at"),
+            @Result(property = "deletedAt", column = "deleted_at")
     })
     @Select("""
             SELECT
             """ + CHARACTER_COLUMNS + """
             FROM characters
             WHERE id = #{id}
+              AND deleted_at IS NULL
             """)
     LearningCharacter findById(Long id);
 
@@ -79,6 +82,7 @@ public interface LearningCharacterMapper {
             FROM characters
             WHERE id = #{id}
               AND user_id = #{userId}
+              AND deleted_at IS NULL
             """)
     @org.apache.ibatis.annotations.ResultMap("LearningCharacterResult")
     LearningCharacter findByIdAndUserId(@Param("id") Long id, @Param("userId") long userId);
@@ -89,6 +93,7 @@ public interface LearningCharacterMapper {
             FROM characters
             WHERE id = #{id}
               AND user_id = #{userId}
+              AND deleted_at IS NULL
             FOR UPDATE
             """)
     @org.apache.ibatis.annotations.ResultMap("LearningCharacterResult")
@@ -99,6 +104,7 @@ public interface LearningCharacterMapper {
             """ + CHARACTER_COLUMNS + """
             FROM characters
             WHERE user_id = #{userId}
+              AND deleted_at IS NULL
             ORDER BY created_at DESC, id DESC
             """)
     @org.apache.ibatis.annotations.ResultMap("LearningCharacterResult")
@@ -109,6 +115,7 @@ public interface LearningCharacterMapper {
             """ + CHARACTER_COLUMNS + """
             FROM characters
             WHERE user_id = #{userId}
+              AND deleted_at IS NULL
             ORDER BY created_at DESC, id DESC
             FOR UPDATE
             """)
@@ -121,6 +128,7 @@ public interface LearningCharacterMapper {
             FROM characters
             WHERE user_id = #{userId}
               AND is_active = true
+              AND deleted_at IS NULL
             """)
     @org.apache.ibatis.annotations.ResultMap("LearningCharacterResult")
     LearningCharacter findActiveByUserId(long userId);
@@ -131,13 +139,25 @@ public interface LearningCharacterMapper {
             FROM characters
             WHERE user_id = #{userId}
               AND is_active = true
+              AND deleted_at IS NULL
             FOR UPDATE
             """)
     @org.apache.ibatis.annotations.ResultMap("LearningCharacterResult")
     LearningCharacter findActiveByUserIdForUpdate(long userId);
 
-    @Select("SELECT COUNT(*) FROM characters WHERE user_id = #{userId}")
+    @Select("SELECT COUNT(*) FROM characters WHERE user_id = #{userId} AND deleted_at IS NULL")
     long countByUserId(long userId);
+
+    @Update("""
+            UPDATE characters
+            SET is_active = false,
+                version = version + 1,
+                updated_at = #{deletedAt},
+                deleted_at = #{deletedAt}
+            WHERE user_id = #{userId}
+              AND deleted_at IS NULL
+            """)
+    int softDeleteAllByUserId(@Param("userId") long userId, @Param("deletedAt") Instant deletedAt);
 
     @Insert("""
             INSERT INTO characters (
@@ -207,11 +227,10 @@ public interface LearningCharacterMapper {
                 sprite_meta = CAST(#{spriteMeta} AS jsonb),
                 is_active = #{active},
                 version = version + 1,
-                updated_at = #{updatedAt}
+                updated_at = #{updatedAt},
+                deleted_at = #{deletedAt}
             WHERE id = #{id}
+              AND deleted_at IS NULL
             """)
     int update(LearningCharacter character);
-
-    @Delete("DELETE FROM characters WHERE id = #{id}")
-    int deleteById(Long id);
 }

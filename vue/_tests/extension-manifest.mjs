@@ -6,6 +6,10 @@ const EXPECTED_EXTENSION_ID = 'daijhhcaecladkkpcjdlfgcokohehhmn'
 const manifest = JSON.parse(await readFile(new URL('../public/manifest.json', import.meta.url), 'utf8'))
 
 assert.equal(typeof manifest.key, 'string', 'manifest key must be present to keep the extension ID stable')
+assert.ok(
+  manifest.host_permissions?.includes('https://app.example.com/*'),
+  'manifest host_permissions must include the production API origin',
+)
 
 const publicKey = Buffer.from(manifest.key, 'base64')
 const digest = createHash('sha256').update(publicKey).digest().subarray(0, 16)
@@ -14,4 +18,4 @@ const extensionId = [...digest]
   .join('')
 
 assert.equal(extensionId, EXPECTED_EXTENSION_ID)
-console.log('extension manifest key test passed')
+console.log('extension manifest contract test passed')

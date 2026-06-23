@@ -7,6 +7,7 @@ import com.commitgotchi.user.domain.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -88,6 +89,7 @@ public class CharacterCommandService {
 
         LearningCharacter character = target.get();
         boolean wasActive = character.isActive();
+        character.markDeleted(Instant.now());
         characterRepository.delete(character);
         characterRepository.flush();
 
@@ -101,7 +103,7 @@ public class CharacterCommandService {
             }
         }
 
-        return Optional.of(new CharacterDeletionResult(character, newActive));
+        return Optional.of(new CharacterDeletionResult(character, newActive, wasActive));
     }
 
     @Transactional

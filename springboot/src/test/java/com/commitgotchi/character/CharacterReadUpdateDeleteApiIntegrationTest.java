@@ -313,6 +313,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andExpect(jsonPath("$.state.characters[0].active").value(true));
 
         assertThat(characterRepository.findById(firstId.longValue())).isEmpty();
+        assertThat(isCharacterSoftDeleted(firstId)).isTrue();
         assertThat(characterRepository.findById(secondId.longValue())).isPresent();
         assertThat(activeCharacterCount(user.id())).isEqualTo(1);
         assertThat(activeCharacterId(user.id())).isEqualTo(secondId.longValue());
@@ -353,6 +354,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                         .isEqualTo(secondId.longValue()));
 
         assertThat(characterRepository.findById(thirdId.longValue())).isEmpty();
+        assertThat(isCharacterSoftDeleted(thirdId)).isTrue();
         assertThat(activeCharacterCount(user.id())).isEqualTo(1);
         assertThat(activeCharacterId(user.id())).isEqualTo(secondId.longValue());
     }
@@ -714,6 +716,14 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 userId
         );
         return id == null ? 0 : id;
+    }
+
+    private boolean isCharacterSoftDeleted(Number characterId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT deleted_at IS NOT NULL FROM characters WHERE id = ?",
+                Boolean.class,
+                characterId.longValue()
+        ));
     }
 
     private String uniqueEmail() {
