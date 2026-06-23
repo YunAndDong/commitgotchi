@@ -120,7 +120,9 @@ class ReportOutboxDispatcherIntegrationTest extends PostgresIntegrationTest {
         Map<String, Object> retryRow = outboxRow(user.id());
         assertThat(retryRow).containsEntry("status", "PENDING");
         assertThat(retryRow).containsEntry("attempt_count", 1);
-        assertThat(toInstant(retryRow.get("available_at"))).isAfterOrEqualTo(firstAttempt.plusSeconds(300));
+        Instant retryAvailableAt = toInstant(retryRow.get("available_at"));
+        assertThat(retryAvailableAt).isAfter(firstAttempt.plusSeconds(299));
+        assertThat(retryAvailableAt).isBefore(firstAttempt.plusSeconds(301));
         assertThat((String) retryRow.get("last_error")).contains("ReportRequestPublishException");
 
         ReportOutboxDispatcher.DispatchResult second = dispatcher.dispatchAvailable(firstAttempt.plusSeconds(301));
