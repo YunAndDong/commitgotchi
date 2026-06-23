@@ -47,7 +47,7 @@
 
 - Vue SPA는 **Chrome 확장프로그램**으로만 배포된다. EC2/ECR/compose(prod)/CI/Nginx 서빙 대상이 **아니다**.
 - 확장 빌드(`VITE_API_BASE_URL=https://commitgotchi.store` 절대 URL)는 **Chrome Web Store로 별도 배포** — 이 파이프라인 밖. manifest `host_permissions`/build는 팀 runbook의 extension 체크리스트 따름.
-- **Vue 소스·로컬 개발 흐름은 유지**한다. 로컬 `docker-compose.yml`의 vue 서비스는 로컬 개발/미리보기용으로 둘 수 있다(단, prod overlay/ECR/CI에서는 제외).
+- **Vue 소스·로컬 개발 흐름은 유지**한다. 로컬 `docker-compose.yml`의 vue 서비스는 로컬 개발/미리보기용으로 둘 수 있다(단, **독립 `docker-compose.prod.yml`**·ECR·CI에서는 제외).
 - 확장은 백엔드 API를 **호출하는 클라이언트**일 뿐 — 백엔드(Spring·FastAPI·Postgres·API Nginx)는 그대로 배포된다.
 
 ### 2.1.2 미완성/전제
@@ -143,7 +143,7 @@ flowchart LR
 
 | 구분 | dev (`.env`) | prod (`.env.prod`) |
 |------|--------------|--------------------|
-| 오케스트레이션 | `docker-compose.yml` | `docker-compose.yml` + `docker-compose.prod.yml` overlay |
+| 오케스트레이션 | `docker-compose.yml` (vue 포함) | **독립 `docker-compose.prod.yml` 단독 실행** (vue 없이 nginx+spring+fastapi+postgres 자체 정의) |
 | 값 출처 | 로컬 직접 입력 | **SSM Parameter Store**에서 배포 시점 주입 |
 | 자격증명 | 로컬 값/개발 키 | EC2 instance role |
 | 진입점 | 각 포트 직접 접근 | Nginx 443 단일 진입점(same-origin) + HTTPS |
@@ -357,7 +357,7 @@ flowchart LR
 |-------|------|------|
 | **Phase 1** | 문서/계획 정리 (이 문서) | ✅ |
 | **Phase 2 (앞단)** | **report consumer 워커 배선** — 별도 프로세스 entrypoint + 별도 compose 서비스 | ⏭ INFRA-0 |
-| **Phase 2** | **.env 통합** + GEMINI 갭 수정 + **로컬 통합 실행** + `docker-compose.prod.yml` overlay **prod 드라이런** + Nginx config(runbook 기반) | ⏭ INFRA-1 (이 브랜치) |
+| **Phase 2** | **.env 통합** + GEMINI 갭 수정 + **로컬 통합 실행** + **독립 `docker-compose.prod.yml`**(vue 제외) **prod 드라이런** + Nginx config(runbook 기반) | ⏭ INFRA-1 (이 브랜치) |
 | **Phase 3** | **aws-cli 부트스트랩** — ECR·SQS(prod 큐)·S3(공용 버킷)·IAM·EC2 생성 + SSM 적재 | ⏭ INFRA-2 |
 | **Phase 4** | EC2 prod 배포(SSM env 주입) + **수동 배포** 검증 | ⏭ INFRA-3 |
 | **Phase 5** | GitHub Actions **CI/CD** (OIDC + ECR push + 배포 + 롤백) | ⏭ INFRA-4 |
@@ -387,7 +387,7 @@ flowchart LR
 - [ ] **report consumer 워커 entrypoint + 별도 compose 서비스**(별도 프로세스, uvicorn 미탑재)(INFRA-0)
 - [ ] **.env 통합** — `.env.example`/`.env.prod.example` 정리, `GEMINI_API_KEY` compose 주입(INFRA-1)
 - [ ] **aws-cli 전용 named 프로필**(`default` 금지) 생성·사용 명시(INFRA-2)
-- [ ] `docker-compose.prod.yml` overlay (API Nginx + 앱 포트 비공개, prod는 ECR 이미지 / 드라이런은 build, **vue 제외**)
+- [ ] **독립 `docker-compose.prod.yml`** (단독 실행용, **vue 미정의** — overlay 아님; nginx+spring+fastapi+postgres 자체 정의, 앱 포트 비공개, prod는 ECR 이미지 / 드라이런은 build)
 - [ ] Nginx config(**API 전용**) — `/api/**`·`/character-assets/**`→Spring, TLS/Certbot, FastAPI 비프록시, `/`→Vue 서빙 없음. 팀 runbook 상단에 API-only 정렬 노트 추가
 - [ ] **aws-cli 부트스트랩 스크립트**(`scripts/aws/`, 멱등) — ECR×2(springboot/fastapi), prod SQS 큐(+DLQ), S3 공용 버킷, IAM role, SSM 적재
 - [ ] SSM parameter naming 확정 + 값 적재 (SecureString; `SPRING_INTERNAL_API_SECRET`, `GEMINI_API_KEY`, SQS/S3 포함)

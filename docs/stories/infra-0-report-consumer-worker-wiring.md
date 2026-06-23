@@ -59,5 +59,5 @@ so that 통합 실행/배포에서 리포트 SQS 흐름 A가 실제로 동작한
 
 ## 검증 / 보류
 - 로컬: 큐에 테스트 메시지 넣고 worker가 콜백까지 수행하는지 확인(또는 localstack).
-- 🔶 prod에서도 같은 worker 서비스를 `docker-compose.prod.yml`에 둘지(권장) — INFRA-1 overlay에서 반영.
+- 🔶 prod에서도 같은 worker 서비스를 독립 `docker-compose.prod.yml`에 정의할지(권장) — INFRA-1에서 반영.
 - VisibilityTimeout 실제 값은 INFRA-2 큐 생성 시 확정.
