@@ -1,6 +1,6 @@
 ---
 title: Character Image 2 - Commitgotchi Image Endpoint With Local Result
-status: backlog
+status: review
 created: 2026-06-14
 owner: FastAPI AI 서버
 epic: character-image-generation-epic
@@ -18,7 +18,7 @@ source_docs:
 
 ## Status
 
-backlog
+review
 
 ## Story
 
@@ -31,6 +31,18 @@ so that Spring Boot can complete character creation with `READY` or `FALLBACK` i
 Spring Boot가 호출할 FastAPI endpoint를 만든다. S3 bucket이 아직 없으므로 endpoint는 local storage result를 반환하는 MVP 계약으로 시작한다.
 
 이번 story는 Story 1 core service를 HTTP endpoint에 연결한다. S3 upload와 storage adapter hardening은 Story 3에서 다룬다.
+
+## Contract Decision (2026-06-23): Option A — architecture §4.4 호환 응답
+
+> **확정:** 응답 계약은 architecture §4.4의 `status: "OK"|"FAIL"` + `spriteSheetUrl` + `spriteMeta` shape를 따른다.
+> Spring Boot `FastApiCharacterImageClient`가 이미 §4.4 계약(`status == "OK"`, non-empty `spriteSheetUrl`,
+> `spriteMeta.frameMap`의 `joy/sad/angry` 좌표)을 기대하므로, **Spring 클라이언트는 수정하지 않고 FastAPI가 호환 응답을 낸다.**
+>
+> - 요청 본문은 Spring이 보내는 `{ "userId", "s3ObjectUrl", "prompt" }`를 그대로 받는다(§4.4).
+> - S3가 아직 없으므로 MVP에서는 **로컬에 저장**하고, `spriteSheetUrl`은 로컬 URL 호환 경로로 채운다.
+>   `s3ObjectUrl`은 요청 값을 그대로 echo하거나 null로 둔다. 실제 S3 업로드는 Story 3.
+> - 실패 시 `status: "FAIL"` + `spriteSheetUrl: null` + `spriteMeta: null` + safe `errorMessage`.
+> - 아래 문서의 `imageStatus="READY"|"FALLBACK"` 표기는 이 결정으로 폐기되었다. `status="OK"|"FAIL"`로 읽는다.
 
 ## Background
 
@@ -57,53 +69,44 @@ Architecture §4.4의 원래 계약은 Spring Boot가 `POST /api/ai/commitgotchi
    - local/dev에서 secret이 비어 있을 때의 동작은 기존 integration config 정책을 따른다.
    - auth failure는 image generation core service를 호출하지 않는다.
 
-3. Request schema
-   - 최소 필드:
+3. Request schema (§4.4 호환, Option A)
+   - 필수 필드 (Spring이 보내는 §4.4 본문):
      - `userId`
-     - `designKeyword` 또는 `prompt`
-     - optional `imageRequestId`
-   - S3 bucket이 없으므로 `s3ObjectUrl`은 optional/future field로만 취급한다.
-   - `designKeyword`가 있으면 canonical prompt template을 사용한다.
-   - `prompt`만 있는 경우에도 Story 1 sanitizer를 거쳐 safe keyword/prompt input으로 축약하거나 fallback 처리한다.
-   - request body의 file path, object key, callback URL은 storage destination으로 신뢰하지 않는다.
+     - `prompt`
+     - `s3ObjectUrl` (MVP에서는 저장 destination으로 신뢰하지 않고, echo/무시. 로컬 저장으로 대체)
+   - `prompt`는 Story 1 sanitizer를 거쳐 safe input으로 축약하거나 fallback 처리한다.
+   - request body의 `s3ObjectUrl`, file path, object key, callback URL은 **로컬 저장 destination으로 신뢰하지 않는다.**
+     (S3 업로드는 Story 3에서 검증된 어댑터로만 처리)
 
-권장 request shape:
+권장 request shape (§4.4):
 
 ```json
 {
   "userId": 1,
-  "designKeyword": "작고 둥근 초록 슬라임",
-  "prompt": null,
-  "imageRequestId": "image-request-uuid",
-  "s3ObjectUrl": null
+  "s3ObjectUrl": "s3://commitgotchi-sprites/characters/42/sprite-sheet.png",
+  "prompt": "A retro Tamagotchi character design sheet ... design keyword \"작고 둥근 초록 슬라임\" ... --ar 3:1"
 }
 ```
 
-4. Success response
-   - Story 1 core service가 success를 반환하면 `imageStatus="READY"`로 응답한다.
-   - local stored path 또는 local URL-compatible path를 포함한다.
-   - `s3ObjectUrl`은 optional 또는 null/future field다.
-   - image metadata를 포함한다.
+4. Success response (§4.4 호환)
+   - Story 1 core service가 success를 반환하면 `status="OK"`로 응답한다.
+   - `spriteSheetUrl`은 local URL-compatible path로 채운다(S3 전까지). Spring은 이 값을 non-empty로 요구한다.
+   - `s3ObjectUrl`은 요청 값 echo 또는 null.
+   - `spriteMeta`는 `frameMap`에 `joy/sad/angry` 좌표를 반드시 포함한다(Spring 검증 대상).
 
-권장 success response:
+권장 success response (§4.4):
 
 ```json
 {
   "userId": 1,
-  "imageRequestId": "image-request-uuid",
-  "imageStatus": "READY",
-  "storageKind": "LOCAL",
-  "localPath": "fastapi/runtime/data/character-images/users/1/image-request-uuid.png",
-  "localUrlPath": "/runtime/character-images/users/1/image-request-uuid.png",
-  "s3ObjectUrl": null,
-  "spriteSheetUrl": "/runtime/character-images/users/1/image-request-uuid.png",
-  "contentType": "image/png",
+  "status": "OK",
+  "s3ObjectUrl": "s3://commitgotchi-sprites/characters/42/sprite-sheet.png",
+  "spriteSheetUrl": "/runtime/character-images/characters/42/sprite-sheet.png",
   "spriteMeta": {
     "columns": 3,
     "rows": 1,
     "frameMap": {
       "joy": [0, 0],
-      "happy": [0, 0],
       "sad": [0, 1],
       "angry": [0, 2]
     },
@@ -112,26 +115,22 @@ Architecture §4.4의 원래 계약은 Spring Boot가 `POST /api/ai/commitgotchi
 }
 ```
 
-5. Fallback response
-   - generation/validation/storage failure는 `imageStatus="FALLBACK"` 또는 동등 fallback classification으로 반환한다.
-   - Spring Boot는 fallback response를 받으면 기본 sprite set을 배정할 수 있어야 한다.
-   - error detail은 safe reason code만 반환한다.
+5. Fallback response (§4.4 호환)
+   - generation/validation/storage failure는 `status="FAIL"`로 반환한다.
+   - Spring Boot는 `status != "OK"`를 받으면 기본 sprite set을 배정한다(FR-16). 즉 실패도 캐릭터 생성을 막지 않는다.
+   - `spriteSheetUrl`/`spriteMeta`는 null, `errorMessage`는 safe reason code만.
    - API key, full prompt, image bytes, stack trace는 response에 포함하지 않는다.
 
-권장 fallback response:
+권장 fallback response (§4.4):
 
 ```json
 {
   "userId": 1,
-  "imageRequestId": "image-request-uuid",
-  "imageStatus": "FALLBACK",
-  "storageKind": "NONE",
-  "localPath": null,
-  "localUrlPath": null,
-  "s3ObjectUrl": null,
+  "status": "FAIL",
+  "s3ObjectUrl": "s3://commitgotchi-sprites/characters/42/sprite-sheet.png",
   "spriteSheetUrl": null,
   "spriteMeta": null,
-  "fallbackReason": "IMAGE_GENERATION_FAILED"
+  "errorMessage": "IMAGE_GENERATION_FAILED"
 }
 ```
 
@@ -143,22 +142,22 @@ Architecture §4.4의 원래 계약은 Spring Boot가 `POST /api/ai/commitgotchi
 4. auth guard는 기존 Spring internal auth helper/config 패턴을 재사용하거나 동일 계약으로 구현한다.
 5. auth 실패 시 core service는 호출되지 않는다.
 6. request schema는 `userId`를 필수로 받는다.
-7. request schema는 `designKeyword` 또는 `prompt` 중 하나를 받는다.
-8. request schema는 optional `imageRequestId`를 받는다.
-9. `s3ObjectUrl`은 optional/future field로 취급하며 required가 아니다.
+7. request schema는 `prompt`를 받는다(§4.4).
+8. request schema는 `s3ObjectUrl`을 받되, 로컬 저장 destination으로는 신뢰하지 않는다.
+9. (S3 미사용) `s3ObjectUrl`은 echo/무시 대상이며 실제 업로드는 Story 3에서 처리한다.
 10. invalid request는 validation error를 반환하고 image generation을 호출하지 않는다.
 11. valid request는 Story 1 core service를 호출한다.
 12. endpoint는 Spring Boot DB에 접근하지 않는다.
 13. endpoint는 character record를 생성하거나 저장하지 않는다.
-14. success response는 `imageStatus="READY"`를 포함한다.
-15. success response는 local stored path 또는 local URL-compatible path를 포함한다.
-16. success response는 `storageKind="LOCAL"` 또는 동등 local classification을 포함한다.
-17. success response는 image metadata와 `contentType="image/png"`를 포함한다.
-18. S3 bucket이 없으므로 success response의 `s3ObjectUrl`은 null/optional/future field로 허용된다.
-19. generation failure는 `imageStatus="FALLBACK"` 또는 명확한 fallback classification을 반환한다.
-20. validation failure는 `imageStatus="FALLBACK"` 또는 명확한 fallback classification을 반환한다.
-21. local storage failure는 `imageStatus="FALLBACK"` 또는 명확한 fallback classification을 반환한다.
-22. fallback response는 safe `fallbackReason` code를 포함한다.
+14. success response는 `status="OK"`를 포함한다.
+15. success response의 `spriteSheetUrl`은 local URL-compatible path로 non-empty다(Spring 검증 통과).
+16. success response의 `s3ObjectUrl`은 요청 값 echo 또는 null이다.
+17. success response의 `spriteMeta.frameMap`은 `joy/sad/angry` 좌표를 포함한다(Spring 검증 대상).
+18. S3 bucket이 없으므로 실제 S3 업로드는 하지 않고 로컬에 저장한다.
+19. generation failure는 `status="FAIL"`로 반환한다.
+20. validation failure는 `status="FAIL"`로 반환한다.
+21. local storage failure는 `status="FAIL"`로 반환한다.
+22. fallback(`status="FAIL"`) response는 safe `errorMessage` code를 포함하고 `spriteSheetUrl`/`spriteMeta`는 null이다.
 23. response에는 secret, API key, generated image bytes, full prompt, stack trace가 포함되지 않는다.
 24. endpoint는 report SQS consumer를 수정하지 않는다.
 25. endpoint는 quiz grading endpoint/callback을 수정하지 않는다.
@@ -172,12 +171,12 @@ Architecture §4.4의 원래 계약은 Spring Boot가 `POST /api/ai/commitgotchi
 
 - auth header가 없거나 invalid이면 401/403 계열 응답을 반환하고 core service가 호출되지 않는지 검증한다.
 - valid auth + valid request이면 core service가 정확한 input으로 호출되는지 검증한다.
-- `designKeyword` request가 success response `READY`로 mapping되는지 검증한다.
-- `prompt` only request가 sanitizer/fallback 정책에 따라 처리되는지 검증한다.
-- `imageRequestId`가 없을 때 server-side id 생성 또는 nullable 정책이 schema와 일치하는지 검증한다.
-- `s3ObjectUrl`이 없어도 request가 성공할 수 있는지 검증한다.
-- core service success result가 HTTP response의 local path, content type, sprite metadata로 보존되는지 검증한다.
-- core service fallback result가 `imageStatus="FALLBACK"` response로 보존되는지 검증한다.
+- `prompt` request가 success response `status="OK"` + non-empty `spriteSheetUrl`로 mapping되는지 검증한다.
+- `prompt`가 sanitizer/fallback 정책에 따라 처리되는지 검증한다.
+- 요청의 `s3ObjectUrl`을 로컬 저장 경로로 신뢰하지 않는지(echo/무시) 검증한다.
+- core service success result가 HTTP response의 `spriteSheetUrl`(local path), `spriteMeta`(joy/sad/angry)로 보존되는지 검증한다.
+- core service fallback result가 `status="FAIL"` + null `spriteSheetUrl`/`spriteMeta` response로 보존되는지 검증한다.
+- Spring 클라이언트 호환: 응답이 `status`/`spriteSheetUrl`/`spriteMeta.frameMap(joy,sad,angry)` 필드를 가지는지 검증한다.
 - invalid request는 core service를 호출하지 않는지 검증한다.
 - response/log snapshot에 secret, full prompt, generated image bytes가 없는지 검증한다.
 - endpoint test가 fake service를 사용하며 실제 Gemini/S3 호출을 하지 않는지 검증한다.
@@ -207,15 +206,15 @@ python3 -m unittest discover -s tests
 
 ## Tasks / Subtasks
 
-- [ ] request/response schema 설계 (AC: 6, 7, 8, 9, 14-22)
-- [ ] Spring internal auth guard 재사용 또는 endpoint용 wrapper 구현 (AC: 3, 4, 5)
-- [ ] `POST /api/ai/commitgotchi` route 구현과 app 등록 (AC: 1, 2)
-- [ ] Story 1 core service dependency injection 연결 (AC: 11, 26)
-- [ ] success result to response mapping 구현 (AC: 14, 15, 16, 17, 18)
-- [ ] fallback result to response mapping 구현 (AC: 19, 20, 21, 22)
-- [ ] response/log redaction guardrail 구현 (AC: 23)
-- [ ] endpoint가 Spring DB/report/quiz flow를 건드리지 않는지 확인 (AC: 12, 13, 24, 25)
-- [ ] fake core service 기반 endpoint tests 작성 (AC: 26, 27, 28)
+- [x] request/response schema 설계 (AC: 6, 7, 8, 9, 14-22)
+- [x] Spring internal auth guard 재사용 또는 endpoint용 wrapper 구현 (AC: 3, 4, 5)
+- [x] `POST /api/ai/commitgotchi` route 구현과 app 등록 (AC: 1, 2)
+- [x] Story 1 core service dependency injection 연결 (AC: 11, 26)
+- [x] success result to response mapping 구현 (AC: 14, 15, 16, 17, 18)
+- [x] fallback result to response mapping 구현 (AC: 19, 20, 21, 22)
+- [x] response/log redaction guardrail 구현 (AC: 23)
+- [x] endpoint가 Spring DB/report/quiz flow를 건드리지 않는지 확인 (AC: 12, 13, 24, 25)
+- [x] fake core service 기반 endpoint tests 작성 (AC: 26, 27, 28)
 
 ## Dev Notes
 
@@ -238,37 +237,52 @@ python3 -m unittest discover -s tests
 권장 정책:
 
 - schema/auth 실패: HTTP error
-- core service success: `200 OK` + `imageStatus="READY"`
-- generation/validation/storage failure: `200 OK` + `imageStatus="FALLBACK"`
+- core service success: `200 OK` + `status="OK"`
+- generation/validation/storage failure: `200 OK` + `status="FAIL"`
 
 fallback을 HTTP 5xx로 표현하면 Spring Boot character creation flow가 실패로 오인될 수 있다. 장애 관측이 필요하면 safe reason code와 metric/log classification으로 분리한다.
 
-### Compatibility Note
+### Compatibility Note (Option A 확정)
 
-Architecture §4.4의 기존 response field인 `status="OK"|"FAIL"`과 `spriteSheetUrl`은 S3 전제 계약이었다. 이번 MVP는 `imageStatus="READY"|"FALLBACK"`와 local result를 우선한다. Spring Boot 쪽 호환을 위해 구현자는 필요 시 다음 adapter mapping을 둘 수 있다.
+Architecture §4.4의 response field `status="OK"|"FAIL"` + `spriteSheetUrl` + `spriteMeta`를 **그대로 따른다**.
+Spring Boot `FastApiCharacterImageClient`가 이 shape를 이미 파싱하므로 Spring 쪽 변경은 없다.
+S3 미가용 상태이므로 MVP에서는 `spriteSheetUrl`을 local URL-compatible path로, `s3ObjectUrl`은 echo/null로 둔다.
+실제 S3 업로드는 Story 3에서 storage adapter로 추가하며, 그때도 이 응답 shape는 유지된다.
 
-| MVP field | Legacy-compatible meaning |
-|-----------|---------------------------|
-| `imageStatus="READY"` | `status="OK"` |
-| `imageStatus="FALLBACK"` | `status="FAIL"` 또는 fallback success |
-| `localUrlPath`/`spriteSheetUrl` | local URL-compatible sprite path |
-| `s3ObjectUrl=null` | S3 unavailable |
+| §4.4 field | MVP(local) 채움 |
+|------------|------------------|
+| `status="OK"` | core service 성공 |
+| `status="FAIL"` | 생성/검증/저장 실패(Spring이 기본 sprite 사용) |
+| `spriteSheetUrl` | local URL-compatible sprite path |
+| `s3ObjectUrl` | 요청 값 echo 또는 null (S3 unavailable) |
+| `spriteMeta.frameMap` | `joy/sad/angry` 좌표 필수 |
 
 ## Dev Agent Record
 
 ### Debug Log
 
 - 2026-06-14: Story 문서 생성. 코드 구현 없음.
+- 2026-06-23: `tests.image.test_commitgotchi_endpoint` 8 tests pass. 전체 스위트 `unittest discover -s tests` 247 tests pass.
+- 2026-06-23: report consumer guardrail test가 `/api/ai/commitgotchi` 부재를 단언하고 있어, 본 엔드포인트 도입에 맞춰 `/api/report` 불변식만 남기고 갱신.
+- 2026-06-23: Spring `FastApiCharacterImageClientTest` 기대 계약(요청 `{userId, s3ObjectUrl, prompt}`, 응답 `status:"OK"` + `spriteSheetUrl` + `spriteMeta.frameMap{joy,sad,angry}`)과 응답 shape 일치 확인.
 
 ### Completion Notes
 
-- Story 2는 Story 1 core service가 준비된 뒤 구현한다.
-- S3 upload는 Story 3 이후 별도 구현으로 연결한다.
+- Option A(§4.4 호환)로 `POST /api/ai/commitgotchi` 구현. 요청 `prompt`(=design keyword)를 story-1 `generate_commitgotchi_sprite(design_keyword=...)`에 전달.
+- 응답은 `status="OK"|"FAIL"` + `spriteSheetUrl`(MVP: 로컬 경로) + `spriteMeta`(joy/sad/angry). `s3ObjectUrl`은 echo만 하고 저장 destination으로 신뢰하지 않음.
+- 내부 인증은 quiz grading과 동일 패턴(`Authorization: Internal <secret>`, `hmac.compare_digest`)을 재사용. blank secret이면 local dev 통과.
+- 실제 S3 업로드는 Story 3에서 storage adapter로 추가(응답 shape 유지). quiz grading / report consumer / Spring 코드는 변경하지 않음.
 
 ## File List
 
+- `fastapi/app/api/commitgotchi.py` (신규)
+- `fastapi/app/main.py` (router 등록)
+- `fastapi/tests/image/test_commitgotchi_endpoint.py` (신규)
+- `fastapi/tests/integration/test_report_consumer.py` (guardrail 갱신)
+- `fastapi/docs/character-image/character-image-generation-sprint-status.yaml` (status review)
 - `fastapi/docs/character-image/stories/character-image-2-commitgotchi-image-endpoint-local-result.md`
 
 ## Change Log
 
 - 2026-06-14: Story 2 생성. S3 없는 local-result endpoint MVP 계약으로 범위를 제한했다.
+- 2026-06-23: **Contract Decision Option A 확정.** 응답 계약을 architecture §4.4 호환(`status="OK"|"FAIL"` + `spriteSheetUrl` + `spriteMeta`)으로 고정. Spring `FastApiCharacterImageClient` 무수정. 요청은 §4.4 `{userId, s3ObjectUrl, prompt}` 수신. S3 미가용으로 로컬 저장 + local URL `spriteSheetUrl`, 실제 S3 업로드는 Story 3. 기존 `imageStatus="READY"|"FALLBACK"` 표기 폐기.
