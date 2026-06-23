@@ -1,29 +1,37 @@
-# Commit-Gotchi — initial Docker infrastructure.
+# Commit-Gotchi production/API-only compose.
 #
-# Services: Vue SPA, Spring Boot (System of Record), FastAPI (Intelligence),
-# and a single shared PostgreSQL instance with one database per backend.
-#
-# NOTE: The public Nginx reverse proxy + Certbot/HTTPS layer is intentionally
-# NOT here — it is added on the server instance after provisioning. Locally,
-# each service is reachable directly on its mapped port.
+# Standalone file: do not merge with docker-compose.yml. Vue is intentionally
+# absent because production clients are Chrome extension builds, not a served SPA.
 
 services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: commitgotchi-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/api-only.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${NGINX_LETSENCRYPT_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
+      - ${NGINX_CERTBOT_WEBROOT:-/var/www/certbot}:/var/www/certbot:ro
+    depends_on:
+      springboot:
+        condition: service_started
+    networks:
+      - commitgotchi-net
+
   postgres:
     image: postgres:16-alpine
-    container_name: commitgotchi-postgres
+    container_name: commitgotchi-postgres-prod
     restart: unless-stopped
     environment:
-      # POSTGRES_DB creates the Spring Boot (SoR) database automatically.
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${SPRING_DB_NAME}
-      # Consumed by the init script to create the separate FastAPI database.
       FASTAPI_DB_NAME: ${FASTAPI_DB_NAME}
-    ports:
-      - "${DB_PORT}:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      # Init scripts run once, only when the data volume is empty.
+      - postgres-prod-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${SPRING_DB_NAME}"]
@@ -34,9 +42,10 @@ services:
       - commitgotchi-net
 
   springboot:
+    image: ${SPRINGBOOT_IMAGE:-commitgotchi-springboot:prod}
     build:
       context: ./springboot
-    container_name: commitgotchi-springboot
+    container_name: commitgotchi-springboot-prod
     restart: unless-stopped
     environment:
       DB_HOST: postgres
@@ -47,6 +56,7 @@ services:
       JWT_SECRET_BASE64: ${JWT_SECRET_BASE64:?JWT_SECRET_BASE64 is required}
       JWT_ISSUER: ${JWT_ISSUER:-commitgotchi-springboot}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+      REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-true}
       SPRING_INTERNAL_API_SECRET: ${SPRING_INTERNAL_API_SECRET:?SPRING_INTERNAL_API_SECRET is required}
       CHARACTER_IMAGE_ENABLED: ${CHARACTER_IMAGE_ENABLED:-true}
       CHARACTER_IMAGE_BASE_URL: ${CHARACTER_IMAGE_BASE_URL:-http://fastapi:8000}
@@ -56,6 +66,7 @@ services:
       QUIZ_GRADING_CALLBACK_URL: ${QUIZ_GRADING_CALLBACK_URL:-http://springboot:8080/api/internal/quizzes/grade-result}
       REPORT_MIDNIGHT_SCHEDULER_ENABLED: ${REPORT_MIDNIGHT_SCHEDULER_ENABLED:-true}
       REPORT_REQUEST_QUEUE_ENABLED: ${REPORT_REQUEST_QUEUE_ENABLED:-false}
+      REPORT_REQUEST_DISPATCHER_ENABLED: ${REPORT_REQUEST_DISPATCHER_ENABLED:-false}
       AWS_REGION: ${AWS_REGION:-ap-northeast-2}
       AWS_SQS_ENDPOINT: ${AWS_SQS_ENDPOINT:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
@@ -66,12 +77,9 @@ services:
       REPORT_REQUEST_QUEUE_SESSION_TOKEN: ${REPORT_REQUEST_QUEUE_SESSION_TOKEN:-}
       REPORT_REQUEST_QUEUE_NAME: ${REPORT_REQUEST_QUEUE_NAME:-}
       REPORT_REQUEST_QUEUE_URL: ${REPORT_REQUEST_QUEUE_URL:-}
-      REPORT_REQUEST_DISPATCHER_ENABLED: ${REPORT_REQUEST_DISPATCHER_ENABLED:-false}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       S3_OBJECT_PREFIX: ${S3_OBJECT_PREFIX:-}
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
-    ports:
-      - "${SPRING_PORT}:8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,10 +87,10 @@ services:
       - commitgotchi-net
 
   fastapi:
-    image: commitgotchi-fastapi:local
+    image: ${FASTAPI_IMAGE:-commitgotchi-fastapi:prod}
     build:
       context: ./fastapi
-    container_name: commitgotchi-fastapi
+    container_name: commitgotchi-fastapi-prod
     restart: unless-stopped
     environment:
       DB_HOST: postgres
@@ -113,8 +121,6 @@ services:
       REPORT_REQUEST_DLQ_URL: ${REPORT_REQUEST_DLQ_URL:-}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       S3_OBJECT_PREFIX: ${S3_OBJECT_PREFIX:-}
-    ports:
-      - "${FASTAPI_PORT}:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,10 +129,10 @@ services:
 
   fastapi-report-worker:
     profiles: ["worker"]
-    image: commitgotchi-fastapi:local
+    image: ${FASTAPI_IMAGE:-commitgotchi-fastapi:prod}
     build:
       context: ./fastapi
-    container_name: commitgotchi-fastapi-report-worker
+    container_name: commitgotchi-fastapi-report-worker-prod
     restart: unless-stopped
     command: ["python", "-m", "app.integration.report_worker"]
     environment:
@@ -162,23 +168,8 @@ services:
     healthcheck:
       disable: true
 
-  vue:
-    build:
-      context: ./vue
-      args:
-        # Browser calls the Spring Boot host port. Override per environment.
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
-    container_name: commitgotchi-vue
-    restart: unless-stopped
-    ports:
-      - "${VUE_PORT}:80"
-    depends_on:
-      - springboot
-    networks:
-      - commitgotchi-net
-
 volumes:
-  postgres-data:
+  postgres-prod-data:
 
 networks:
   commitgotchi-net:
