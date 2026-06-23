@@ -9,7 +9,7 @@
 > FastAPI는 외부 비공개. 아래 문서의 same-origin **웹 서빙(Option A의 `/`→Vue) 부분은 "향후 웹앱을
 > 추가할 경우의 옵션"** 으로만 남겨둔다. `/api/**`·`/character-assets/**` 프록시, 헤더 보존,
 > CORS/스모크(확장 origin·거부 origin·PATCH/DELETE preflight·SSE), asset 경계 절은 그대로 유효하다.
-> prod CORS 부팅 조건상 `CORS_ALLOWED_ORIGINS`에는 `https://<api-domain>` HTTPS origin 1개를
+> prod CORS 부팅 조건상 `CORS_ALLOWED_ORIGINS`에는 `https://commitgotchi.store` HTTPS origin 1개를
 > placeholder로 유지하고, 확장 origin은 Spring 하드코딩 allowlist로 허용된다.
 
 ## 결정

@@ -36,7 +36,7 @@ so that 배포 전에 prod 프로필/설정 오류를 로컬에서 싸게 잡고
   - 같은 변수 이름, 값만 환경별(plan §5).
   - **실측 갭 수정**: `docker-compose.yml`의 `fastapi` 서비스에 `GEMINI_API_KEY: ${GEMINI_API_KEY}` 주입(현재 누락 → AI 미동작).
 - **`docker-compose.prod.yml` overlay**: base compose에 얹어 prod 설정으로 띄우는 overlay. **vue 서비스 제외.**
-  - `SPRING_PROFILES_ACTIVE=prod`, `CORS_ALLOWED_ORIGINS=https://<api-domain>`(부팅 placeholder), secure cookie.
+  - `SPRING_PROFILES_ACTIVE=prod`, `CORS_ALLOWED_ORIGINS=https://commitgotchi.store`(부팅 placeholder), secure cookie.
   - **API 전용 Nginx 서비스** 추가: `/api/**`·`/character-assets/**`→Spring, FastAPI 비프록시, `/`→Vue 서빙 없음.
   - 드라이런은 로컬 build 이미지로, 실배포(INFRA-3)는 ECR `image:`로 — 이미지 출처만 다름.
 - **Nginx config**: 팀 `public-nginx-reverse-proxy-runbook.md` server block 차용하되 **API-only로 정렬**(웹 `/` 서빙 제거). runbook 상단에 API-only 정렬 노트 추가.
@@ -55,7 +55,7 @@ so that 배포 전에 prod 프로필/설정 오류를 로컬에서 싸게 잡고
 
 ### AC3 — env 변수 이름 일관성
 - **Then** local과 prod가 **같은 변수 이름**을 쓰고 값만 다르다(`.env.example`/`.env.prod.example`가 같은 키 집합).
-- **And** `VITE_API_BASE_URL`은 **확장 빌드 전용** 변수다(로컬 개발=`http://localhost:8080`, 확장 릴리스=`https://<api-domain>`, 둘 다 파이프라인 밖 빌드). prod 백엔드 배포 env에는 포함하지 않는다.
+- **And** `VITE_API_BASE_URL`은 **확장 빌드 전용** 변수다(로컬 개발=`http://localhost:8080`, 확장 릴리스=`https://commitgotchi.store`, 둘 다 파이프라인 밖 빌드). prod 백엔드 배포 env에는 포함하지 않는다.
 
 ### AC4 — dev 무영향
 - **Then** 기존 `docker-compose.yml` 단독 실행(개발용 vue 포함) 흐름은 그대로 동작한다(overlay는 추가일 뿐).
