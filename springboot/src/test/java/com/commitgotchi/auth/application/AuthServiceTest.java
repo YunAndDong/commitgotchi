@@ -22,7 +22,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.hibernate.exception.ConstraintViolationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -179,7 +178,7 @@ class AuthServiceTest {
         when(userRepository.saveAndFlush(any(User.class)))
                 .thenThrow(new DataIntegrityViolationException(
                         "localized database error",
-                        constraintViolation("uq_users_email")
+                        new FakePostgresException("uq_users_email")
                 ));
 
         AuthService service = new AuthService(userRepository, passwordEncoder);
@@ -198,11 +197,29 @@ class AuthServiceTest {
                 .isInstanceOf(InvalidSignupException.class);
     }
 
-    private ConstraintViolationException constraintViolation(String constraintName) {
-        return new ConstraintViolationException(
-                "localized database error",
-                new java.sql.SQLException("localized database error"),
-                constraintName
-        );
+    public static class FakePostgresException extends RuntimeException {
+
+        private final FakeServerErrorMessage serverErrorMessage;
+
+        FakePostgresException(String constraintName) {
+            this.serverErrorMessage = new FakeServerErrorMessage(constraintName);
+        }
+
+        public FakeServerErrorMessage getServerErrorMessage() {
+            return serverErrorMessage;
+        }
+    }
+
+    public static class FakeServerErrorMessage {
+
+        private final String constraint;
+
+        FakeServerErrorMessage(String constraint) {
+            this.constraint = constraint;
+        }
+
+        public String getConstraint() {
+            return constraint;
+        }
     }
 }

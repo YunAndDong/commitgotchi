@@ -1,10 +1,12 @@
 package com.commitgotchi.game.application;
 
+import com.commitgotchi.character.api.dto.FastApiScoreDelta;
 import com.commitgotchi.character.api.dto.CharacterCreateRequest;
 import com.commitgotchi.character.api.dto.CharacterUpdateRequest;
 import com.commitgotchi.character.application.CharacterCommandService;
 import com.commitgotchi.character.application.CharacterCreationService;
 import com.commitgotchi.character.application.CharacterDeletionResult;
+import com.commitgotchi.character.application.CharacterEventService;
 import com.commitgotchi.character.application.CharacterGameProjectionService;
 import com.commitgotchi.character.application.CharacterImageService;
 import com.commitgotchi.character.application.CharacterNotFoundException;
@@ -13,6 +15,12 @@ import com.commitgotchi.character.domain.LearningCharacter;
 import com.commitgotchi.game.api.dto.GameMutationResponse;
 import com.commitgotchi.game.domain.GameState;
 import com.commitgotchi.game.domain.GameStateRepository;
+import com.commitgotchi.quiz.application.QuizGradeRequestClient;
+import com.commitgotchi.quiz.application.QuizGradeRequestMessage;
+import com.commitgotchi.quiz.application.QuizGradeRequestResult;
+import com.commitgotchi.quiz.application.QuizGradingProperties;
+import com.commitgotchi.report.application.DailyReportProjectionService;
+import com.commitgotchi.report.application.ReportRequestOutboxService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,10 +30,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 public class GameService {
@@ -41,6 +51,11 @@ public class GameService {
     private final CharacterCreationService characterCreationService;
     private final CharacterGameProjectionService characterProjectionService;
     private final CharacterImageService characterImageService;
+    private final CharacterEventService characterEventService;
+    private final DailyReportProjectionService dailyReportProjectionService;
+    private final ReportRequestOutboxService reportRequestOutboxService;
+    private final QuizGradeRequestClient quizGradeRequestClient;
+    private final QuizGradingProperties quizGradingProperties;
 
     public GameService(
             GameStateRepository repository,
@@ -48,7 +63,12 @@ public class GameService {
             CharacterCommandService characterCommandService,
             CharacterCreationService characterCreationService,
             CharacterGameProjectionService characterProjectionService,
-            CharacterImageService characterImageService
+            CharacterImageService characterImageService,
+            CharacterEventService characterEventService,
+            DailyReportProjectionService dailyReportProjectionService,
+            ReportRequestOutboxService reportRequestOutboxService,
+            QuizGradeRequestClient quizGradeRequestClient,
+            QuizGradingProperties quizGradingProperties
     ) {
         this.repository = repository;
         this.objectMapper = objectMapper;
@@ -56,6 +76,11 @@ public class GameService {
         this.characterCreationService = characterCreationService;
         this.characterProjectionService = characterProjectionService;
         this.characterImageService = characterImageService;
+        this.characterEventService = characterEventService;
+        this.dailyReportProjectionService = dailyReportProjectionService;
+        this.reportRequestOutboxService = reportRequestOutboxService;
+        this.quizGradeRequestClient = quizGradeRequestClient;
+        this.quizGradingProperties = quizGradingProperties;
     }
 
     @Transactional
@@ -156,7 +181,8 @@ public class GameService {
         if (character == null) {
             return response(state, NullNode.instance);
         }
-        String today = today();
+        LocalDate targetDate = todayDate();
+        String today = targetDate.toString();
         String characterId = character.getId().toString();
         ObjectNode report = findReportForDate(state, today, characterId);
         if (report == null) {
@@ -170,13 +196,15 @@ public class GameService {
                 .put("title", requiredText(request, "title"))
                 .put("content", text(request, "content"))
                 .put("status", "analyzing")
-                .put("characterId", characterId);
+                .put("characterId", characterId)
+                .put("requestId", reportRequestOutboxService.requestIdFor(userId, character.getId(), targetDate));
         report.set("tags", copyArray(request.path("tags")));
         ObjectNode dailyReport = dailyReport(today, characterId, "pending");
         state.set("dailyReport", dailyReport);
         applyCharacterProjection(userId, state);
         state.put("notice", "리포트 저장됨 - 자정에 분석돼요. 내일 오전 9시 도착.");
         save(userId, state);
+        reportRequestOutboxService.createOrRefreshSnapshot(userId, character.getId(), targetDate, report, state);
         return response(state, report);
     }
 
@@ -192,12 +220,82 @@ public class GameService {
         quiz.put("userAnswer", userAnswer);
         quiz.put("scored", false);
         quiz.put("gradeFailed", false);
+        quiz.put("grading", false);
         if (bool(request, "fail")) {
             quiz.put("submitted", false);
             quiz.put("gradeFailed", true);
+            quiz.put("grading", false);
             save(userId, state);
             return response(state, objectMapper.createObjectNode().put("ok", false).set("quiz", quiz));
         }
+
+        if (quizGradeRequestClient.isEnabled()) {
+            return requestQuizGrade(userId, id, state, quiz, userAnswer);
+        }
+
+        return submitQuizLocally(userId, state, quiz, userAnswer);
+    }
+
+    private GameMutationResponse requestQuizGrade(
+            long userId,
+            String id,
+            ObjectNode state,
+            ObjectNode quiz,
+            String userAnswer
+    ) {
+        ObjectNode character = findObject(array(state, "characters"), quiz.path("characterId").asText());
+        Long characterId = parseCharacterId(quiz.path("characterId").asText());
+        if (character == null || characterId == null) {
+            quiz.put("submitted", false);
+            quiz.put("gradeFailed", true);
+            quiz.put("grading", false);
+            quiz.put("deltaAmount", 0);
+            quiz.put("feedback", "채점 대상 캐릭터를 찾을 수 없어 채점 요청을 보내지 못했어요.");
+            save(userId, state);
+            return response(state, quiz);
+        }
+
+        String submissionId = submissionIdFor(quiz);
+        long quizId = positiveQuizId(id, quiz);
+        quiz.put("submissionId", submissionId);
+        quiz.put("quizId", quizId);
+        quiz.put("grading", true);
+        quiz.set("correct", NullNode.instance);
+        quiz.set("feedback", NullNode.instance);
+        quiz.put("deltaAmount", 0);
+
+        QuizGradeRequestMessage message = new QuizGradeRequestMessage(
+                submissionId,
+                userId,
+                characterId,
+                quizId,
+                problemIdFor(quiz),
+                quiz.path("question").asText(""),
+                modelAnswerFor(quiz),
+                userAnswer,
+                scoreAllocationFor(quiz),
+                characterMetadata(character),
+                quizGradingProperties.normalizedCallbackUrl()
+        );
+        QuizGradeRequestResult result = quizGradeRequestClient.requestGrade(message);
+        if (!result.accepted()) {
+            quiz.put("submitted", false);
+            quiz.put("gradeFailed", true);
+            quiz.put("grading", false);
+            quiz.put("feedback", "채점 요청을 보내지 못했어요. 잠시 후 다시 시도해 주세요.");
+            save(userId, state);
+            ObjectNode item = objectMapper.createObjectNode()
+                    .put("ok", false)
+                    .put("failureReason", result.failureReason());
+            item.set("quiz", quiz);
+            return response(state, item);
+        }
+
+        save(userId, state);
+        return response(state, quiz);
+    }
+
+    private GameMutationResponse submitQuizLocally(long userId, ObjectNode state, ObjectNode quiz, String userAnswer) {
         QuizEvaluation evaluation = evaluateQuizAnswer(quiz, userAnswer);
         boolean correct = evaluation.correct();
         quiz.put("correct", correct);
@@ -208,6 +306,7 @@ public class GameService {
         if (character == null || characterId == null) {
             quiz.put("scored", false);
             quiz.put("gradeFailed", true);
+            quiz.put("grading", false);
             quiz.put("deltaAmount", 0);
             quiz.put("feedback", "채점 대상 캐릭터를 찾을 수 없어 점수 반영을 건너뛰었어요.");
             save(userId, state);
@@ -227,6 +326,7 @@ public class GameService {
         if (updated == null) {
             quiz.put("scored", false);
             quiz.put("gradeFailed", true);
+            quiz.put("grading", false);
             quiz.put("deltaAmount", 0);
             quiz.put("feedback", "채점 대상 캐릭터를 찾을 수 없어 점수 반영을 건너뛰었어요.");
             save(userId, state);
@@ -235,9 +335,11 @@ public class GameService {
 
         quiz.put("scored", true);
         quiz.put("gradeFailed", false);
+        quiz.put("grading", false);
         quiz.put("_evolvedNow", !wasEvolved && updated.isEvolved());
         applyCharacterProjection(userId, state);
         save(userId, state);
+        characterEventService.publishCharacterUpdatedAfterCommit(userId, updated);
         return response(state, quiz);
     }
 
@@ -359,7 +461,8 @@ public class GameService {
                 .put("id", nextId(state, "rv"))
                 .put("author", CURRENT_OWNER)
                 .put("stars", Math.max(1, Math.min(5, request.path("stars").asInt(5))))
-                .put("text", requiredText(request, "text"));
+                .put("text", requiredText(request, "text"))
+                .put("createdAt", Instant.now().toString());
         array(post, "reviews").insert(0, review);
         recalculateRating(post);
         save(userId, state);
@@ -416,6 +519,7 @@ public class GameService {
 
     private void applyCharacterProjection(long userId, ObjectNode state) {
         state.set("characters", characterProjectionService.projectCharacters(userId));
+        dailyReportProjectionService.overlay(userId, state);
     }
 
     private ObjectNode loadOrCreateForUpdate(long userId) {
@@ -487,7 +591,8 @@ public class GameService {
                 .put("id", id)
                 .put("author", author)
                 .put("stars", stars)
-                .put("text", text);
+                .put("text", text)
+                .put("createdAt", Instant.now().toString());
     }
 
     private ObjectNode parse(String json) {
@@ -535,7 +640,11 @@ public class GameService {
     }
 
     private String today() {
-        return LocalDate.now(APP_ZONE).toString();
+        return todayDate().toString();
+    }
+
+    private LocalDate todayDate() {
+        return LocalDate.now(APP_ZONE);
     }
 
     private String requiredText(JsonNode request, String field) {
@@ -807,6 +916,81 @@ public class GameService {
         quiz.set("correct", NullNode.instance);
         quiz.set("feedback", NullNode.instance);
         return quiz;
+    }
+
+    private String submissionIdFor(ObjectNode quiz) {
+        String existing = quiz.path("submissionId").asText("").trim();
+        return existing.isBlank() ? "quiz-" + UUID.randomUUID() : existing;
+    }
+
+    private long positiveQuizId(String id, ObjectNode quiz) {
+        long explicit = quiz.path("quizId").asLong(0L);
+        if (explicit > 0) {
+            return explicit;
+        }
+        String digits = id == null ? "" : id.replaceAll("\\D+", "");
+        if (!digits.isBlank()) {
+            try {
+                long parsed = Long.parseLong(digits);
+                if (parsed > 0) {
+                    return parsed;
+                }
+            } catch (NumberFormatException ignored) {
+                // Fall through to a stable hash for non-numeric quiz ids.
+            }
+        }
+        long hash = Integer.toUnsignedLong(String.valueOf(id).hashCode());
+        return hash == 0 ? 1 : hash;
+    }
+
+    private String problemIdFor(ObjectNode quiz) {
+        JsonNode problemId = quiz.path("problemId");
+        if (problemId.isMissingNode() || problemId.isNull()) {
+            return null;
+        }
+        String value = problemId.asText("").trim();
+        return value.isBlank() ? null : value;
+    }
+
+    private FastApiScoreDelta scoreAllocationFor(ObjectNode quiz) {
+        JsonNode allocation = quiz.path("scoreAllocation");
+        if (allocation.isObject()) {
+            return new FastApiScoreDelta(
+                    boundedScore(allocation.path("db").asInt(0)),
+                    boundedScore(allocation.path("algorithm").asInt(0)),
+                    boundedScore(allocation.path("cs").asInt(0)),
+                    boundedScore(allocation.path("network").asInt(0)),
+                    boundedScore(allocation.path("framework").asInt(0))
+            );
+        }
+
+        int amount = boundedScore(quiz.path("maxScore").asInt(10));
+        String stat = quiz.path("deltaStat").asText("algo");
+        return switch (stat) {
+            case "db" -> new FastApiScoreDelta(amount, 0, 0, 0, 0);
+            case "cs" -> new FastApiScoreDelta(0, 0, amount, 0, 0);
+            case "net" -> new FastApiScoreDelta(0, 0, 0, amount, 0);
+            case "fw" -> new FastApiScoreDelta(0, 0, 0, 0, amount);
+            default -> new FastApiScoreDelta(0, amount, 0, 0, 0);
+        };
+    }
+
+    private int boundedScore(int value) {
+        return Math.max(0, Math.min(10, value));
+    }
+
+    private ObjectNode characterMetadata(ObjectNode character) {
+        ObjectNode metadata = objectMapper.createObjectNode();
+        metadata.put("personality", character.path("personality").asText(""));
+        JsonNode stats = character.path("stats");
+        ObjectNode currentStats = objectMapper.createObjectNode();
+        currentStats.put("db", stats.path("db").asInt(0));
+        currentStats.put("algorithm", stats.path("algo").asInt(0));
+        currentStats.put("cs", stats.path("cs").asInt(0));
+        currentStats.put("network", stats.path("net").asInt(0));
+        currentStats.put("framework", stats.path("fw").asInt(0));
+        metadata.set("currentStats", currentStats);
+        return metadata;
     }
 
     private QuizEvaluation evaluateQuizAnswer(ObjectNode quiz, String userAnswer) {

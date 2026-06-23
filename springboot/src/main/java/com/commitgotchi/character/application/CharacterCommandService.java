@@ -61,6 +61,7 @@ public class CharacterCommandService {
         for (LearningCharacter existing : existingCharacters) {
             if (existing.isActive() && !existing.getId().equals(character.getId())) {
                 existing.deactivate();
+                characterRepository.save(existing);
                 deactivated = true;
             }
         }
@@ -142,6 +143,25 @@ public class CharacterCommandService {
             String statusMessage
     ) {
         return characterRepository.findByIdAndUserIdForUpdate(characterId, userId)
+                .map(character -> {
+                    character.applyScoreDelta(dbDelta, algorithmDelta, csDelta, networkDelta, frameworkDelta);
+                    character.react(emotion, statusMessage);
+                    return characterRepository.saveAndFlush(character);
+                });
+    }
+
+    @Transactional
+    public Optional<LearningCharacter> applyScoreDeltasToActive(
+            long userId,
+            int dbDelta,
+            int algorithmDelta,
+            int csDelta,
+            int networkDelta,
+            int frameworkDelta,
+            CharacterEmotion emotion,
+            String statusMessage
+    ) {
+        return characterRepository.findActiveByUserIdForUpdate(userId)
                 .map(character -> {
                     character.applyScoreDelta(dbDelta, algorithmDelta, csDelta, networkDelta, frameworkDelta);
                     character.react(emotion, statusMessage);

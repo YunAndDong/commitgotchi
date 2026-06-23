@@ -1,63 +1,71 @@
 package com.commitgotchi.character.domain;
 
-import jakarta.persistence.LockModeType;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface LearningCharacterRepository extends JpaRepository<LearningCharacter, Long> {
+@Repository
+public class LearningCharacterRepository {
 
-    @Query("""
-            SELECT character
-            FROM LearningCharacter character
-            WHERE character.user.id = :userId
-            ORDER BY character.createdAt DESC, character.id DESC
-            """)
-    List<LearningCharacter> findAllByUserIdOrderByCreatedAtDesc(@Param("userId") long userId);
+    private final LearningCharacterMapper mapper;
 
-    long countByUserId(long userId);
+    public LearningCharacterRepository(LearningCharacterMapper mapper) {
+        this.mapper = mapper;
+    }
 
-    Optional<LearningCharacter> findByIdAndUserId(Long id, long userId);
+    public LearningCharacter save(LearningCharacter character) {
+        if (character.getId() == null) {
+            mapper.insert(character);
+            return character;
+        }
+        mapper.update(character);
+        return mapper.findById(character.getId());
+    }
 
-    @Query("""
-            SELECT character
-            FROM LearningCharacter character
-            WHERE character.user.id = :userId
-              AND character.active = true
-            """)
-    Optional<LearningCharacter> findActiveByUserId(@Param("userId") long userId);
+    public LearningCharacter saveAndFlush(LearningCharacter character) {
+        return save(character);
+    }
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            SELECT character
-            FROM LearningCharacter character
-            WHERE character.id = :characterId
-              AND character.user.id = :userId
-            """)
-    Optional<LearningCharacter> findByIdAndUserIdForUpdate(
-            @Param("characterId") Long characterId,
-            @Param("userId") long userId
-    );
+    public void flush() {
+        // MyBatis executes mapper statements immediately within the current transaction.
+    }
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            SELECT character
-            FROM LearningCharacter character
-            WHERE character.user.id = :userId
-            ORDER BY character.createdAt DESC, character.id DESC
-            """)
-    List<LearningCharacter> findAllByUserIdForUpdateOrderByCreatedAtDesc(@Param("userId") long userId);
+    public void delete(LearningCharacter character) {
+        if (character.getId() != null) {
+            mapper.deleteById(character.getId());
+        }
+    }
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            SELECT character
-            FROM LearningCharacter character
-            WHERE character.user.id = :userId
-              AND character.active = true
-            """)
-    Optional<LearningCharacter> findActiveByUserIdForUpdate(@Param("userId") long userId);
+    public Optional<LearningCharacter> findById(Long id) {
+        return Optional.ofNullable(mapper.findById(id));
+    }
+
+    public List<LearningCharacter> findAllByUserIdOrderByCreatedAtDesc(long userId) {
+        return mapper.findAllByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    public long countByUserId(long userId) {
+        return mapper.countByUserId(userId);
+    }
+
+    public Optional<LearningCharacter> findByIdAndUserId(Long id, long userId) {
+        return Optional.ofNullable(mapper.findByIdAndUserId(id, userId));
+    }
+
+    public Optional<LearningCharacter> findActiveByUserId(long userId) {
+        return Optional.ofNullable(mapper.findActiveByUserId(userId));
+    }
+
+    public Optional<LearningCharacter> findByIdAndUserIdForUpdate(Long id, long userId) {
+        return Optional.ofNullable(mapper.findByIdAndUserIdForUpdate(id, userId));
+    }
+
+    public List<LearningCharacter> findAllByUserIdForUpdateOrderByCreatedAtDesc(long userId) {
+        return mapper.findAllByUserIdForUpdateOrderByCreatedAtDesc(userId);
+    }
+
+    public Optional<LearningCharacter> findActiveByUserIdForUpdate(long userId) {
+        return Optional.ofNullable(mapper.findActiveByUserIdForUpdate(userId));
+    }
 }

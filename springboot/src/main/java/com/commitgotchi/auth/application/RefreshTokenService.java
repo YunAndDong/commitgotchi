@@ -91,6 +91,7 @@ public class RefreshTokenService {
         // FK ON DELETE CASCADE가 토큰 존재 시 사용자 존재를 보장하므로 그대로 사용한다.
         User user = current.getUser();
         current.revoke(now);
+        refreshTokenRepository.save(current);
         IssuedRefreshToken refreshToken = issue(user);
         IssuedAccessToken accessToken = jwtTokenProvider.issue(user.getId(), user.getEmail(), user.getRole());
         return TokenPairResponse.from(accessToken, refreshToken);

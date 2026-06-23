@@ -3,17 +3,16 @@ package com.commitgotchi.character.domain;
 import com.commitgotchi.support.PostgresIntegrationTest;
 import com.commitgotchi.user.domain.User;
 import com.commitgotchi.user.domain.UserRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
+import org.apache.ibatis.annotations.Select;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,9 +31,6 @@ class LearningCharacterRepositoryIntegrationTest extends PostgresIntegrationTest
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    private EntityManager entityManager;
-
     @Test
     void findsCharactersByUserAndCountsOwnedCharacters() {
         User user = saveUser();
@@ -52,7 +48,6 @@ class LearningCharacterRepositoryIntegrationTest extends PostgresIntegrationTest
                 first.getId(),
                 second.getId()
         );
-        entityManager.clear();
 
         assertThat(characterRepository.countByUserId(user.getId())).isEqualTo(2);
         assertThat(characterRepository.findAllByUserIdOrderByCreatedAtDesc(user.getId()))
@@ -72,18 +67,19 @@ class LearningCharacterRepositoryIntegrationTest extends PostgresIntegrationTest
         assertThat(characterRepository.findByIdAndUserId(character.getId(), otherUser.getId())).isEmpty();
         assertThat(characterRepository.findByIdAndUserIdForUpdate(character.getId(), owner.getId())).isPresent();
 
-        assertPessimisticWriteLock(
+        assertForUpdateSql(
                 "findByIdAndUserIdForUpdate",
                 Long.class,
                 long.class
         );
-        assertPessimisticWriteLock("findAllByUserIdForUpdateOrderByCreatedAtDesc", long.class);
-        assertPessimisticWriteLock("findActiveByUserIdForUpdate", long.class);
+        assertForUpdateSql("findAllByUserIdForUpdateOrderByCreatedAtDesc", long.class);
+        assertForUpdateSql("findActiveByUserIdForUpdate", long.class);
     }
 
-    private void assertPessimisticWriteLock(String methodName, Class<?>... parameterTypes) throws NoSuchMethodException {
-        Method lockMethod = LearningCharacterRepository.class.getMethod(methodName, parameterTypes);
-        assertThat(lockMethod.getAnnotation(Lock.class).value()).isEqualTo(LockModeType.PESSIMISTIC_WRITE);
+    private void assertForUpdateSql(String methodName, Class<?>... parameterTypes) throws NoSuchMethodException {
+        Method lockMethod = LearningCharacterMapper.class.getMethod(methodName, parameterTypes);
+        String sql = String.join(" ", Arrays.asList(lockMethod.getAnnotation(Select.class).value()));
+        assertThat(sql).containsIgnoringCase("FOR UPDATE");
     }
 
     private User saveUser() {
