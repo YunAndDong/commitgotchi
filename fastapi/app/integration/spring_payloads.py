@@ -31,8 +31,8 @@ DEFAULT_GRADED_EMOTION = "JOY"
 DEFAULT_GRADED_STATUS_MESSAGE = "좋아요, 핵심은 잡았어요!"
 DEFAULT_UNGRADED_EMOTION = "SAD"
 DEFAULT_UNGRADED_STATUS_MESSAGE = "AI가 잠깐 쉬는 중이에요. 답안은 저장됐어요."
-DEFAULT_GRADED_FEEDBACK = "채점은 완료되었지만 상세 피드백이 비어 있습니다."
-DEFAULT_UNGRADED_FEEDBACK = "Gemini 호출 또는 구조화 출력 변환에 실패하여 채점하지 않았습니다."
+DEFAULT_GRADED_FEEDBACK = "채점은 끝났는데 상세 피드백이 쏙 비었어요. 점수 결과는 저장해둘게요."
+DEFAULT_UNGRADED_FEEDBACK = "채점 AI가 잠깐 시무룩해져서 이번 답안은 점수를 매기지 못했어요."
 
 
 def build_report_callback_payload(

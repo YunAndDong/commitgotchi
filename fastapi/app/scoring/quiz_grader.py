@@ -19,10 +19,10 @@ from .schemas import QuizGradingResult
 DEFAULT_GEMINI_QUIZ_GRADER_MODEL = "gemini-3.1-flash-lite"
 FALLBACK_GEMINI_QUIZ_GRADER_MODEL = "gemini-2.5-flash-lite"
 DEFAULT_UNGRADED_FEEDBACK = (
-    "Gemini 호출 또는 구조화 출력 변환에 실패하여 채점하지 않았습니다. "
-    "API 키와 모델 설정을 확인해 주세요."
+    "채점 AI가 잠깐 시무룩해져서 이번 답안은 점수를 매기지 못했어요. "
+    "API 키와 모델 설정을 살짝 확인해 주세요."
 )
-EMPTY_ANSWER_FEEDBACK = "답안이 비어 있어 점수를 부여하지 않았습니다."
+EMPTY_ANSWER_FEEDBACK = "답안이 비어 있어서 점수는 살짝 아껴둘게요. 다음엔 한 줄이라도 꼭 적어줘요."
 FASTAPI_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -269,7 +269,7 @@ def _normalize_submission_id(submission_id: str | None) -> str:
 def _normalize_feedback(value: Any) -> str:
     feedback = _clean_text(value)
     if not feedback:
-        return "채점은 완료되었지만 상세 피드백이 비어 있습니다."
+        return "채점은 끝났는데 상세 피드백이 쏙 비었어요. 그래도 점수 결과는 저장해둘게요."
     return feedback
 
 

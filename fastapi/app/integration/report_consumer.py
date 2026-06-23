@@ -357,14 +357,14 @@ def _safe_fallback_report_result() -> dict[str, Any]:
     return {
         "status": "FALLBACK",
         "scoreDelta": zero_score_vector(),
-        "statusMessage": "리포트 분석을 완료하지 못했지만 안전한 fallback 결과를 전송합니다.",
+        "statusMessage": "리포트 분석 AI가 잠깐 시무룩해졌어요. 안전한 결과로 저장해둘게요.",
         "dailyReport": {
             "text": "",
-            "feedback": "리포트 분석을 완료하지 못했습니다.",
+            "feedback": "이번 리포트는 제대로 살펴보지 못해서 점수는 살짝 아껴둘게요.",
         },
         "nextRecommendation": {
             "topics": [],
-            "rationale": "분석 fallback으로 추천을 생성하지 않았습니다.",
+            "rationale": "분석이 안정되면 다음 학습 주제를 다시 콕 집어줄게요.",
         },
         "recommendedQuizzes": [],
     }

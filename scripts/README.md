@@ -1,0 +1,134 @@
+# Commit-Gotchi Runtime Deploy Scripts
+
+INFRA-3 adds two EC2-side runtime scripts:
+
+- `scripts/deploy.sh`: SSM -> `.env.prod` -> ECR pull -> `docker compose up -d` -> health check.
+- `scripts/bootstrap-tls.sh`: first Let's Encrypt certificate issuance before nginx starts.
+
+Vue/Chrome extension deployment is intentionally out of scope.
+
+## `deploy.sh`
+
+Production deploy must run on the prod EC2 instance with the instance role
+`commitgotchi-prod-ec2-role`. The script rejects the AWS CLI `default` profile,
+named profiles in actual deploy mode, and static AWS credential environment
+variables. Local validation is read-only only:
+
+```bash
+AWS_PROFILE=commitgotchi-bootstrap ./scripts/deploy.sh --plan
+```
+
+Actual EC2 deploy:
+
+```bash
+cd /opt/commitgotchi
+./scripts/deploy.sh
+```
+
+What actual deploy does:
+
+1. Verify AWS caller identity is the EC2 instance role.
+2. Read `/commitgotchi/prod/*` SSM parameters with `--with-decryption`.
+3. Generate `.env.prod` with mode `600`; secret values are not printed.
+4. Verify Let's Encrypt files exist for `commitgotchi.store`.
+5. Verify `SPRINGBOOT_IMAGE` and `FASTAPI_IMAGE` tags exist in ECR.
+6. Run ECR login.
+7. Run `docker compose --env-file .env.prod -f docker-compose.prod.yml pull`.
+8. Run `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`.
+9. Check container state/health and `/api/health` via public HTTPS, then local nginx fallback.
+
+If `REPORT_REQUEST_QUEUE_ENABLED=true`, `DEPLOY_WORKER_PROFILE=auto` enables
+the compose `worker` profile so `fastapi-report-worker` starts too.
+
+### Deploy Options
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| `--plan`, `--dry-run` | off | Read-only validation and command preview. |
+| `--region REGION` | `ap-northeast-2` | AWS region. |
+| `--ssm-prefix PREFIX` | `/commitgotchi/prod` | SSM root prefix. |
+| `--env-file PATH` | `.env.prod` | Generated env file path. |
+| `--compose-file PATH` | `docker-compose.prod.yml` | Prod compose file. |
+| `--domain DOMAIN` | `commitgotchi.store` | Public API domain. |
+| `--profile NAME` | unset | Allowed only with `--plan`; never copy bootstrap profile to EC2. |
+
+### Deploy Environment Variables
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `AWS_REGION` / `AWS_DEFAULT_REGION` | `ap-northeast-2` | Region override. |
+| `AWS_PROFILE` / `AWS_PROFILE_NAME` | unset | Read-only local plan only; `default` is rejected. |
+| `SSM_PREFIX` | `/commitgotchi/prod` | Same as `--ssm-prefix`. |
+| `DOMAIN` | `commitgotchi.store` | Same as `--domain`. |
+| `SPRINGBOOT_IMAGE` | SSM `/deploy/SPRINGBOOT_IMAGE` | Optional image override for plan or emergency rollback. |
+| `FASTAPI_IMAGE` | SSM `/deploy/FASTAPI_IMAGE` | Optional image override for plan or emergency rollback. |
+| `DEPLOY_WORKER_PROFILE` | `auto` | `auto`, `true`, or `false`. |
+| `HEALTH_TIMEOUT_SECONDS` | `180` | Container health wait. |
+| `HEALTH_EXTERNAL_URL` | `https://commitgotchi.store/api/health` | First HTTP health target. |
+| `HEALTH_LOCAL_URL` | `https://commitgotchi.store/api/health` | Used with `--resolve DOMAIN:443:127.0.0.1`. |
+
+### Missing ECR Images
+
+`deploy.sh` stops before `docker compose pull` if the configured ECR tag does
+not exist. INFRA-3 does not build or push images. Push manually or complete
+INFRA-4 first.
+
+Reference manual push shape:
+
+```bash
+aws ecr get-login-password --region ap-northeast-2 \
+  | docker login --username AWS --password-stdin 491013322019.dkr.ecr.ap-northeast-2.amazonaws.com
+
+docker build -t 491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-springboot:prod ./springboot
+docker push 491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-springboot:prod
+
+docker build -t 491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-fastapi:prod ./fastapi
+docker push 491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-fastapi:prod
+```
+
+## `bootstrap-tls.sh`
+
+Initial TLS bootstrap must run before nginx compose starts because
+`nginx/api-only.conf` directly references:
+
+- `/etc/letsencrypt/live/commitgotchi.store/fullchain.pem`
+- `/etc/letsencrypt/live/commitgotchi.store/privkey.pem`
+
+Default mode is read-only and does not invoke certbot:
+
+```bash
+./scripts/bootstrap-tls.sh --plan --expected-ip 54.116.84.198
+```
+
+Actual issuance requires explicit approval and `--apply`:
+
+```bash
+./scripts/bootstrap-tls.sh --apply --email ops@example.com --expected-ip 54.116.84.198
+```
+
+The script refuses to proceed in apply mode when port `80` is already in use or
+Commit-Gotchi prod containers are running. It does not stop nginx/compose for
+the operator.
+
+### TLS Options
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| `--apply` | off | Actually run `certbot certonly --standalone`. |
+| `--plan`, `--dry-run` | on | Read-only preview. |
+| `--domain DOMAIN` | `commitgotchi.store` | Certificate domain. |
+| `--email EMAIL` | unset | Required for apply unless `--no-email`. |
+| `--no-email` | off | Explicit no-email registration. |
+| `--staging` | off | Use Let's Encrypt staging. |
+| `--force` | off | Continue even if certificate files already exist. |
+| `--expected-ip IP` | unset | DNS sanity check. |
+
+Renewal is documented but not automated by this script:
+
+```bash
+sudo certbot renew --dry-run
+sudo certbot renew
+```
+
+Do not add crontab, systemd timers, or nginx reload hooks until the operator
+approves the renewal policy.
