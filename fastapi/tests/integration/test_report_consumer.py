@@ -524,7 +524,7 @@ class ReportConsumerPollingTest(unittest.TestCase):
 
 
 class ReportConsumerGuardrailTest(unittest.TestCase):
-    def test_fastapi_does_not_define_report_or_character_generation_post_route(
+    def test_fastapi_does_not_define_spring_report_callback_post_route(
         self,
     ) -> None:
         from app.main import app
@@ -535,8 +535,12 @@ class ReportConsumerGuardrailTest(unittest.TestCase):
             if "POST" in getattr(route, "methods", set())
         }
 
+        # /api/report is Spring Boot's internal callback endpoint; FastAPI calls
+        # it but must never implement it. This invariant stays.
         self.assertNotIn("/api/report", post_routes)
-        self.assertNotIn("/api/ai/commitgotchi", post_routes)
+        # NOTE: /api/ai/commitgotchi IS now exposed by the character-image epic
+        # (story character-image-2, architecture §4.4). It is intentionally part
+        # of the app and is no longer excluded here.
 
     def test_report_consumer_does_not_use_quiz_callback_path_or_db_access(self) -> None:
         from app.integration import report_consumer

@@ -1,11 +1,13 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from .api.commitgotchi import router as commitgotchi_router
 from .api.quiz_grading import router as quiz_grading_router
 from .db import engine
 
 app = FastAPI(title="Commit-Gotchi AI Service", version="0.1.0")
 app.include_router(quiz_grading_router)
+app.include_router(commitgotchi_router)
 
 
 @app.get("/api/health")

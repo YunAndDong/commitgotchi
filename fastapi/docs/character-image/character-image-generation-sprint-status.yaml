@@ -23,7 +23,7 @@ status_definitions:
 development_status:
   character-image-generation-epic: in-progress
   character-image-1-gemini-sprite-generation-local-storage: done
-  character-image-2-commitgotchi-image-endpoint-local-result: backlog
+  character-image-2-commitgotchi-image-endpoint-local-result: review
   character-image-3-storage-adapter-s3-ready-contract: backlog
   character-image-generation-retrospective: optional
 

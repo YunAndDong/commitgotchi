@@ -1,6 +1,6 @@
 ---
 title: Character Image 2 - Commitgotchi Image Endpoint With Local Result
-status: backlog
+status: review
 created: 2026-06-14
 owner: FastAPI AI 서버
 epic: character-image-generation-epic
@@ -18,7 +18,7 @@ source_docs:
 
 ## Status
 
-backlog
+review
 
 ## Story
 
@@ -206,15 +206,15 @@ python3 -m unittest discover -s tests
 
 ## Tasks / Subtasks
 
-- [ ] request/response schema 설계 (AC: 6, 7, 8, 9, 14-22)
-- [ ] Spring internal auth guard 재사용 또는 endpoint용 wrapper 구현 (AC: 3, 4, 5)
-- [ ] `POST /api/ai/commitgotchi` route 구현과 app 등록 (AC: 1, 2)
-- [ ] Story 1 core service dependency injection 연결 (AC: 11, 26)
-- [ ] success result to response mapping 구현 (AC: 14, 15, 16, 17, 18)
-- [ ] fallback result to response mapping 구현 (AC: 19, 20, 21, 22)
-- [ ] response/log redaction guardrail 구현 (AC: 23)
-- [ ] endpoint가 Spring DB/report/quiz flow를 건드리지 않는지 확인 (AC: 12, 13, 24, 25)
-- [ ] fake core service 기반 endpoint tests 작성 (AC: 26, 27, 28)
+- [x] request/response schema 설계 (AC: 6, 7, 8, 9, 14-22)
+- [x] Spring internal auth guard 재사용 또는 endpoint용 wrapper 구현 (AC: 3, 4, 5)
+- [x] `POST /api/ai/commitgotchi` route 구현과 app 등록 (AC: 1, 2)
+- [x] Story 1 core service dependency injection 연결 (AC: 11, 26)
+- [x] success result to response mapping 구현 (AC: 14, 15, 16, 17, 18)
+- [x] fallback result to response mapping 구현 (AC: 19, 20, 21, 22)
+- [x] response/log redaction guardrail 구현 (AC: 23)
+- [x] endpoint가 Spring DB/report/quiz flow를 건드리지 않는지 확인 (AC: 12, 13, 24, 25)
+- [x] fake core service 기반 endpoint tests 작성 (AC: 26, 27, 28)
 
 ## Dev Notes
 
@@ -262,14 +262,24 @@ S3 미가용 상태이므로 MVP에서는 `spriteSheetUrl`을 local URL-compatib
 ### Debug Log
 
 - 2026-06-14: Story 문서 생성. 코드 구현 없음.
+- 2026-06-23: `tests.image.test_commitgotchi_endpoint` 8 tests pass. 전체 스위트 `unittest discover -s tests` 247 tests pass.
+- 2026-06-23: report consumer guardrail test가 `/api/ai/commitgotchi` 부재를 단언하고 있어, 본 엔드포인트 도입에 맞춰 `/api/report` 불변식만 남기고 갱신.
+- 2026-06-23: Spring `FastApiCharacterImageClientTest` 기대 계약(요청 `{userId, s3ObjectUrl, prompt}`, 응답 `status:"OK"` + `spriteSheetUrl` + `spriteMeta.frameMap{joy,sad,angry}`)과 응답 shape 일치 확인.
 
 ### Completion Notes
 
-- Story 2는 Story 1 core service가 준비된 뒤 구현한다.
-- S3 upload는 Story 3 이후 별도 구현으로 연결한다.
+- Option A(§4.4 호환)로 `POST /api/ai/commitgotchi` 구현. 요청 `prompt`(=design keyword)를 story-1 `generate_commitgotchi_sprite(design_keyword=...)`에 전달.
+- 응답은 `status="OK"|"FAIL"` + `spriteSheetUrl`(MVP: 로컬 경로) + `spriteMeta`(joy/sad/angry). `s3ObjectUrl`은 echo만 하고 저장 destination으로 신뢰하지 않음.
+- 내부 인증은 quiz grading과 동일 패턴(`Authorization: Internal <secret>`, `hmac.compare_digest`)을 재사용. blank secret이면 local dev 통과.
+- 실제 S3 업로드는 Story 3에서 storage adapter로 추가(응답 shape 유지). quiz grading / report consumer / Spring 코드는 변경하지 않음.
 
 ## File List
 
+- `fastapi/app/api/commitgotchi.py` (신규)
+- `fastapi/app/main.py` (router 등록)
+- `fastapi/tests/image/test_commitgotchi_endpoint.py` (신규)
+- `fastapi/tests/integration/test_report_consumer.py` (guardrail 갱신)
+- `fastapi/docs/character-image/character-image-generation-sprint-status.yaml` (status review)
 - `fastapi/docs/character-image/stories/character-image-2-commitgotchi-image-endpoint-local-result.md`
 
 ## Change Log
