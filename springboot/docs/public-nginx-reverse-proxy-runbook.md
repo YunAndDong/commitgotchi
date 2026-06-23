@@ -2,6 +2,16 @@
 
 작성일: 2026-06-23
 
+> **2026-06-23 정렬 노트 (MVP 배포 = 확장 전용 / API-only):**
+> MVP 배포 범위에서 **Vue는 Chrome 확장프로그램으로만 배포**되며, 웹앱을 서버에서 서빙하지 않는다
+> (근거: `docs/mvp-cicd-pipeline-plan.md`). 따라서 공개 Nginx는 **API 전용**으로 운영한다 —
+> `/api/**`·`/character-assets/**`만 Spring Boot로 프록시하고, **`/`(Vue 정적 서빙)는 적용하지 않는다.**
+> FastAPI는 외부 비공개. 아래 문서의 same-origin **웹 서빙(Option A의 `/`→Vue) 부분은 "향후 웹앱을
+> 추가할 경우의 옵션"** 으로만 남겨둔다. `/api/**`·`/character-assets/**` 프록시, 헤더 보존,
+> CORS/스모크(확장 origin·거부 origin·PATCH/DELETE preflight·SSE), asset 경계 절은 그대로 유효하다.
+> prod CORS 부팅 조건상 `CORS_ALLOWED_ORIGINS`에는 `https://commitgotchi.store` HTTPS origin 1개를
+> placeholder로 유지하고, 확장 origin은 Spring 하드코딩 allowlist로 허용된다.
+
 ## 결정
 
 COR-1.2의 운영 기본안은 **Option A: same-origin reverse proxy**다.
