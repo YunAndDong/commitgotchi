@@ -122,7 +122,7 @@ def _generate_with_retries(
 def _post_process_sprite_sheet(
     png_bytes: bytes,
 ) -> tuple[bytes | None, FallbackReason | None]:
-    """Turn a raw generated PNG into a contract-ready transparent 2x3 grid.
+    """Turn a raw generated PNG into a contract-ready transparent 1x3 atlas.
 
     Returns (processed_bytes, None) on success or (None, reason) when the sheet
     cannot be repaired into a sliceable transparent grid, so the caller falls

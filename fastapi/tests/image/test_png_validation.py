@@ -50,7 +50,7 @@ class PngValidationTest(unittest.TestCase):
         for png_bytes in (
             make_png_bytes(width=1, height=1, color_type=6),
             make_png_bytes(width=95, height=64, color_type=6),
-            make_png_bytes(width=96, height=63, color_type=6),
+            make_png_bytes(width=96, height=17, color_type=6),
         ):
             with self.subTest(length=len(png_bytes)):
                 with self.assertRaises(PngValidationError) as context:

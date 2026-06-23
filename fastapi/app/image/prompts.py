@@ -8,25 +8,37 @@ from typing import Any
 
 
 MAX_DESIGN_KEYWORD_LENGTH = 80
-PROMPT_TEMPLATE_VERSION = "commitgotchi_character_sprite_v2"
-# v2 hardening (validated by the character-image-quality POC):
-# - drop "16x16/18x18" wording (the model baked it as visible "16x1" labels)
-# - forbid any text/numbers/labels outright
-# - request one solid flat magenta background so deterministic border flood-fill
-#   can key it out, and forbid per-creature backdrop panels
-CANONICAL_SPRITE_PROMPT_TEMPLATE = """Create a pixel-art creature sprite sheet for a retro handheld virtual pet game.
+PROMPT_TEMPLATE_VERSION = "commitgotchi_character_sprite_v9_retro_wide_3x1_poc"
+# v9 POC:
+# - generate only the hatched/evolved creature frames; pre-hatch eggs are static assets
+# - keep a strict 3x1 horizontal sheet aligned with validation/storage contracts
+# - align generated creatures with the Commit-gotchi retro pixel logo/mascot art
+# - preserve the v5 creature style while requesting a frontend-ready 3:1 crop
+# - preserve the magenta chroma-key guardrail used by post-processing
+CANONICAL_SPRITE_PROMPT_TEMPLATE = """Create a pixel-art creature sprite sheet for Commit-gotchi, a cozy retro virtual pet game.
 
-Draw exactly six pixel-art creatures laid out on a uniform grid of 2 rows and 3 columns.
-Every one of the six grid cells is the exact same size, with equal spacing and equal margins, and exactly one creature is centered inside each cell at roughly the same scale.
-Top row left to right: happy, sad, angry. Bottom row left to right: happy, sad, angry.
-The bottom-row creatures are a slightly larger, more evolved version of the same creature.
+Draw exactly three pixel-art creatures laid out as a 1 row by 3 columns horizontal sprite sheet.
+Use three invisible layout slots of equal size, with equal spacing and equal margins, and exactly one creature centered in each invisible slot at the same scale.
+Compose the final PNG itself as a wide rectangular 3:1 sprite sheet, not as a square poster and not as a small strip floating inside a square canvas.
+Keep only small top and bottom magenta padding so the row is easy to slice into three equal frontend sprite cells.
+Each creature should fill most of its one-third frame cell while staying fully visible, aligned on the same baseline, and separated by clean magenta space.
+Frame order from left to right: joy, sad, angry.
+The words joy, sad, and angry are internal frame instructions only; never write these words or any emotion labels in the image.
 
-All six sprites share the same creature identity based on this design keyword: "{designKeyword}".
-Use clean black outlines, a vibrant limited palette, a simple readable silhouette, and a front-facing pose.
+These three sprites are the post-hatch evolved character only.
+Do NOT draw an egg, cracked egg, baby form, pre-hatch form, evolution sequence, before/after comparison, or any second row.
+All three sprites share the same post-hatch evolved creature identity based on this design keyword: "{designKeyword}".
 
-ABSOLUTELY NO text, NO letters, NO numbers, NO labels, NO captions, NO watermark, and NO grid lines anywhere in the image.
-Fill the ENTIRE background with one solid, flat, uniform magenta color (RGB 255,0,255); the background must be a single flat color, NOT a checkerboard and NOT a gradient.
-Do NOT draw any panel, card, frame, or colored backdrop behind the creatures, and never use magenta anywhere inside the creatures. No shadows, no UI.
+Use the Commit-gotchi visual style: cute old-game pixel art, chunky mascot proportions, rounded dinosaur-logo-friendly charm, deep navy or near-black pixel outlines, a small limited pastel palette, crisp square pixels, and a simple readable front-facing silhouette.
+Use flat color clusters with only one or two darker shade steps, like a classic handheld game sprite enlarged without smoothing.
+The creature should feel friendly and toy-like, matching a retro pixel logo/mascot family, but not glossy, not modern 3D, not painterly, and not Japanese-anime styled.
+Show emotion through the creature's face and pose only; do NOT add detached anger puffs, sweat drops, floating symbols, puddles, ground marks, shine streaks, aura, or effect marks outside the creature silhouette.
+
+ABSOLUTELY NO text, NO letters, NO numbers, NO labels, NO captions, NO watermark, NO visible layout guides, and NO grid lines anywhere in the image.
+Do NOT draw boxes, borders, panels, cards, frames, dividers, cell outlines, stage platforms, UI chrome, or colored backdrops around or behind the creatures.
+The three creatures must float directly on the plain magenta background with empty magenta space between them.
+Fill the ENTIRE background with one solid, flat, uniform magenta color (RGB 255,0,255); the background must be a single flat color, NOT a checkerboard, NOT a gradient, and NOT a pink scene backdrop.
+Never use magenta anywhere inside the creatures. No shadows, no UI, no extra props.
 """
 
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")

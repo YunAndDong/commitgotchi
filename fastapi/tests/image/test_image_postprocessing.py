@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import unittest
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from app.image.background_removal import remove_background_to_alpha
 from app.image.frame_normalizer import normalize_sprite_grid
@@ -41,20 +41,20 @@ class BackgroundRemovalTest(unittest.TestCase):
 
 
 class FrameNormalizerTest(unittest.TestCase):
-    def test_six_sprites_normalize_into_uniform_validatable_grid(self) -> None:
+    def test_three_sprites_normalize_into_uniform_validatable_atlas(self) -> None:
         bg = remove_background_to_alpha(make_sprite_sheet_png_bytes()).png_bytes
         result = normalize_sprite_grid(bg)
 
         self.assertTrue(result.success)
-        self.assertEqual((result.columns, result.rows), (3, 2))
+        self.assertEqual((result.columns, result.rows), (3, 1))
         meta = validate_transparent_png(result.png_bytes)
         self.assertEqual(meta.width, result.cell_width * 3)
-        self.assertEqual(meta.height, result.cell_height * 2)
+        self.assertEqual(meta.height, result.cell_height)
         self.assertTrue(meta.has_alpha)
 
     def test_missing_sprite_fails_normalization(self) -> None:
         bg = remove_background_to_alpha(
-            make_sprite_sheet_png_bytes(sprite_count=5)
+            make_sprite_sheet_png_bytes(sprite_count=2)
         ).png_bytes
         result = normalize_sprite_grid(bg)
         self.assertFalse(result.success)
@@ -70,6 +70,35 @@ class FrameNormalizerTest(unittest.TestCase):
         image.save(buffer, format="PNG")
         result = normalize_sprite_grid(buffer.getvalue())
         self.assertTrue(result.success)
+
+    def test_square_canvas_sprite_row_is_rebuilt_as_three_to_one_atlas(self) -> None:
+        image = Image.new("RGB", (1024, 1024), (255, 0, 255))
+        draw = ImageDraw.Draw(image)
+        for cx, cy, color in (
+            (180, 520, (120, 210, 130)),
+            (512, 520, (130, 205, 120)),
+            (844, 520, (110, 200, 120)),
+        ):
+            draw.ellipse(
+                (cx - 105, cy - 140, cx + 105, cy + 140),
+                fill=color,
+                outline=(12, 24, 54),
+                width=8,
+            )
+            draw.ellipse((cx - 52, cy - 44, cx - 18, cy - 10), fill=(12, 24, 54))
+            draw.ellipse((cx + 18, cy - 44, cx + 52, cy - 10), fill=(12, 24, 54))
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+
+        bg = remove_background_to_alpha(buffer.getvalue()).png_bytes
+        result = normalize_sprite_grid(bg)
+
+        self.assertTrue(result.success, result.reason)
+        self.assertEqual((result.columns, result.rows), (3, 1))
+        meta = validate_transparent_png(result.png_bytes)
+        self.assertEqual(meta.width, meta.height * 3)
+        self.assertEqual(meta.width, result.cell_width * 3)
+        self.assertEqual(meta.height, result.cell_height)
 
 
 class QualityGateTest(unittest.TestCase):

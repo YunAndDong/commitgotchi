@@ -100,12 +100,13 @@ Architecture §4.4의 원래 계약은 Spring Boot가 `POST /api/ai/commitgotchi
   "contentType": "image/png",
   "spriteMeta": {
     "columns": 3,
-    "rows": 2,
+    "rows": 1,
     "frameMap": {
-      "baby": { "happy": [0, 0], "sad": [0, 1], "angry": [0, 2] },
-      "mature": { "happy": [1, 0], "sad": [1, 1], "angry": [1, 2] }
+      "joy": [0, 0],
+      "happy": [0, 0],
+      "sad": [0, 1],
+      "angry": [0, 2]
     },
-    "frame": { "babyPx": 16, "maturePx": 18 },
     "transparent": true
   }
 }

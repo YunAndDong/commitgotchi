@@ -1,7 +1,7 @@
 """POC service for character-image-quality option A.
 
 Pipeline: design keyword -> Gemini sprite sheet -> deterministic background
-removal -> uniform 3x2 frame grid normalization -> validate -> save stages under
+removal -> uniform 1x3 frame atlas normalization -> validate -> save stages under
 fastapi/runtime/data/character-images/preview/ for manual inspection.
 
 Endpoint wiring is intentionally out of scope; this is a quick generation +
