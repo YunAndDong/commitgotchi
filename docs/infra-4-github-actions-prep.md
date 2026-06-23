@@ -109,6 +109,11 @@ Runtime secrets remain EC2 instance-role responsibility through `scripts/deploy.
 
 ## INFRA-4 Workflow Expectations
 
+Implemented workflow files:
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/deploy.yml`
+
 `ci.yml`:
 
 - Runs on PRs and pushes.
@@ -128,6 +133,20 @@ Runtime secrets remain EC2 instance-role responsibility through `scripts/deploy.
 - Runs public smoke checks for:
   - `https://commitgotchi.store/api/health`
   - `https://commitgotchi.store/character-assets/default_image1.png`
+
+Deploy image strategy:
+
+- ECR push uses only immutable `sha-<full-git-sha>` tags.
+- The EC2 SSM command passes those exact image URIs as `SPRINGBOOT_IMAGE` and
+  `FASTAPI_IMAGE` overrides to `scripts/deploy.sh`.
+- The existing SSM/default `prod` tags remain a fallback path for manual
+  deploy plans, but `deploy.yml` does not promote or rely on `latest`.
+
+Staging note:
+
+- Staging auto deploy is intentionally not implemented in INFRA-4 because no
+  staging EC2/SSM/S3 deployment target exists yet. Add staging only after its
+  infrastructure and environment-specific variables are defined.
 
 ## Guardrails
 

@@ -1,0 +1,329 @@
+name: Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Commit SHA, branch, or tag to deploy. Leave blank for the selected ref.
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+  EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+  S3_BUCKET: ${{ vars.S3_BUCKET }}
+  BUNDLE_PREFIX: ${{ vars.BUNDLE_PREFIX }}
+  SSM_PREFIX: ${{ vars.SSM_PREFIX }}
+  DOMAIN: ${{ vars.DOMAIN }}
+  SPRINGBOOT_ECR: ${{ vars.SPRINGBOOT_ECR }}
+  FASTAPI_ECR: ${{ vars.FASTAPI_ECR }}
+
+jobs:
+  deploy-prod:
+    name: Build, push, and deploy prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: prod
+      url: https://${{ vars.DOMAIN }}/api/health
+
+    steps:
+      - name: Validate required repository variables
+        run: |
+          set -Eeuo pipefail
+          required=(
+            AWS_REGION
+            AWS_ROLE_ARN
+            EC2_INSTANCE_ID
+            S3_BUCKET
+            BUNDLE_PREFIX
+            SSM_PREFIX
+            DOMAIN
+            SPRINGBOOT_ECR
+            FASTAPI_ECR
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Missing required GitHub repository variable(s):\n' >&2
+            printf '  - %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+          case "$BUNDLE_PREFIX" in
+            prod/deploy-bundles|prod/deploy-bundles/*) ;;
+            *)
+              echo "BUNDLE_PREFIX must stay under prod/deploy-bundles." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha || github.ref }}
+
+      - name: Resolve deploy metadata
+        id: meta
+        run: |
+          set -Eeuo pipefail
+          deploy_sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          image_tag="sha-${deploy_sha}"
+          bundle_uri="s3://${S3_BUCKET}/${BUNDLE_PREFIX%/}/${deploy_sha}/deploy-bundle.tar.gz"
+          springboot_image="${SPRINGBOOT_ECR}:${image_tag}"
+          fastapi_image="${FASTAPI_ECR}:${image_tag}"
+
+          {
+            echo "deploy_sha=${deploy_sha}"
+            echo "short_sha=${short_sha}"
+            echo "image_tag=${image_tag}"
+            echo "bundle_uri=${bundle_uri}"
+            echo "springboot_image=${springboot_image}"
+            echo "fastapi_image=${fastapi_image}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Deploy commit: ${deploy_sha}"
+          echo "Image tag: ${image_tag}"
+          echo "Bundle URI: ${bundle_uri}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm AWS caller
+        run: aws sts get-caller-identity --query Arn --output text
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Spring Boot image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./springboot
+          file: ./springboot/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.springboot_image }}
+          cache-from: type=gha,scope=springboot-prod
+          cache-to: type=gha,mode=max,scope=springboot-prod
+
+      - name: Build and push FastAPI image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./fastapi
+          file: ./fastapi/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.fastapi_image }}
+          cache-from: type=gha,scope=fastapi-prod
+          cache-to: type=gha,mode=max,scope=fastapi-prod
+
+      - name: Create deploy bundle
+        run: |
+          set -Eeuo pipefail
+          BUNDLE_BUCKET="$S3_BUCKET" BUNDLE_PREFIX="$BUNDLE_PREFIX" \
+            ./scripts/make-deploy-bundle.sh \
+              --commit "${{ steps.meta.outputs.deploy_sha }}" \
+              --output "$RUNNER_TEMP/deploy-bundle.tar.gz"
+
+      - name: Inspect deploy bundle contents
+        run: |
+          set -Eeuo pipefail
+          tar -tzf "$RUNNER_TEMP/deploy-bundle.tar.gz" | tee "$RUNNER_TEMP/deploy-bundle.contents"
+
+          if grep -E '(^|/)(docs|springboot|fastapi|vue)(/|$)|(^|/)\.env' "$RUNNER_TEMP/deploy-bundle.contents"; then
+            echo "Deploy bundle contains forbidden source tree or env entry." >&2
+            exit 1
+          fi
+
+          unexpected=0
+          while IFS= read -r entry; do
+            case "$entry" in
+              docker-compose.prod.yml|nginx/api-only.conf|postgres/init|postgres/init/|postgres/init/*|scripts/deploy.sh|scripts/bootstrap-tls.sh)
+                ;;
+              *)
+                echo "Unexpected deploy bundle entry: $entry" >&2
+                unexpected=1
+                ;;
+            esac
+          done < "$RUNNER_TEMP/deploy-bundle.contents"
+
+          if [ "$unexpected" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Upload deploy bundle to S3
+        run: |
+          set -Eeuo pipefail
+          aws s3 cp "$RUNNER_TEMP/deploy-bundle.tar.gz" "${{ steps.meta.outputs.bundle_uri }}"
+
+      - name: Send SSM deploy command
+        id: ssm
+        run: |
+          set -Eeuo pipefail
+
+          remote_script="$(mktemp)"
+          cat > "$remote_script" <<'REMOTE_SCRIPT'
+          bash <<'REMOTE_BASH'
+          set +x
+          set -Eeuo pipefail
+
+          DEPLOY_ROOT="/opt/commitgotchi"
+          TMP_ROOT="/tmp/commitgotchi-deploy-${DEPLOY_SHA}"
+          TMP_BUNDLE="/tmp/commitgotchi-deploy-bundle-${DEPLOY_SHA}.tar.gz"
+
+          if [ "$(id -u)" -eq 0 ]; then
+            SUDO=""
+          else
+            SUDO="sudo"
+          fi
+
+          export AWS_REGION
+          export AWS_DEFAULT_REGION="$AWS_REGION"
+          unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_PROFILE_NAME
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+
+          rm -rf "$TMP_ROOT"
+          mkdir -p "$TMP_ROOT"
+
+          aws s3 cp "$BUNDLE_URI" "$TMP_BUNDLE" --region "$AWS_REGION"
+          tar -tzf "$TMP_BUNDLE" | tee "$TMP_ROOT/deploy-bundle.contents"
+
+          if grep -E '(^|/)(docs|springboot|fastapi|vue)(/|$)|(^|/)\.env' "$TMP_ROOT/deploy-bundle.contents"; then
+            echo "Deploy bundle contains forbidden source tree or env entry." >&2
+            exit 1
+          fi
+
+          unexpected=0
+          while IFS= read -r entry; do
+            case "$entry" in
+              docker-compose.prod.yml|nginx/api-only.conf|postgres/init|postgres/init/|postgres/init/*|scripts/deploy.sh|scripts/bootstrap-tls.sh)
+                ;;
+              *)
+                echo "Unexpected deploy bundle entry: $entry" >&2
+                unexpected=1
+                ;;
+            esac
+          done < "$TMP_ROOT/deploy-bundle.contents"
+          [ "$unexpected" -eq 0 ]
+
+          $SUDO rm -rf "$DEPLOY_ROOT"
+          $SUDO install -d -m 0755 "$DEPLOY_ROOT"
+          $SUDO tar -xzf "$TMP_BUNDLE" -C "$DEPLOY_ROOT"
+          $SUDO chown -R "$(id -u):$(id -g)" "$DEPLOY_ROOT"
+
+          cd "$DEPLOY_ROOT"
+          if [ -d docs ] || [ -d springboot ] || [ -d fastapi ] || [ -d vue ]; then
+            echo "Deploy root contains forbidden source directory after extraction." >&2
+            exit 1
+          fi
+
+          unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_PROFILE_NAME
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+          export AWS_REGION
+          export AWS_DEFAULT_REGION="$AWS_REGION"
+          export SSM_PREFIX
+          export DOMAIN
+          export SPRINGBOOT_IMAGE
+          export FASTAPI_IMAGE
+
+          ./scripts/deploy.sh
+          REMOTE_BASH
+          REMOTE_SCRIPT
+
+          shell_export() {
+            printf 'export %s=' "$1"
+            printf '%q' "$2"
+          }
+
+          jq -n \
+            --arg command "$(cat "$remote_script")" \
+            --arg deploy_sha "$(shell_export DEPLOY_SHA "${{ steps.meta.outputs.deploy_sha }}")" \
+            --arg bundle_uri "$(shell_export BUNDLE_URI "${{ steps.meta.outputs.bundle_uri }}")" \
+            --arg aws_region "$(shell_export AWS_REGION "$AWS_REGION")" \
+            --arg ssm_prefix "$(shell_export SSM_PREFIX "$SSM_PREFIX")" \
+            --arg domain "$(shell_export DOMAIN "$DOMAIN")" \
+            --arg springboot_image "$(shell_export SPRINGBOOT_IMAGE "${{ steps.meta.outputs.springboot_image }}")" \
+            --arg fastapi_image "$(shell_export FASTAPI_IMAGE "${{ steps.meta.outputs.fastapi_image }}")" \
+            '{
+              commands: [
+                $deploy_sha,
+                $bundle_uri,
+                $aws_region,
+                $ssm_prefix,
+                $domain,
+                $springboot_image,
+                $fastapi_image,
+                $command
+              ],
+              executionTimeout: ["1800"]
+            }' > "$RUNNER_TEMP/ssm-parameters.json"
+
+          command_id="$(
+            aws ssm send-command \
+              --instance-ids "$EC2_INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --comment "commitgotchi prod deploy ${{ steps.meta.outputs.short_sha }}" \
+              --parameters "file://$RUNNER_TEMP/ssm-parameters.json" \
+              --query "Command.CommandId" \
+              --output text
+          )"
+
+          echo "command_id=${command_id}" >> "$GITHUB_OUTPUT"
+          echo "SSM command id: ${command_id}"
+
+      - name: Wait for SSM deploy command
+        run: |
+          set -Eeuo pipefail
+          command_id="${{ steps.ssm.outputs.command_id }}"
+
+          set +e
+          aws ssm wait command-executed \
+            --command-id "$command_id" \
+            --instance-id "$EC2_INSTANCE_ID"
+          wait_status=$?
+          set -e
+
+          aws ssm get-command-invocation \
+            --command-id "$command_id" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --output json
+
+          status="$(
+            aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query "Status" \
+              --output text
+          )"
+
+          if [ "$wait_status" -ne 0 ] || [ "$status" != "Success" ]; then
+            echo "SSM deploy command failed with status: $status" >&2
+            exit 1
+          fi
+
+      - name: Public smoke checks
+        run: |
+          set -Eeuo pipefail
+          curl -fsS "https://${DOMAIN}/api/health"
+          curl -fsS -o /dev/null -w "default sprite HTTP %{http_code}\n" \
+            "https://${DOMAIN}/character-assets/default_image1.png"

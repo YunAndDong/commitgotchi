@@ -24,6 +24,74 @@ and contains only:
 It does not contain `docs/`, source trees, `.env.prod`, or secret values.
 `deploy.sh` still creates `.env.prod` on the EC2 host from SSM at deploy time.
 
+## GitHub Actions CI/CD
+
+INFRA-4 adds two backend-only workflows:
+
+- `.github/workflows/ci.yml`: runs Spring Boot tests, FastAPI tests, and Docker
+  build validation on pull requests and pushes. It never pushes images to ECR.
+- `.github/workflows/deploy.yml`: approval-gated production deploy through
+  GitHub Environment `prod`. It uses OIDC, pushes immutable `sha-<git-sha>` ECR
+  images, uploads a deploy bundle to S3, and triggers EC2 through SSM Run
+  Command.
+
+Vue/Chrome extension build and deployment remain outside these workflows.
+
+Configure these GitHub repository variables before enabling deploys:
+
+| Variable | Value |
+| --- | --- |
+| `AWS_REGION` | `ap-northeast-2` |
+| `AWS_ROLE_ARN` | `arn:aws:iam::491013322019:role/commitgotchi-github-actions-deploy-role` |
+| `EC2_INSTANCE_ID` | `i-0df1583a004e52aaf` |
+| `S3_BUCKET` | `commitgotchi-character-images-491013322019` |
+| `BUNDLE_PREFIX` | `prod/deploy-bundles` |
+| `SSM_PREFIX` | `/commitgotchi/prod` |
+| `DOMAIN` | `commitgotchi.store` |
+| `SPRINGBOOT_ECR` | `491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-springboot` |
+| `FASTAPI_ECR` | `491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-fastapi` |
+
+Create and protect the GitHub Environment named `prod` before using
+`deploy.yml`. The environment approval gate should be required because the
+deploy workflow performs real ECR push, S3 upload, and SSM Run Command after
+approval.
+
+Do not add app runtime secrets to GitHub Secrets. Runtime secret/config values
+remain in SSM Parameter Store and are read by the EC2 instance role when
+`scripts/deploy.sh` runs.
+
+The deploy workflow sends an EC2 SSM command equivalent to:
+
+1. Download
+   `s3://commitgotchi-character-images-491013322019/prod/deploy-bundles/<commit>/deploy-bundle.tar.gz`.
+2. Verify the bundle does not contain `docs/`, `springboot/`, `fastapi/`,
+   `vue/`, `.env*`, or unexpected paths.
+3. Replace `/opt/commitgotchi` with the bundle contents.
+4. Unset `AWS_PROFILE`, `AWS_DEFAULT_PROFILE`, `AWS_PROFILE_NAME`, and static
+   AWS credential environment variables.
+5. Export `SPRINGBOOT_IMAGE` and `FASTAPI_IMAGE` with immutable
+   `sha-<git-sha>` ECR image URIs.
+6. Run `./scripts/deploy.sh`.
+
+Prepare the GitHub OIDC role with the plan-only script first:
+
+```bash
+./scripts/aws/bootstrap-github-oidc.sh \
+  --profile commitgotchi-bootstrap \
+  --region ap-northeast-2
+```
+
+The role policy should allow only:
+
+- ECR auth and push for `commitgotchi-springboot` and `commitgotchi-fastapi`.
+- S3 `PutObject`/`GetObject` under
+  `commitgotchi-character-images-491013322019/prod/deploy-bundles/*`.
+- SSM `SendCommand`/command result reads for `i-0df1583a004e52aaf`.
+- Minimal EC2/SSM describe calls for deploy preflight.
+
+Do not run `--apply`, ECR push, S3 upload, SSM SendCommand, or the real GitHub
+production workflow before operator approval.
+
 Create the local bundle:
 
 ```bash

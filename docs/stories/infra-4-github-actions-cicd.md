@@ -1,56 +1,216 @@
 ---
 story: INFRA-4
-status: draft
-scope: infra (GitHub Actions CI + CD)
+status: in-progress
+scope: infra (GitHub Actions CI + prod CD)
 phase: Phase 5
 plan: ../mvp-cicd-pipeline-plan.md
 related_files:
-  - .github/workflows/ci.yml      # 신규
-  - .github/workflows/deploy.yml  # 신규
+  - ../../.github/workflows/ci.yml
+  - ../../.github/workflows/deploy.yml
   - ../infra-4-github-actions-prep.md
+  - ../../scripts/README.md
   - ../../scripts/aws/bootstrap-github-oidc.sh
+  - ../../scripts/make-deploy-bundle.sh
+  - ../../scripts/deploy.sh
 ---
 
-# Story INFRA-4: GitHub Actions CI/CD (OIDC + ECR push + 배포 + 롤백)
+# Story INFRA-4: GitHub Actions CI/CD (OIDC + ECR + S3 bundle + SSM)
 
-Status: draft
+Status: in-progress
+
+> Local workflow/docs implementation is present. This story must not be marked
+> done until the operator approves the state-changing steps and the GitHub
+> Actions prod path is run successfully.
 
 ## Story
 
 As a 개발자/운영자,
-I want PR 검증 → main merge 시 ECR push → tag/dispatch 시 prod 배포까지 자동화된 파이프라인을,
-so that 검증된 이미지만 레지스트리에 쌓이고 수동 배포(INFRA-3)가 자동화된다.
+I want PR/push backend CI and an approval-gated production deploy workflow,
+so that INFRA-3.5's ECR image + deploy bundle + SSM deployment flow can run
+from GitHub Actions without storing app secrets in GitHub.
 
-## 전제
-- INFRA-2(ECR·EC2·SSM) 완료.
-- INFRA-3(deploy 스크립트·EC2 수동 배포) 완료.
-- INFRA-3.5(ECR images + deploy bundle + SSM 구조) 완료.
-- GitHub Actions OIDC deploy role은 `scripts/aws/bootstrap-github-oidc.sh`로 plan/apply를 분리해 준비한다. 실제 IAM/OIDC 변경은 운영자 승인 전 실행하지 않는다.
+## Current Production Baseline
 
-## 범위
+- INFRA-3 is done: EC2 manual prod deploy is live.
+- INFRA-3.5 is done: prod deploy uses ECR images, an S3 deploy bundle, and SSM
+  Parameter Store. EC2 does not need the full repository.
+- Prod health is currently verified at `https://commitgotchi.store/api/health`.
+- Default sprite is verified at
+  `https://commitgotchi.store/character-assets/default_image1.png`.
+- Target EC2 instance: `i-0df1583a004e52aaf`.
+- Region: `ap-northeast-2`.
+- SSM prefix: `/commitgotchi/prod`.
+- Bundle path:
+  `s3://commitgotchi-character-images-491013322019/prod/deploy-bundles/<commit>/deploy-bundle.tar.gz`.
 
-- **CI (`ci.yml`)**: **백엔드 2종(springboot, fastapi)** 대상. Vue(Chrome 확장) 빌드/게시는 파이프라인 밖(plan §2.1.1).
-- **CD (`deploy.yml`)**: OIDC AssumeRole → ECR push → EC2에 SSM Run Command(권장)로 `deploy.sh` 실행.
-- 이미지 태그: `sha-<git-sha>`(불변) + `staging` + `vX.Y.Z`. `latest`는 운영 기준 미사용.
+## Scope
+
+- **CI (`ci.yml`)**
+  - Runs on pull requests and pushes.
+  - Runs Spring Boot tests with Gradle.
+  - Runs FastAPI tests with pytest.
+  - Builds Spring Boot and FastAPI Docker images for validation only.
+  - Does not push to ECR.
+  - Does not build or deploy Vue.
+
+- **Production CD (`deploy.yml`)**
+  - Runs from `workflow_dispatch` and optionally `v*` tags.
+  - Uses GitHub Environment `prod`; production execution requires Environment
+    approval before AWS credentials are configured.
+  - Uses GitHub OIDC to assume the deploy role.
+  - Builds and pushes immutable ECR tags only:
+    `sha-<full-git-sha>`.
+  - Runs `scripts/make-deploy-bundle.sh --commit <sha>`.
+  - Verifies the deploy bundle excludes `docs/`, `springboot/`, `fastapi/`,
+    `vue/`, and `.env*`.
+  - Uploads the bundle to the approved S3 prefix.
+  - Sends SSM Run Command to EC2. The EC2 command downloads the bundle, replaces
+    `/opt/commitgotchi` with bundle contents, unsets local/static AWS
+    credential variables, sets `SPRINGBOOT_IMAGE` and `FASTAPI_IMAGE` to the
+    immutable `sha-` ECR images, then runs `scripts/deploy.sh`.
+
+## Explicit Non-Scope
+
+- Staging auto deploy is not implemented because staging infrastructure does
+  not currently exist. Add it as future work after staging EC2/SSM/S3/ECR
+  conventions exist.
+- Vue/Chrome extension build, upload, store publication, and prod web serving
+  remain outside this pipeline.
+- The local work in this story must not run real GitHub Actions, apply IAM,
+  push to ECR, upload to S3, or send SSM commands before operator approval.
+- GitHub Secrets must not store application runtime secrets. Runtime values
+  continue to come from SSM on the EC2 host through `scripts/deploy.sh`.
 
 ## Acceptance Criteria
 
-### AC1 — PR: build only
-- **When** PR이 열리면 → Spring test, FastAPI test, Docker image **build**만 수행하고 **ECR push 없음**. (Vue는 선택적 lint/test 게이트만, 이미지화 없음)
+### AC1 - PR/push backend CI
 
-### AC2 — main merge / tag: build + push + deploy
-- **When** main merge → test 통과 후 **백엔드 이미지 2종**을 `sha-<git-sha>`+`staging`으로 ECR push, staging 배포.
-- **When** tag(`vX.Y.Z`)/manual dispatch → prod 배포(승격).
-- **And** Vue는 배포 대상이 아니므로 CI/CD에서 이미지화하지 않는다.
+- **Given** a PR or push runs `Backend CI`,
+- **When** the workflow executes,
+- **Then** Spring Boot tests and FastAPI tests run, backend Docker images build,
+  no ECR push occurs, and Vue is not built or deployed.
 
-### AC3 — secret 비보유 + 권한 분리
-- **Then** GitHub Actions는 OIDC로 deploy role을 Assume(앱 secret 미보유). CI push 권한과 EC2 pull 권한 분리.
+### AC2 - Approval-gated prod deploy
 
-### AC4 — 배포 + 롤백
-- **When** 배포 실행 → EC2에서 ECR login → SSM fetch → compose pull → up -d → health check.
-- **And** health check 실패 시 직전 `sha-` 태그로 rollback(MVP는 수동 트리거 허용).
+- **Given** repository variables are configured and the OIDC role exists,
+- **When** an operator starts `Production Deploy` manually or pushes a `v*` tag,
+- **Then** the `prod` GitHub Environment approval gate is reached before AWS
+  credentials are configured or any prod-changing step runs.
 
-## 검증 / 보류
-- staging 자동 배포 happy path + 의도적 실패 롤백 확인. 배포 후 팀 runbook Smoke Tests/Release CORS Matrix를 release gate로.
-- 🔶 각 앱 test 명령/캐시(`./gradlew test`, FastAPI pytest).
-- 🔶 롤백 자동화 수준, 무중단 여부(MVP는 짧은 다운타임 허용).
+### AC3 - Immutable image tag deploy
+
+- **Given** the deploy workflow is approved,
+- **When** backend images are pushed,
+- **Then** both images use the immutable tag `sha-<full-git-sha>`, and the EC2
+  SSM command passes those exact image URIs to `deploy.sh` using
+  `SPRINGBOOT_IMAGE` and `FASTAPI_IMAGE` overrides.
+- **And** `latest` is not used as an operational deploy tag.
+
+### AC4 - Deploy bundle safety
+
+- **When** the deploy workflow creates the deploy bundle,
+- **Then** it runs `scripts/make-deploy-bundle.sh --commit <sha>` and verifies
+  the tarball contains only approved runtime files.
+- **And** it fails if `docs/`, `springboot/`, `fastapi/`, `vue/`, `.env*`, or
+  unexpected paths are present.
+
+### AC5 - SSM deploy execution
+
+- **Given** the bundle is uploaded to S3,
+- **When** the SSM command runs on EC2,
+- **Then** EC2 downloads the bundle, extracts it to `/opt/commitgotchi`, confirms
+  only bundle files are present, unsets AWS profile/static credential variables,
+  and runs `scripts/deploy.sh`.
+- **And** the workflow prints the SSM command id, waits for completion, fetches
+  command invocation output, and then performs public health/default sprite
+  smoke checks.
+
+### AC6 - Least-privilege OIDC role
+
+- **Given** `scripts/aws/bootstrap-github-oidc.sh` is reviewed,
+- **When** it is run in plan mode,
+- **Then** it documents the role trust and policy without mutating IAM.
+- **And** the role is restricted to `YunAndDong/commitgotchi`, the two backend
+  ECR repositories, the approved deploy bundle S3 prefix, and SSM Run Command
+  against the prod instance.
+
+## Required GitHub Repository Variables
+
+| Variable | Value |
+| --- | --- |
+| `AWS_REGION` | `ap-northeast-2` |
+| `AWS_ROLE_ARN` | `arn:aws:iam::491013322019:role/commitgotchi-github-actions-deploy-role` |
+| `EC2_INSTANCE_ID` | `i-0df1583a004e52aaf` |
+| `S3_BUCKET` | `commitgotchi-character-images-491013322019` |
+| `BUNDLE_PREFIX` | `prod/deploy-bundles` |
+| `SSM_PREFIX` | `/commitgotchi/prod` |
+| `DOMAIN` | `commitgotchi.store` |
+| `SPRINGBOOT_ECR` | `491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-springboot` |
+| `FASTAPI_ECR` | `491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-fastapi` |
+
+No app runtime secret belongs in GitHub Secrets. Runtime secret values stay in
+SSM Parameter Store and are read by the EC2 instance role at deploy time.
+
+## Verification Plan
+
+- Workflow YAML syntax validation.
+- `bash -n scripts/deploy.sh scripts/make-deploy-bundle.sh scripts/bootstrap-tls.sh`
+- `scripts/make-deploy-bundle.sh --commit <sha>` and tar content inspection.
+- `docker compose --env-file .env.prod.example -f docker-compose.prod.yml config --quiet`
+- Spring Boot test command check: `cd springboot && ./gradlew test --no-daemon`
+  when Docker/Testcontainers is available.
+- FastAPI test command check: `cd fastapi && python -m pytest`
+- `AWS_PROFILE=commitgotchi-bootstrap ./scripts/deploy.sh --plan`
+- `git diff --check`
+
+## Local Verification Results
+
+2026-06-23 local-only verification:
+
+- ✅ Workflow YAML parsed with Ruby `YAML.load_file`:
+  - `.github/workflows/ci.yml`
+  - `.github/workflows/deploy.yml`
+- ✅ `bash -n scripts/deploy.sh scripts/make-deploy-bundle.sh scripts/bootstrap-tls.sh scripts/aws/bootstrap-github-oidc.sh`
+- ✅ `docker compose --env-file .env.prod.example -f docker-compose.prod.yml config --quiet`
+- ✅ `./scripts/make-deploy-bundle.sh --commit daab918ecfe78deec6def43bbef1c9b3d3d82964 --output /tmp/commitgotchi-infra4-deploy-bundle.tar.gz`
+  - Tar contents: `docker-compose.prod.yml`, `nginx/api-only.conf`,
+    `postgres/init/`, `postgres/init/10-create-fastapi-db.sh`,
+    `postgres/init/01-init-databases.sql`, `scripts/deploy.sh`,
+    `scripts/bootstrap-tls.sh`.
+  - Confirmed no `docs/`, `springboot/`, `fastapi/`, `vue/`, or `.env*`
+    entries.
+- ✅ FastAPI tests:
+  - Temporary venv with Python 3.12.13.
+  - `cd fastapi && python -m pytest`
+  - Result: 249 passed.
+- ⚠️ FastAPI tests with local default `python3` did not run because the default
+  Python was 3.14 and no `psycopg-binary==3.2.3` wheel was available for that
+  interpreter. CI pins Python 3.11.
+- ⚠️ Spring Boot tests:
+  - `cd springboot && ./gradlew test --no-daemon`
+  - Compile/test discovery ran, but Testcontainers failed before application
+    assertions with `DockerClientProviderStrategy` initialization errors in this
+    local Docker/Testcontainers setup.
+  - CI runs on `ubuntu-latest` with Docker available; keep Testcontainers as a
+    required CI dependency for Spring integration tests.
+- ✅ `AWS_PROFILE=commitgotchi-bootstrap ./scripts/deploy.sh --plan`
+  - SSM and ECR preflight passed with secret values redacted.
+  - No `.env.prod`, Docker service, or AWS resource changes were made.
+  - Local TLS certificate warnings are expected outside the EC2 host.
+- ✅ `git diff --check`
+
+## Pending Operator Approvals
+
+- Apply/create the GitHub Actions OIDC deploy role if it is still absent.
+- Configure GitHub repo variables and the protected `prod` Environment.
+- Run GitHub Actions CI on the remote repository.
+- Run `Production Deploy` or push a `v*` tag.
+- Approve the real ECR push, S3 upload, and SSM Run Command performed by the
+  GitHub workflow.
+
+## Future Work
+
+- Add staging deployment only after staging infrastructure and SSM paths exist.
+- Add a rollback convenience workflow that reuses a known-good `sha-` image tag.
+- Consider ECR lifecycle policy for `sha-` tags after operational retention is
+  decided.

@@ -14,6 +14,9 @@ deploy-bundle.tar.gz
 
 # Hidden directories
 **/.*/
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 
 # BMad
 _bmad/
