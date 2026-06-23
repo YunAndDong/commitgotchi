@@ -12,6 +12,7 @@
  */
 
 const BASE = import.meta.env?.VITE_API_BASE_URL || ''
+const NORMALIZED_BASE = String(BASE || '').replace(/\/+$/, '')
 const TOKENS_KEY = 'cg.tokens'
 const REQUEST_TIMEOUT_MS = 15000
 let memoryTokens = null
@@ -51,6 +52,17 @@ export function clearAuthSession() {
   authGeneration += 1
   refreshPromise = null
   saveTokens(null)
+}
+
+export function apiAssetUrl(path) {
+  if (typeof path !== 'string') return path
+  const value = path.trim()
+  if (!value || !value.startsWith('/') || !NORMALIZED_BASE) return value
+  if (/^[a-z][a-z\d+\-.]*:/i.test(value) || value.startsWith('//')) return value
+  if (/^https?:\/\//i.test(NORMALIZED_BASE)) {
+    return new URL(value, NORMALIZED_BASE).toString()
+  }
+  return `${NORMALIZED_BASE}${value}`
 }
 
 export class ApiError extends Error {
@@ -132,6 +144,111 @@ export async function authed(method, path, opts = {}) {
     const next = await refreshPromise
     return await raw(method, path, { ...opts, token: next.accessToken })
   }
+}
+
+async function openAuthedStream(path, signal) {
+  const attempt = (token) => fetch(`${BASE}${path}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'text/event-stream',
+      Authorization: `Bearer ${token}`,
+    },
+    credentials: 'include',
+    signal,
+  })
+  const tokens = loadTokens()
+  if (!tokens) throw new ApiError(401, 'AUTH_ACCESS_TOKEN_MISSING', 'Not logged in')
+  let res = await attempt(tokens.accessToken)
+  if (res.status === 401) {
+    const generation = authGeneration
+    if (!refreshPromise) {
+      refreshPromise = auth.refresh()
+        .catch(error => {
+          if (error?.status === 401) clearAuthSession()
+          throw error
+        })
+        .then(next => {
+          if (generation !== authGeneration) throw new ApiError(401, 'AUTH_CANCELLED', 'Session ended')
+          return saveTokens(next)
+        })
+        .finally(() => { refreshPromise = null })
+    }
+    const next = await refreshPromise
+    res = await attempt(next.accessToken)
+  }
+  if (!res.ok) {
+    const data = await parse(res)
+    const code = data && typeof data === 'object' ? data.code : undefined
+    const message = data && typeof data === 'object' ? data.message : data
+    throw new ApiError(res.status, code, message, data)
+  }
+  return res
+}
+
+async function consumeSse(response, handlers, signal) {
+  if (!response.body?.getReader) {
+    throw new ApiError(0, 'SSE_UNSUPPORTED', 'Streaming is not supported in this browser')
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (!signal.aborted) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    buffer = dispatchSseFrames(buffer, handlers)
+  }
+  buffer += decoder.decode()
+  dispatchSseFrames(buffer, handlers, true)
+}
+
+function dispatchSseFrames(buffer, handlers, flush = false) {
+  let normalized = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  let boundary = normalized.indexOf('\n\n')
+  while (boundary >= 0) {
+    dispatchSseFrame(normalized.slice(0, boundary), handlers)
+    normalized = normalized.slice(boundary + 2)
+    boundary = normalized.indexOf('\n\n')
+  }
+  if (flush && normalized.trim()) dispatchSseFrame(normalized, handlers)
+  return normalized
+}
+
+function dispatchSseFrame(frame, handlers) {
+  let eventName = 'message'
+  const data = []
+  frame.split('\n').forEach(line => {
+    if (!line || line.startsWith(':')) return
+    const separator = line.indexOf(':')
+    const field = separator < 0 ? line : line.slice(0, separator)
+    let value = separator < 0 ? '' : line.slice(separator + 1)
+    if (value.startsWith(' ')) value = value.slice(1)
+    if (field === 'event') eventName = value || 'message'
+    if (field === 'data') data.push(value)
+  })
+  if (!data.length) return
+  const rawData = data.join('\n')
+  let payload = rawData
+  try { payload = JSON.parse(rawData) } catch { /* keep text payload */ }
+  handlers?.onEvent?.(eventName, payload)
+}
+
+export function openCharacterEventStream(characterId, handlers = {}) {
+  const controller = new AbortController()
+  let closed = false
+  const close = () => {
+    closed = true
+    controller.abort()
+  }
+  openAuthedStream(`/api/game/characters/${encodeURIComponent(String(characterId))}/events`, controller.signal)
+    .then(response => consumeSse(response, handlers, controller.signal))
+    .catch(error => {
+      if (!closed && error?.name !== 'AbortError') handlers.onError?.(error)
+    })
+    .finally(() => {
+      if (!closed) handlers.onClose?.()
+    })
+  return { close }
 }
 
 export const users = {

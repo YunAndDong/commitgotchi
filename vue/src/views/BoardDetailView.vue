@@ -71,7 +71,8 @@ watch(pages, value => { page.value = Math.min(page.value, value) })
       <!-- left: character -->
       <section class="cg-screen col center cchar">
         <CgEmo :emotion="p.emotion" />
-        <CgSprite :size="180" :emotion="p.emotion" :evolved="p.isEvolved" />
+        <CgSprite :size="180" :emotion="p.emotion" :evolved="p.isEvolved"
+                  :sprite-sheet-url="p.spriteSheetUrl" :sprite-meta="p.spriteMeta" />
         <h1 class="cg-section-title big">{{ p.name }}</h1>
         <span class="tiny faint">@{{ p.owner }}</span>
         <span class="cg-tag">육아점수 {{ p.score.toLocaleString() }}</span>

@@ -1,10 +1,24 @@
 <script setup>
+import { onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { authState } from './stores/auth.js'
 import { gameState, clearNotice } from './stores/game.js'
 import AppNav from './components/AppNav.vue'
 
 const route = useRoute()
+let noticeTimer = null
+
+watch(() => gameState.notice, notice => {
+  if (noticeTimer) window.clearTimeout(noticeTimer)
+  if (!notice) return
+  noticeTimer = window.setTimeout(() => {
+    if (gameState.notice === notice) clearNotice()
+  }, 2000)
+}, { immediate: true })
+
+onBeforeUnmount(() => {
+  if (noticeTimer) window.clearTimeout(noticeTimer)
+})
 </script>
 
 <template>

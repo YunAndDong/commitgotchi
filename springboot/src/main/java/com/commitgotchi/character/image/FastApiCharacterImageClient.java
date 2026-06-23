@@ -1,5 +1,6 @@
 package com.commitgotchi.character.image;
 
+import com.commitgotchi.security.InternalApiProperties;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -23,15 +24,18 @@ public class FastApiCharacterImageClient implements CharacterImageClient {
     private static final Logger log = LoggerFactory.getLogger(FastApiCharacterImageClient.class);
 
     private final CharacterImageProperties properties;
+    private final InternalApiProperties internalApiProperties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
 
     public FastApiCharacterImageClient(
             RestClient.Builder restClientBuilder,
             CharacterImageProperties properties,
+            InternalApiProperties internalApiProperties,
             ObjectMapper objectMapper
     ) {
         this.properties = properties;
+        this.internalApiProperties = internalApiProperties;
         this.objectMapper = objectMapper;
         RestClient.Builder imageClientBuilder = restClientBuilder.clone()
                 .requestFactory(requestFactory(properties));
@@ -51,9 +55,14 @@ public class FastApiCharacterImageClient implements CharacterImageClient {
         }
 
         try {
-            FastApiResponse response = restClient.post()
+            RestClient.RequestBodySpec requestSpec = restClient.post()
                     .uri("/api/ai/commitgotchi")
-                    .contentType(MediaType.APPLICATION_JSON)
+                    .contentType(MediaType.APPLICATION_JSON);
+            if (internalApiProperties.hasSecret()) {
+                requestSpec.header("Authorization", "Internal " + internalApiProperties.normalizedSecret());
+            }
+
+            FastApiResponse response = requestSpec
                     .body(new FastApiRequest(request.userId(), request.s3ObjectUrl(), request.prompt()))
                     .retrieve()
                     .body(FastApiResponse.class);
@@ -106,15 +115,9 @@ public class FastApiCharacterImageClient implements CharacterImageClient {
     private boolean hasSpriteFrameMap(JsonNode spriteMeta) {
         JsonNode frameMap = spriteMeta.path("frameMap");
         return spriteMeta.isObject()
-                && hasFrameRow(frameMap.path("baby"))
-                && hasFrameRow(frameMap.path("mature"));
-    }
-
-    private boolean hasFrameRow(JsonNode frameRow) {
-        return frameRow.isObject()
-                && isCoordinate(frameRow.path("joy"))
-                && isCoordinate(frameRow.path("sad"))
-                && isCoordinate(frameRow.path("angry"));
+                && isCoordinate(frameMap.path("joy"))
+                && isCoordinate(frameMap.path("sad"))
+                && isCoordinate(frameMap.path("angry"));
     }
 
     private boolean isCoordinate(JsonNode coordinate) {

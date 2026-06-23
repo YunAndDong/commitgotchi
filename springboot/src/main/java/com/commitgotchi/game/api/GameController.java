@@ -2,9 +2,12 @@ package com.commitgotchi.game.api;
 
 import com.commitgotchi.character.api.dto.CharacterCreateRequest;
 import com.commitgotchi.character.api.dto.CharacterUpdateRequest;
+import com.commitgotchi.character.application.CharacterEventService;
+import com.commitgotchi.character.application.CharacterNotFoundException;
 import com.commitgotchi.game.api.dto.GameMutationResponse;
 import com.commitgotchi.game.api.dto.GameStateResponse;
 import com.commitgotchi.game.application.GameService;
+import com.commitgotchi.report.application.ReportEventService;
 import com.commitgotchi.security.AuthPrincipal;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,6 +15,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/game")
@@ -29,9 +34,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class GameController {
 
     private final GameService gameService;
+    private final CharacterEventService characterEventService;
+    private final ReportEventService reportEventService;
 
-    public GameController(GameService gameService) {
+    public GameController(
+            GameService gameService,
+            CharacterEventService characterEventService,
+            ReportEventService reportEventService
+    ) {
         this.gameService = gameService;
+        this.characterEventService = characterEventService;
+        this.reportEventService = reportEventService;
     }
 
     @Operation(summary = "게임 상태 조회", description = "정규화 characters row를 응답 시점에 state.characters로 projection합니다.")
@@ -56,6 +69,27 @@ public class GameController {
             @Parameter(description = "Character id", example = "1") @PathVariable String id
     ) {
         return gameService.getCharacter(principal.userId(), id);
+    }
+
+    @Operation(summary = "캐릭터 이벤트 구독", description = "자기 캐릭터의 최신 projection을 text/event-stream으로 구독합니다.")
+    @GetMapping(path = "/characters/{id}/events", produces = "text/event-stream")
+    public ResponseEntity<SseEmitter> characterEvents(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+            @Parameter(description = "Character id", example = "1") @PathVariable String id
+    ) {
+        try {
+            return ResponseEntity.ok(characterEventService.subscribe(principal.userId(), parseCharacterId(id)));
+        } catch (CharacterNotFoundException exception) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @Operation(summary = "일일 리포트 이벤트 구독", description = "현재 사용자의 dailyReport projection을 text/event-stream으로 구독합니다.")
+    @GetMapping(path = "/reports/events", produces = "text/event-stream")
+    public ResponseEntity<SseEmitter> reportEvents(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal
+    ) {
+        return ResponseEntity.ok(reportEventService.subscribe(principal.userId()));
     }
 
     @Operation(summary = "캐릭터 수정", description = "사용자가 편집 가능한 name, keyword, personality만 수정합니다.")
@@ -171,5 +205,13 @@ public class GameController {
             @PathVariable String reviewId
     ) {
         return gameService.deleteReview(principal.userId(), postId, reviewId);
+    }
+
+    private long parseCharacterId(String id) {
+        try {
+            return Long.parseLong(id);
+        } catch (NumberFormatException exception) {
+            throw new CharacterNotFoundException();
+        }
     }
 }

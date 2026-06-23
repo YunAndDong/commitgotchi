@@ -109,6 +109,7 @@ async function submit() {
   display: flex; flex-direction: column; justify-content: space-between; min-height: 460px;
   background: linear-gradient(180deg, #bfe3ef 0%, var(--screen) 70%);
 }
+:global(html.is-ext-popup .auth__scene) { min-height: 360px; }
 [data-theme='cli'] .auth__scene { background: var(--screen); }
 .sky { position: relative; height: 90px; }
 .sun { position: absolute; right: 12px; top: 0; font-size: 34px; }

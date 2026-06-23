@@ -1,33 +1,46 @@
 package com.commitgotchi.auth.domain;
 
-import jakarta.persistence.LockModeType;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID> {
+@Repository
+public class RefreshTokenRepository {
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select token from RefreshToken token join fetch token.user where token.tokenHash = :tokenHash")
-    Optional<RefreshToken> findByTokenHashForUpdate(@Param("tokenHash") String tokenHash);
+    private final RefreshTokenMapper mapper;
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("""
-            update RefreshToken token
-            set token.revokedAt = :revokedAt
-            where token.user.id = :userId and token.revokedAt is null
-            """)
-    int revokeAllActiveByUserId(@Param("userId") long userId, @Param("revokedAt") Instant revokedAt);
+    public RefreshTokenRepository(RefreshTokenMapper mapper) {
+        this.mapper = mapper;
+    }
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("delete from RefreshToken token where token.tokenHash = :tokenHash and token.revokedAt is null")
-    int deleteActiveByTokenHash(@Param("tokenHash") String tokenHash);
+    public RefreshToken save(RefreshToken token) {
+        if (mapper.existsById(token.getId())) {
+            mapper.update(token);
+        } else {
+            mapper.insert(token);
+        }
+        return mapper.findById(token.getId());
+    }
 
-    long countByUserIdAndRevokedAtIsNull(long userId);
+    public Optional<RefreshToken> findByTokenHashForUpdate(String tokenHash) {
+        return Optional.ofNullable(mapper.findByTokenHashForUpdate(tokenHash));
+    }
+
+    public int revokeAllActiveByUserId(long userId, Instant revokedAt) {
+        return mapper.revokeAllActiveByUserId(userId, revokedAt);
+    }
+
+    public int deleteActiveByTokenHash(String tokenHash) {
+        return mapper.deleteActiveByTokenHash(tokenHash);
+    }
+
+    public long countByUserIdAndRevokedAtIsNull(long userId) {
+        return mapper.countByUserIdAndRevokedAtIsNull(userId);
+    }
+
+    public void deleteAll() {
+        mapper.deleteAll();
+    }
 }

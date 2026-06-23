@@ -5,7 +5,7 @@
  * 확인 대상:
  *  - AC3 퀴즈 채점 실패 → 답안 보존 · 점수 미반영 · 재시도 가능, 재시도 성공 시 점수 반영
  *  - AC3 일일 레포트 실패 → status 'failed' · 작성 리포트 보존 · 점수 변화 없음
- *  - AC4 이미지 실패 → imageStatus 'FAILED' (캐릭터는 계속 사용 가능), retryImage 로 복구
+ *  - AC4 이미지 실패 → imageStatus 'FALLBACK' (캐릭터는 계속 사용 가능), retryImage 로 복구
  */
 import {
   gameState, activeCharacter, nurtureScore,
@@ -58,7 +58,7 @@ console.log('AC4 — 이미지 생성 실패 Fallback')
   ok(c.imageStatus === 'PENDING', '생성 직후 PENDING')
   ok(activeCharacter.value && activeCharacter.value.id === c.id, '실패 예정이어도 캐릭터는 활성/사용 가능')
   await sleep(2400)
-  ok(c.imageStatus === 'FAILED', '실패 시 imageStatus=FAILED (깨진 이미지 아님)')
+  ok(c.imageStatus === 'FALLBACK', '실패 시 imageStatus=FALLBACK (깨진 이미지 아님)')
   retryImage(c.id)
   ok(c.imageStatus === 'PENDING', 'retryImage 후 PENDING 재진입')
   await sleep(1800)

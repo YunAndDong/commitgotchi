@@ -39,8 +39,8 @@ inputDocuments:
 
 ## 구현 전 결정 필요 사항
 
-1. 캐릭터 이미지 생성 방식: PRD는 생성 응답을 즉시 완료하고 이미지 상태를 `PENDING`으로 두는 비동기-즉시 흐름을 말하지만, 아키텍처 문서는 Spring Boot가 FastAPI 이미지 엔드포인트를 동기 HTTP로 호출하는 흐름을 말한다.
-2. 퀴즈 채점 방식: 마스터 에픽의 추가 요구사항은 최신 PRD/Addendum과 아키텍처 사이의 동기 채점/웹훅 충돌을 구현 전 정합화해야 한다고 기록한다.
+1. 캐릭터 이미지 생성 방식: `architecture.md`를 SSOT로 잠그고, Spring Boot가 FastAPI `POST /api/ai/commitgotchi`를 동기 HTTP로 호출하는 흐름을 따른다.
+2. 퀴즈 채점 방식: `architecture.md`의 비동기 요청 수락 + `POST /api/internal/quizzes/grade-result` 웹훅 계약을 따른다. FastAPI webhook의 `emotion`/`statusMessage`는 Spring Boot가 수락한다.
 3. 능력치 키 이름: BE-2.6 기준 공개 API는 `algo`, `cs`, `db`, `net`, `fw`를 유지하고 DB 컬럼은 `stat_algorithm`, `stat_cs`, `stat_db`, `stat_network`, `stat_framework`로 매핑한다.
 4. API 경로: BE-2 공개 계약은 `/api/game/**` facade로 고정되었다. `/api/characters` 같은 신규 경로는 별도 ADR/마이그레이션 스토리 없이는 정식 계약으로 소개하지 않는다.
 
@@ -155,6 +155,11 @@ Acceptance Criteria:
 - 이미 요청한 리포트는 중복 적재하지 않는다.
 - 실패한 적재를 재시도할 수 있는 상태를 기록한다.
 
+구현 분해:
+- **BE-3.2a — Report Outbox 기반 요청 스냅샷 정규화**: `report_request_outbox` row 생성/갱신, 결정적 `requestId`, 즉시 SQS 전송 제거, FastAPI 메시지 스냅샷 계약 고정. 상세: `springboot/docs/stories/be-3-2a-report-outbox-foundation-and-request-snapshot.md`
+- **BE-3.2b — Asia/Seoul 자정 Report Outbox 적재 스케줄러**: 전날 리포트 대상 선정, `@Scheduled` cron/zone, 멱등 재실행, local/test 수동 실행 service. 상세: `springboot/docs/stories/be-3-2b-midnight-report-outbox-enqueue-scheduler.md`
+- **BE-3.2c — Report Outbox SQS Dispatcher와 Retry 상태 전이**: `PENDING` row 잠금 조회, SQS `SendMessage`, `SENT/FAILED` 상태 전이, attempt/backoff, fake/mocked producer 테스트. 상세: `springboot/docs/stories/be-3-2c-report-sqs-dispatcher-and-retry.md`
+
 ### Story BE-3.3: AI 일일 리포트 결과 수신
 
 Acceptance Criteria:
@@ -178,6 +183,10 @@ Acceptance Criteria:
 - 사용자는 대기, 실패, 완료 상태를 조회할 수 있다.
 - 오전 9시 제공이라는 제품 문구와 실제 API 상태 모델을 정합화한다.
 - Vue가 기대하는 `dailyReport`, `reports`, `quizzes` projection을 제공한다.
+
+구현 분해:
+- **BE-3.5a — 오전 9시 일일 리포트 결과 Read Model과 `/api/game/state` Projection**: pending/fallback/ready 상태 모델, 정규화 결과 저장소 기반 projection, 리포트/퀴즈 독립 목록, cross-owner 미노출. 상세: `springboot/docs/stories/be-3-5a-daily-report-result-read-model-and-game-state-projection.md`
+- **BE-3.5b — 일일 리포트 결과 SSE 알림**: 인증된 SSE stream, `report.snapshot`/`report.ready`/`report.failed`, callback 처리 after-commit publish, duplicate callback 이벤트 중복 방지. 상세: `springboot/docs/stories/be-3-5b-daily-report-sse-notification.md`
 
 ## BE-4: 추천 퀴즈 제출, 채점, 피드백 반영
 

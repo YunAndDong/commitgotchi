@@ -12,7 +12,7 @@ public class CharacterImageProperties {
 
     private boolean enabled = false;
     private String baseUrl = "";
-    private String fallbackSpriteSheetUrl = "https://cdn.commitgotchi.local/sprites/fallback-default.png";
+    private String fallbackSpriteSheetUrl = "/character-assets/default_image1.png";
     private String s3ObjectPrefix = "s3://commitgotchi-character-images/sprites";
     private boolean s3PresignedUrlEnabled = false;
     private String s3Region = "ap-northeast-2";

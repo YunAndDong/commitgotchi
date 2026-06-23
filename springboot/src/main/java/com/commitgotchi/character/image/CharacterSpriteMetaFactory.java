@@ -26,27 +26,16 @@ public class CharacterSpriteMetaFactory {
     public ObjectNode fallbackSpriteMeta() {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("columns", 3);
-        root.put("rows", 2);
+        root.put("rows", 1);
 
         ObjectNode frameMap = objectMapper.createObjectNode();
-        frameMap.set("baby", frameRow(0));
-        frameMap.set("mature", frameRow(1));
+        frameMap.set("joy", coordinates(0, 0));
+        frameMap.set("sad", coordinates(0, 1));
+        frameMap.set("angry", coordinates(0, 2));
         root.set("frameMap", frameMap);
 
-        ObjectNode frame = objectMapper.createObjectNode();
-        frame.put("babyPx", 16);
-        frame.put("maturePx", 18);
-        root.set("frame", frame);
         root.put("transparent", true);
         return root;
-    }
-
-    private ObjectNode frameRow(int row) {
-        ObjectNode frameRow = objectMapper.createObjectNode();
-        frameRow.set("joy", coordinates(row, 0));
-        frameRow.set("sad", coordinates(row, 1));
-        frameRow.set("angry", coordinates(row, 2));
-        return frameRow;
     }
 
     private ArrayNode coordinates(int row, int column) {

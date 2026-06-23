@@ -84,8 +84,8 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andExpect(jsonPath("$.item.emotion").value("joy"))
                 .andExpect(jsonPath("$.item.isEvolved").value(false))
                 .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/fallback-default.png"))
-                .andExpect(jsonPath("$.item.spriteMeta.frameMap.baby.joy[0]").value(0))
+                .andExpect(jsonPath("$.item.spriteSheetUrl").value("/character-assets/default_image1.png"))
+                .andExpect(jsonPath("$.item.spriteMeta.frameMap.joy[0]").value(0))
                 .andExpect(jsonPath("$.item.active").value(true))
                 .andExpect(jsonPath("$.item.message").value("Ready to learn"))
                 .andExpect(jsonPath("$.item.createdAt").isString())
@@ -239,8 +239,8 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andExpect(jsonPath("$.item.battlePower").value(12))
                 .andExpect(jsonPath("$.item.emotion").value("joy"))
                 .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/fallback-default.png"))
-                .andExpect(jsonPath("$.item.spriteMeta.frameMap.baby.joy[0]").value(0))
+                .andExpect(jsonPath("$.item.spriteSheetUrl").value("/character-assets/default_image1.png"))
+                .andExpect(jsonPath("$.item.spriteMeta.frameMap.joy[0]").value(0))
                 .andExpect(jsonPath("$.item.message").value("좋은 답변이야! 핵심을 잡았어."))
                 .andExpect(jsonPath("$.item.active").value(true))
                 .andExpect(jsonPath("$.state.characters[0].name").value("Renamed"));
@@ -313,6 +313,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andExpect(jsonPath("$.state.characters[0].active").value(true));
 
         assertThat(characterRepository.findById(firstId.longValue())).isEmpty();
+        assertThat(isCharacterSoftDeleted(firstId)).isTrue();
         assertThat(characterRepository.findById(secondId.longValue())).isPresent();
         assertThat(activeCharacterCount(user.id())).isEqualTo(1);
         assertThat(activeCharacterId(user.id())).isEqualTo(secondId.longValue());
@@ -353,6 +354,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                         .isEqualTo(secondId.longValue()));
 
         assertThat(characterRepository.findById(thirdId.longValue())).isEmpty();
+        assertThat(isCharacterSoftDeleted(thirdId)).isTrue();
         assertThat(activeCharacterCount(user.id())).isEqualTo(1);
         assertThat(activeCharacterId(user.id())).isEqualTo(secondId.longValue());
     }
@@ -714,6 +716,14 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 userId
         );
         return id == null ? 0 : id;
+    }
+
+    private boolean isCharacterSoftDeleted(Number characterId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT deleted_at IS NOT NULL FROM characters WHERE id = ?",
+                Boolean.class,
+                characterId.longValue()
+        ));
     }
 
     private String uniqueEmail() {

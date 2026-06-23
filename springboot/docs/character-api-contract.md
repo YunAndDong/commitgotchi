@@ -2,9 +2,9 @@
 
 ## Scope
 
-이 문서는 Spring Boot BE-2 캐릭터 도메인의 공개 계약을 고정한다. 실제 공개 경로는 Vue 호환 facade인 `/api/game/**`이며, 별도 `/api/characters` 경로는 정식 계약이 아니다.
+이 문서는 Spring Boot BE-2 캐릭터 도메인의 임시 Vue 호환 facade를 설명한다. 최종 SSOT는 `_bmad-output/planning-artifacts/architecture/architecture-commitgotchi-2026-06-07/architecture.md`이며, 충돌 시 architecture.md가 우선한다. `/api/game/**`는 최종 `/api/characters/**` 계약으로 이동하기 전의 compatibility layer다.
 
-캐릭터의 System of Record는 PostgreSQL `characters` 테이블이다. `game_states.state_json.characters`는 저장 시 항상 빈 배열 `[]`로 유지하고, API 응답에서만 `CharacterGameProjectionService`가 정규화 row를 overlay한다.
+목표 캐릭터 모델은 architecture.md의 `characters` 공유 템플릿 + `user_character` 유저 인스턴스 분리다. 현재 BE-2 compatibility 구현은 정규화 전환 중이며, `game_states.state_json.characters`는 저장 시 항상 빈 배열 `[]`로 유지하고 API 응답에서만 `CharacterGameProjectionService`가 정규화 row를 overlay한다.
 
 ## Public Endpoints
 
@@ -68,18 +68,11 @@
   "spriteSheetUrl": "https://cdn.commitgotchi.local/sprites/fallback-default.png",
   "spriteMeta": {
     "columns": 3,
-    "rows": 2,
+    "rows": 1,
     "frameMap": {
-      "baby": {
-        "joy": [0, 0],
-        "sad": [0, 1],
-        "angry": [0, 2]
-      },
-      "mature": {
-        "joy": [1, 0],
-        "sad": [1, 1],
-        "angry": [1, 2]
-      }
+      "joy": [0, 0],
+      "sad": [0, 1],
+      "angry": [0, 2]
     }
   },
   "active": true,
@@ -129,7 +122,8 @@ Stats API keys map to DB columns as follows:
 
 저장 경계:
 
-- `characters` table stores `name`, `design_keyword`, `personality`, stats, `battle_power`, `emotion`, `status_message`, `is_evolved`, `image_status`, `sprite_sheet_url`, `sprite_meta`, `is_active`.
+- 목표 architecture에서 `characters`는 공유 템플릿(`personality`, `design_keyword`, `sprite_sheet_url`, `sprite_meta`, `image_status`)이고, `user_character`는 유저 인스턴스(`name`, stats, `battle_power`, `emotion`, `status_message`, `is_evolved`, `is_active`)다.
+- 현재 BE-2 compatibility layer는 이 분리를 완료하기 전까지 정규화 캐릭터 projection으로 `/api/game/**` 응답을 유지한다.
 - `game_states.state_json.characters` is persisted as `[]`.
 - `/api/game/state` overlays normalized characters at response time.
 - `spriteSheetUrl` and `spriteMeta` appear in API responses but are not copied into `game_states.state_json.characters`.
@@ -180,11 +174,13 @@ Spring Boot가 FastAPI로 보낼 리포트 요청 메시지는 `characterMetadat
 
 ### `POST /api/internal/quizzes/grade-result`
 
-정식 BE-3 퀴즈 채점 webhook 후보 endpoint다. 현재 `/api/game/quizzes/{id}/submit`은 keyword 기반 동기 채점 compatibility bridge로 유지하며, 이 webhook 계약과 섞지 않는다.
+정식 BE-3 퀴즈 채점 webhook endpoint다. 현재 `/api/game/quizzes/{id}/submit`은 keyword 기반 동기 채점 compatibility bridge로 유지하지만, 두 경로 모두 캐릭터 성장은 `CharacterCommandService` 경계를 통해 반영한다.
 
-허용 필드는 `submissionId`, `userId`, `quizId`, `status`, `scoreAllocation`, `scoreDelta`, `feedback`, 선택적 `failedReason`이다. `scoreAllocation`과 `scoreDelta`는 FastAPI internal stat keys `db`, `algorithm`, `cs`, `network`, `framework`를 사용하고, `scoreDelta[field] <= scoreAllocation[field]`여야 한다. `status=UNGRADED`는 `scoreDelta` 합이 0이어야 한다.
+허용 필드는 `submissionId`, `userId`, 선택적 `characterId`, `quizId`, `status`, `scoreAllocation`, `scoreDelta`, `feedback`, `emotion`, `statusMessage`, 선택적 `failedReason`이다. `scoreAllocation`과 `scoreDelta`는 FastAPI internal stat keys `db`, `algorithm`, `cs`, `network`, `framework`를 사용하고, `scoreDelta[field] <= scoreAllocation[field]`여야 한다. `status=UNGRADED`는 `scoreDelta` 합이 0이어야 한다.
 
-AD-8 정합을 위해 퀴즈 webhook도 Spring Boot가 최종 감정과 status message를 결정한다. FastAPI는 `emotion`/`statusMessage`를 보내지 않으며, 해당 field가 포함되면 unknown field validation으로 실패한다.
+Architecture §4.3에 맞춰 FastAPI는 `emotion`/`statusMessage`를 webhook에 포함한다. Spring Boot는 해당 값을 수락하고 성장 반영 트랜잭션에서 캐릭터 감정과 상태 메시지 갱신에 사용한다.
+
+`characterId`가 있으면 Spring Boot는 해당 사용자의 소유 캐릭터에 성장 결과를 반영한다. `characterId`가 없으면 BE-3 handoff fallback으로 현재 active 캐릭터를 대상으로 삼고, 성장 write가 성공한 경우에만 해당 캐릭터 SSE 채널에 최신 projection 이벤트를 발행한다.
 
 ## BE-3 Handoff Guardrails
 

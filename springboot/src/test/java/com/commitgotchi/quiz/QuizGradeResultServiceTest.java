@@ -12,18 +12,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class QuizGradeResultServiceTest {
 
-    private final QuizGradeResultService service = new QuizGradeResultService();
+    private final QuizGradeResultService service = new QuizGradeResultService(null, null, null, null);
 
     @Test
-    void gradeResultMapsFastApiScoreKeysToDbDomainOrderAndDecidesEmotion() {
+    void gradeResultMapsFastApiScoreKeysToDbDomainOrderAndUsesWebhookEmotion() {
         QuizGradeResultRequest request = new QuizGradeResultRequest(
                 "submission-1",
                 42L,
+                null,
                 55L,
                 QuizGradeStatus.GRADED,
                 new FastApiScoreDelta(1, 2, 3, 4, 5),
                 new FastApiScoreDelta(1, 2, 3, 4, 5),
                 "feedback",
+                CharacterEmotion.JOY,
+                "좋아요, 핵심은 잡았어요!",
                 null
         );
 
@@ -43,11 +46,14 @@ class QuizGradeResultServiceTest {
         QuizGradeResultRequest request = new QuizGradeResultRequest(
                 "submission-2",
                 42L,
+                null,
                 55L,
                 QuizGradeStatus.UNGRADED,
                 new FastApiScoreDelta(1, 2, 3, 4, 5),
                 new FastApiScoreDelta(0, 1, 0, 0, 0),
                 null,
+                null,
+                "AI가 잠깐 쉬는 중이에요.",
                 "LLM_TIMEOUT"
         );
 

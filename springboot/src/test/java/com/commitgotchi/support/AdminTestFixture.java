@@ -4,8 +4,7 @@ import com.commitgotchi.security.JwtTokenProvider;
 import com.commitgotchi.user.domain.User;
 import com.commitgotchi.user.domain.UserRepository;
 import com.commitgotchi.user.domain.UserRole;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,18 +26,18 @@ public class AdminTestFixture {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
-
-    @PersistenceContext
-    private EntityManager entityManager;
+    private final JdbcTemplate jdbcTemplate;
 
     public AdminTestFixture(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            JwtTokenProvider tokenProvider
+            JwtTokenProvider tokenProvider,
+            JdbcTemplate jdbcTemplate
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     /**
@@ -57,20 +56,14 @@ public class AdminTestFixture {
     public ProvisionedUser provisionAdmin(String rawEmail, String rawPassword) {
         User user = persistUser(rawEmail, rawPassword);
         // 운영 가입 경로는 항상 USER이므로, 테스트 전용으로만 role을 ADMIN으로 승격한다.
-        entityManager.createNativeQuery("UPDATE users SET role = 'ADMIN' WHERE id = :id")
-                .setParameter("id", user.getId())
-                .executeUpdate();
-        entityManager.flush();
-        entityManager.clear();
+        jdbcTemplate.update("UPDATE users SET role = 'ADMIN' WHERE id = ?", user.getId());
         return toProvisioned(user, UserRole.ADMIN);
     }
 
     private User persistUser(String rawEmail, String rawPassword) {
         String email = normalize(rawEmail);
         User user = User.create(email, passwordEncoder.encode(rawPassword));
-        User saved = userRepository.save(user);
-        entityManager.flush();
-        return saved;
+        return userRepository.save(user);
     }
 
     private ProvisionedUser toProvisioned(User user, UserRole role) {

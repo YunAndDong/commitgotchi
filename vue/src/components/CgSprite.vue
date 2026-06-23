@@ -1,12 +1,12 @@
 <script setup>
 /*
- * cg-spr — pixel character sprite (SVG stand-in for the AI-generated image).
- * DESIGN.md cg-spr: (is_evolved, emotion) frame selection, baby/mature stage,
- * grey (도감 미획득), bob idle motion, PENDING placeholder, ground shadow.
- * Real product renders a 6-frame spritesheet; here we draw an equivalent
- * pixel sprout so the whole UX works before assets/AI image exist.
+ * cg-spr — pixel character sprite.
+ * DESIGN.md cg-spr: emotion frame selection, grey (도감 미획득),
+ * bob idle motion, PENDING placeholder, ground shadow.
+ * When spriteSheetUrl + spriteMeta exist, renders one frame from a 1x3 sheet.
+ * Otherwise falls back to the inline SVG sprout so the UI never shows broken media.
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   emotion: { type: String, default: 'joy' },   // joy | sad | angry
@@ -17,24 +17,74 @@ const props = defineProps({
   // FE-10 흐름 C: 이미지 생성 실패 시 깨진 이미지 대신 기본 스프라이트(Fallback)를 유지한다.
   failed: { type: Boolean, default: false },
   imageStatus: { type: String, default: '' },
+  spriteSheetUrl: { type: String, default: '' },
+  spriteMeta: { type: [Object, String], default: null },
   size: { type: Number, default: 160 },
 })
 
+const spriteBroken = ref(false)
 const body = computed(() => props.grey ? '#b8b2a6' : '#7FC86A')
 const bodyDark = computed(() => props.grey ? '#857f73' : '#2F5E34')
 const leaf = computed(() => props.grey ? '#cfc9bd' : '#54A857')
 const cheek = computed(() => props.grey ? 'transparent' : '#f3a6a0')
 const emotion = computed(() => ['joy', 'sad', 'angry'].includes(props.emotion) ? props.emotion : 'joy')
 const pending = computed(() => props.pending || props.imageStatus === 'PENDING')
-const failed = computed(() => props.failed || props.imageStatus === 'FAILED')
+const failed = computed(() => props.failed || ['FALLBACK', 'FAILED'].includes(props.imageStatus))
+const spriteMeta = computed(() => {
+  if (!props.spriteMeta) return null
+  if (typeof props.spriteMeta === 'string') {
+    try { return JSON.parse(props.spriteMeta) } catch { return null }
+  }
+  return props.spriteMeta
+})
+const grid = computed(() => ({
+  columns: Math.max(1, Number(spriteMeta.value?.columns) || 3),
+  rows: Math.max(1, Number(spriteMeta.value?.rows) || 1),
+}))
+const frameCoords = computed(() => {
+  const map = spriteMeta.value?.frameMap || {}
+  let coords = Array.isArray(map[emotion.value]) ? map[emotion.value] : null
+  if (!coords && emotion.value === 'joy' && Array.isArray(map.happy)) coords = map.happy
+  if (!coords) {
+    const stage = props.evolved ? 'mature' : 'baby'
+    const stageMap = map[stage] || {}
+    const key = emotion.value === 'joy' && stageMap.happy && !stageMap.joy ? 'happy' : emotion.value
+    coords = Array.isArray(stageMap[key]) ? stageMap[key] : [0, 0]
+  }
+  return {
+    row: Math.min(grid.value.rows - 1, Math.max(0, Number(coords[0]) || 0)),
+    column: Math.min(grid.value.columns - 1, Math.max(0, Number(coords[1]) || 0)),
+  }
+})
+const spriteStyle = computed(() => {
+  const x = grid.value.columns <= 1 ? 0 : (frameCoords.value.column / (grid.value.columns - 1)) * 100
+  const y = grid.value.rows <= 1 ? 0 : (frameCoords.value.row / (grid.value.rows - 1)) * 100
+  return {
+    width: `${props.size}px`,
+    height: `${props.size}px`,
+    backgroundImage: `url("${props.spriteSheetUrl}")`,
+    backgroundSize: `${grid.value.columns * 100}% ${grid.value.rows * 100}%`,
+    backgroundPosition: `${x}% ${y}%`,
+  }
+})
+const showSpriteSheet = computed(() => (
+  !!props.spriteSheetUrl && !!spriteMeta.value && !props.grey && !pending.value && !spriteBroken.value
+))
+
+watch(() => props.spriteSheetUrl, () => { spriteBroken.value = false })
 </script>
 
 <template>
   <div class="spr" :style="{ width: size + 'px' }">
-    <!-- 생성 대기(흐름 C) — failed 일 때는 placeholder 대신 기본 스프라이트로 폴백 -->
+    <!-- 생성 대기(흐름 C) — FALLBACK 일 때는 placeholder 대신 기본 스프라이트로 폴백 -->
     <div v-if="pending && !failed" class="spr__pending" :style="{ height: size + 'px' }">
       <div class="spr__egg">🥚</div>
       <span class="tiny muted">이미지 생성 중…</span>
+    </div>
+
+    <div v-else-if="showSpriteSheet" :class="['spr__sheet', { bobbing: bob }]" :style="spriteStyle" aria-hidden="true">
+      <img class="spr__probe" :src="spriteSheetUrl" alt="" aria-hidden="true"
+           @load="spriteBroken = false" @error="spriteBroken = true" />
     </div>
 
     <svg v-else :class="['spr__svg', { bobbing: bob }]" :width="size" :height="size"
@@ -89,7 +139,21 @@ const failed = computed(() => props.failed || props.imageStatus === 'FAILED')
 <style scoped>
 .spr { display: inline-flex; flex-direction: column; align-items: center; }
 .spr__svg { display: block; }
-.spr__svg.bobbing { animation: bob 1.8s ease-in-out infinite; }
+.spr__svg.bobbing, .spr__sheet.bobbing { animation: bob 1.8s ease-in-out infinite; }
+.spr__sheet {
+  position: relative;
+  display: block;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.spr__probe {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
 .spr__shadow {
   height: 9px; margin-top: -4px; border-radius: 50%;
   background: var(--shadow-hard); filter: blur(1px);

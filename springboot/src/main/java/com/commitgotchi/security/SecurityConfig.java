@@ -63,6 +63,7 @@ public class SecurityConfig {
                                 "/api/auth/logout-cookie",
                                 "/api/health",
                                 "/actuator/health",
+                                "/character-assets/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"

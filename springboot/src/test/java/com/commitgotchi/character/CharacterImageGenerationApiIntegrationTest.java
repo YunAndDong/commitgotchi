@@ -79,11 +79,11 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.imageStatus").value("READY"))
                 .andExpect(jsonPath("$.item.spriteSheetUrl").value(READY_URL))
-                .andExpect(jsonPath("$.item.spriteMeta.frameMap.baby.joy[0]").value(0))
-                .andExpect(jsonPath("$.item.spriteMeta.frameMap.mature.angry[1]").value(2))
+                .andExpect(jsonPath("$.item.spriteMeta.frameMap.joy[0]").value(0))
+                .andExpect(jsonPath("$.item.spriteMeta.frameMap.angry[1]").value(2))
                 .andExpect(jsonPath("$.state.characters[0].imageStatus").value("READY"))
                 .andExpect(jsonPath("$.state.characters[0].spriteSheetUrl").value(READY_URL))
-                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.baby.sad[1]").value(1))
+                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.sad[1]").value(1))
                 .andReturn();
 
         Number characterId = JsonPath.read(created.getResponse().getContentAsString(), "$.item.id");
@@ -93,10 +93,10 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
         assertThat(request.designKeyword()).isEqualTo("green study slime");
         assertThat(request.s3ObjectUrl())
                 .startsWith("https://commitgotchi-character-images.s3.ap-northeast-2.amazonaws.com/sprites")
-                .contains("/users/" + user.id() + "/characters/" + characterId + "/")
+                .contains("/characters/" + characterId + "/sprite-sheet.png")
                 .contains("X-Amz-Algorithm=AWS4-HMAC-SHA256")
                 .contains("X-Amz-Signature=");
-        assertThat(request.prompt()).contains("green study slime", "2x3");
+        assertThat(request.prompt()).isEqualTo("green study slime");
 
         Map<String, Object> stored = imageColumns(characterId);
         assertThat(stored)
@@ -107,7 +107,7 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.characters[0].imageStatus").value("READY"))
                 .andExpect(jsonPath("$.state.characters[0].spriteSheetUrl").value(READY_URL))
-                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.baby.joy[0]").value(0));
+                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.joy[0]").value(0));
     }
 
     @Test
@@ -119,10 +119,10 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
                 .andExpect(jsonPath("$.item.spriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/test-fallback.png"))
-                .andExpect(jsonPath("$.item.spriteMeta.frameMap.baby.joy[0]").value(0))
+                .andExpect(jsonPath("$.item.spriteMeta.frameMap.joy[0]").value(0))
                 .andExpect(jsonPath("$.state.characters[0].active").value(true))
                 .andExpect(jsonPath("$.state.characters[0].imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.mature.sad[1]").value(1))
+                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.sad[1]").value(1))
                 .andReturn();
 
         Number characterId = JsonPath.read(created.getResponse().getContentAsString(), "$.item.id");
@@ -160,7 +160,7 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
                 .andExpect(jsonPath("$.item.spriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/test-fallback.png"))
-                .andExpect(jsonPath("$.item.spriteMeta.frameMap.baby.angry[1]").value(2));
+                .andExpect(jsonPath("$.item.spriteMeta.frameMap.angry[1]").value(2));
 
         assertThat(activeCharacterCount(user.id())).isEqualTo(1);
     }
@@ -199,7 +199,7 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.imageStatus").value("READY"))
                 .andExpect(jsonPath("$.item.spriteSheetUrl").value(READY_URL))
-                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.mature.joy[0]").value(1));
+                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.joy[0]").value(0));
 
         assertThat(imageClient.callCount()).isEqualTo(1);
         assertThat(imageColumns(characterId)).containsEntry("image_status", "READY");
@@ -280,12 +280,12 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
         return """
                 {
                   "columns": 3,
-                  "rows": 2,
+                  "rows": 1,
                   "frameMap": {
-                    "baby": { "joy": [0, 0], "sad": [0, 1], "angry": [0, 2] },
-                    "mature": { "joy": [1, 0], "sad": [1, 1], "angry": [1, 2] }
+                    "joy": [0, 0],
+                    "sad": [0, 1],
+                    "angry": [0, 2]
                   },
-                  "frame": { "babyPx": 16, "maturePx": 18 },
                   "transparent": true
                 }
                 """;

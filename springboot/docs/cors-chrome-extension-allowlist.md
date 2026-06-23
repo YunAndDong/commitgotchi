@@ -8,6 +8,10 @@
 >
 > 2026-06-19 메모: 게임 API가 사용하는 `PATCH`/`DELETE` preflight도 통과하도록 CORS 허용
 > 메서드에 `PATCH`, `DELETE`를 추가했다.
+>
+> 2026-06-23 메모: COR-1.2에서 운영 기본 origin 모델을 same-origin reverse proxy로 확정했다.
+> 운영 웹은 `https://app.example.com`에서 Vue와 `/api/**`를 함께 받고, extension build만
+> `VITE_API_BASE_URL=https://app.example.com` 같은 절대 URL을 사용한다.
 
 ## 배경
 
@@ -95,6 +99,13 @@ if ("chrome-extension".equalsIgnoreCase(scheme)) {
 별도 설정 변경은 필요 없다. 기존 `CORS_ALLOWED_ORIGINS` 값은 유지하며, 백엔드가 지정된 확장 프로그램
 origin을 추가로 허용한다. prod에서는 기존 정책대로 `CORS_ALLOWED_ORIGINS`에 HTTPS origin이 필요하다.
 
+운영 기본안은 same-origin reverse proxy다. 따라서 production web은 `VITE_API_BASE_URL`을 비워
+`/api/**` 상대 경로를 호출하고, Spring Boot는 `CORS_ALLOWED_ORIGINS=https://app.example.com`,
+`SPRING_PROFILES_ACTIVE=prod`로 실행한다. production extension은 같은 public origin을 절대 URL로
+호출해야 하므로 별도 build에서 `VITE_API_BASE_URL=https://app.example.com`을 사용한다.
+상세 매트릭스와 public Nginx 예시는
+[`public-nginx-reverse-proxy-runbook.md`](./public-nginx-reverse-proxy-runbook.md)를 참고한다.
+
 ## 동작 확인 포인트
 
 - 허용된 CORS 응답: `Access-Control-Allow-Origin: chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn`
@@ -106,9 +117,23 @@ origin을 추가로 허용한다. prod에서는 기존 정책대로 `CORS_ALLOWE
 - 쿠키 refresh/logout 엔드포인트는 `Content-Type: application/json`만 허용한다. 따라서 단순 HTML form
   POST는 거부되고, 브라우저의 CORS preflight를 통과한 허용 origin만 쿠키 작업을 수행할 수 있다.
 
+## Vue와 FastAPI 경계
+
+Vue 브라우저 런타임은 FastAPI를 직접 호출하지 않는다. `VITE_API_BASE_URL`은 Spring Boot API origin을
+가리켜야 하며, 브라우저-facing CORS는 Spring Boot의 `/api/**` 정책이 소유한다.
+
+FastAPI는 현재 Spring Boot와의 서버 간 계약 및 health endpoint 용도이며 `CORSMiddleware`를 설정하지
+않은 상태가 의도된 구성이다. browser-facing FastAPI endpoint가 필요해지기 전까지 FastAPI에 CORS를
+선제 추가하지 않는다. 그런 요구가 생기면 Vue 호출 경로, 허용 origin, credentials 정책, 회귀 테스트를
+포함한 별도 decision record를 먼저 남긴다.
+
 ## 변경하지 않은 것 (범위 준수)
 
-- `/springboot` 외 다른 폴더(프론트엔드, FastAPI 등)는 읽기만 했고 수정하지 않았다.
-- CORS 헤더 정책은 그대로 유지하고, 메서드 정책은 현재 `/api/**` 계약(`GET`, `POST`, `PATCH`,
-  `DELETE`)에 맞췄다. refresh cookie 흐름을 위해 credentials를 허용했다.
-- prod에서 최소 1개 HTTPS origin 필요, 와일드카드 금지 등 기존 보안 규칙은 그대로 유지했다.
+- 2026-06-19 코드 변경 당시 `/springboot` 외 다른 폴더(프론트엔드, FastAPI 등)는 읽기만 했고
+  수정하지 않았다.
+- 2026-06-19 코드 변경 당시 CORS 헤더 정책은 그대로 유지하고, 메서드 정책은 현재 `/api/**` 계약
+  (`GET`, `POST`, `PATCH`, `DELETE`)에 맞췄다. refresh cookie 흐름을 위해 credentials를 허용했다.
+- 2026-06-19 코드 변경 당시 prod에서 최소 1개 HTTPS origin 필요, 와일드카드 금지 등 기존 보안 규칙은
+  그대로 유지했다.
+- 2026-06-23 문서 정렬에서는 런타임 동작을 변경하지 않고, Vue가 FastAPI를 직접 호출하지 않는 결정과
+  FastAPI browser CORS 미설정 guardrail만 명시했다.

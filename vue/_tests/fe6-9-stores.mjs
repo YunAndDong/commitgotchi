@@ -57,6 +57,7 @@ setActive(gameState.characters[0].id)
 
   const review = addReview(post.id, 5, '좋아요')
   ok(review && updateReview(post.id, review.id, 4, '수정 리뷰'), '본인 리뷰 작성·수정')
+  ok(typeof review.createdAt === 'string' && !Number.isNaN(new Date(review.createdAt).getTime()), '리뷰 작성 일시 저장')
   ok(updateReview('b1', 'r1', 1, '탈취 수정') === false, '타인 리뷰 수정 거부')
   ok(deleteReview(post.id, review.id) && post.rating === 0, '본인 리뷰 삭제 후 평점 재계산')
   ok(deleteBoardPost('b1') === false && deleteBoardPost(post.id), '타인 글 삭제 거부·본인 글 삭제')

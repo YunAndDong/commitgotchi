@@ -2,8 +2,7 @@
 
 작성일: 2026-06-14
 
-최근 갱신: 2026-06-19 — 로그인 이후 캐릭터/게시글 수정·삭제에서 나는
-`403 Invalid CORS request` 케이스를 추가했다.
+최근 갱신: 2026-06-23 — 운영 origin 모델을 same-origin reverse proxy 기본안으로 확정하고 env matrix 연결을 추가했다.
 
 확장 팝업에서 로그인·회원가입이 안 되던 문제를 추적한 기록. 증상 메시지가 **두 단계로 바뀌며**
 원인이 둘로 드러났다. 결론부터: ① 빌드에 API 주소가 안 박힘, ② 떠 있는 백엔드가 확장 origin을
@@ -174,6 +173,41 @@ configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIO
 `Access-Control-Allow-Methods: GET,POST,PATCH,DELETE,OPTIONS`가 돌아오는지 확인한다. 이 회귀는
 `CorsConfigurationIntegrationTest.trustedChromeExtensionCanPreflightMutatingGameApiMethods`가 보호한다.
 
+## 운영 배포에서 먼저 확인할 origin 모델
+
+COR-1.2 운영 기본안은 **same-origin reverse proxy**다. 운영 웹은 `https://app.example.com`에서 Vue와
+`/api/**`를 함께 받고, public Nginx가 `/api/**`를 Spring Boot로 넘긴다.
+
+| 환경 | `VITE_API_BASE_URL` | `CORS_ALLOWED_ORIGINS` | `SPRING_PROFILES_ACTIVE` | refresh cookie |
+| --- | --- | --- | --- | --- |
+| Local Docker Compose | `http://localhost:8080` | `http://localhost:5173` | `local` | secure false, `SameSite=Lax` |
+| Local Vite dev | `http://localhost:8080` | `http://localhost:5173` | `local` | secure false, `SameSite=Lax` |
+| Production web | empty string | `https://app.example.com` | `prod` | secure true, `SameSite=None` |
+| Production extension | `https://app.example.com` | `https://app.example.com` + 고정 extension origin | `prod` | secure true, `SameSite=None` |
+
+운영에서 같은 `Invalid CORS request`가 나면 비밀번호나 인증 로직보다 먼저 위 네 값이 같은 모델을
+가리키는지 확인한다. 현재 Spring Boot CORS 계약은 `/api/**`에 대해 `GET, POST, PATCH, DELETE, OPTIONS`와
+`Authorization, Content-Type`만 허용하고 `Access-Control-Allow-Credentials: true`를 반환한다.
+credentials가 켜져 있으므로 wildcard origin은 사용할 수 없다. 운영 `prod` 프로필에서는
+`CORS_ALLOWED_ORIGINS`에 최소 하나의 정확한 HTTPS origin이 필요하며, path/query/fragment가 붙은 값은
+부팅 단계에서 거부된다.
+
+| 잘못된 조합 | 대표 증상 | 수정 |
+| --- | --- | --- |
+| 운영 웹 build에 `VITE_API_BASE_URL=http://localhost:8080`이 박힘 | 사용자 브라우저가 자기 PC의 localhost를 호출하거나 mixed content/CORS 오류가 난다. | 운영 웹은 빈 `VITE_API_BASE_URL`로 다시 build한다. |
+| 운영 extension build의 `VITE_API_BASE_URL`이 비어 있음 | 요청이 `chrome-extension://.../api/**`로 해석되어 백엔드에 도달하지 못한다. | extension은 `VITE_API_BASE_URL=https://app.example.com`으로 다시 build한다. |
+| `CORS_ALLOWED_ORIGINS=https://app.example.com/api` | `prod` 부팅 단계에서 origin 검증 실패 또는 CORS 응답 누락 | path 없이 `https://app.example.com`만 넣는다. |
+| 운영 Spring Boot가 `local` 프로필로 실행됨 | refresh cookie가 `Secure; SameSite=None`으로 발급되지 않아 extension 자동 refresh가 끊긴다. | `SPRING_PROFILES_ACTIVE=prod`로 실행하고 `REFRESH_COOKIE_SECURE=false`를 설정하지 않는다. |
+| public Nginx가 `/api/**`를 Vue로 보내거나 누락 | API 호출이 404 또는 HTML 응답으로 돌아온다. | `/api/` location을 Spring Boot upstream으로 프록시한다. |
+
+상세 public Nginx 예시는 [`public-nginx-reverse-proxy-runbook.md`](./public-nginx-reverse-proxy-runbook.md)를
+따른다.
+
+Vue의 `VITE_API_BASE_URL`을 FastAPI로 지정하는 것은 현재 지원 경로가 아니다. Vue는 FastAPI를 직접
+호출하지 않고 Spring Boot를 통해 AI/채점 흐름에 연결된다. FastAPI에 browser CORS가 없는 것은 의도된
+상태이므로, FastAPI CORS를 추가해서 해결하려 하지 말고 Spring Boot API origin과 allowlist를 먼저
+맞춘다.
+
 ## 확장 ID 고정
 
 `vue/public/manifest.json`의 `key`가 확장 ID를 `daijhhcaecladkkpcjdlfgcokohehhmn`으로 고정한다.
@@ -186,12 +220,14 @@ configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIO
 ## 체크리스트 (다음에 또 막히면)
 
 1. `vue/.env.local`에 `VITE_API_BASE_URL=http://localhost:8080` 있는가 → `npm run build` → 확장 새로고침.
-2. `curl http://localhost:8080/api/health` 200인가(백엔드 기동·Postgres 포함).
-3. 확장 origin으로 `curl`했을 때 `Access-Control-Allow-Origin`이 돌아오는가 → 안 오면
+2. 운영이면 same-origin reverse proxy 기본안 기준으로 `VITE_API_BASE_URL`, `CORS_ALLOWED_ORIGINS`,
+   `SPRING_PROFILES_ACTIVE`, refresh cookie secure 값이 맞는가.
+3. `curl http://localhost:8080/api/health` 200인가(백엔드 기동·Postgres 포함).
+4. 확장 origin으로 `curl`했을 때 `Access-Control-Allow-Origin`이 돌아오는가 → 안 오면
    **백엔드를 현재 코드로 재빌드·재기동**.
-4. `chrome://extensions`의 실제 ID == 백엔드 allowlist의 ID 인가.
-5. 로그인은 되는데 캐릭터/게시글 수정·삭제에서만 `Invalid CORS request`가 나는가 → `PATCH`/`DELETE`
+5. `chrome://extensions`의 실제 ID == 백엔드 allowlist의 ID 인가.
+6. 로그인은 되는데 캐릭터/게시글 수정·삭제에서만 `Invalid CORS request`가 나는가 → `PATCH`/`DELETE`
    preflight가 허용되는지 확인.
-6. 로그인 후 ~15분 뒤 끊김은 버그 아님(로컬 HTTP refresh 쿠키 한계) → HTTPS + `refresh-cookie-secure=true`.
+7. 로그인 후 ~15분 뒤 끊김은 버그 아님(로컬 HTTP refresh 쿠키 한계) → HTTPS + `refresh-cookie-secure=true`.
 
 관련 과거 변경 기록: [`cors-chrome-extension-allowlist.md`](./cors-chrome-extension-allowlist.md).

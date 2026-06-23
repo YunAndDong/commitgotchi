@@ -40,6 +40,7 @@ public class CharacterCreationService {
         for (LearningCharacter existing : existingCharacters) {
             if (existing.isActive()) {
                 existing.deactivate();
+                characterRepository.save(existing);
                 deactivated = true;
             }
         }

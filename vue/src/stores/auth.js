@@ -5,7 +5,7 @@
  */
 import { reactive, readonly } from 'vue'
 import { auth, users, loadTokens, saveTokens, clearAuthSession, onTokensChanged, ApiError } from '../api/client.js'
-import { activeCharacter, loadGameState, resetGameState } from './game.js'
+import { activeCharacter, disconnectCharacterEvents, loadGameState, resetGameState } from './game.js'
 import {
   clearActiveGotchi,
   publishActiveGotchi,
@@ -27,6 +27,7 @@ export const isAuthenticated = () => !!state.tokens
 onTokensChanged(tokens => {
   state.tokens = tokens
   if (!tokens) {
+    disconnectCharacterEvents()
     setActiveGotchiPublishingEnabled(false)
     void clearActiveGotchi()
   }
@@ -117,6 +118,7 @@ export function demoLogin() {
   state.tokens = fake
   state.user = DEMO_USER
   state.status = 'ready'
+  resetGameState()
   publishAuthenticatedGotchi()
   return state.user
 }

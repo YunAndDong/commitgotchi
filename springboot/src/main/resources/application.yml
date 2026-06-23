@@ -11,15 +11,12 @@ spring:
     username: ${DB_USER:commitgotchi}
     password: ${DB_PASSWORD:commitgotchi}
     driver-class-name: org.postgresql.Driver
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-    open-in-view: false
   flyway:
     enabled: true
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
 
 springdoc:
   api-docs:
@@ -39,13 +36,40 @@ management:
 commitgotchi:
   internal-api:
     secret: ${SPRING_INTERNAL_API_SECRET:}
+  report:
+    scheduler:
+      enabled: ${REPORT_MIDNIGHT_SCHEDULER_ENABLED:true}
+      midnight-cron: ${REPORT_MIDNIGHT_SCHEDULER_CRON:0 0 0 * * *}
+      zone: ${REPORT_MIDNIGHT_SCHEDULER_ZONE:Asia/Seoul}
+    queue:
+      enabled: ${REPORT_REQUEST_QUEUE_ENABLED:false}
+      region: ${AWS_REGION:ap-northeast-2}
+      endpoint-url: ${AWS_SQS_ENDPOINT:}
+      access-key-id: ${REPORT_REQUEST_QUEUE_ACCESS_KEY_ID:}
+      secret-access-key: ${REPORT_REQUEST_QUEUE_SECRET_ACCESS_KEY:}
+      session-token: ${REPORT_REQUEST_QUEUE_SESSION_TOKEN:}
+      request-queue-name: ${REPORT_REQUEST_QUEUE_NAME:}
+      request-queue-url: ${REPORT_REQUEST_QUEUE_URL:}
+    dispatcher:
+      enabled: ${REPORT_REQUEST_DISPATCHER_ENABLED:${REPORT_REQUEST_QUEUE_ENABLED:false}}
+      batch-size: ${REPORT_REQUEST_DISPATCHER_BATCH_SIZE:20}
+      max-attempts: ${REPORT_REQUEST_DISPATCHER_MAX_ATTEMPTS:3}
+      retry-delay: ${REPORT_REQUEST_DISPATCHER_RETRY_DELAY:PT5M}
+      fixed-delay-ms: ${REPORT_REQUEST_DISPATCHER_FIXED_DELAY_MS:30000}
+  quiz:
+    grading:
+      enabled: ${QUIZ_GRADING_ENABLED:false}
+      base-url: ${QUIZ_GRADING_BASE_URL:}
+      callback-url: ${QUIZ_GRADING_CALLBACK_URL:http://localhost:8080/api/internal/quizzes/grade-result}
+      connect-timeout: ${QUIZ_GRADING_CONNECT_TIMEOUT:PT2S}
+      read-timeout: ${QUIZ_GRADING_READ_TIMEOUT:PT5S}
   auth:
     refresh-cookie-secure: ${REFRESH_COOKIE_SECURE:false}
   character:
     image:
       enabled: ${CHARACTER_IMAGE_ENABLED:false}
       base-url: ${CHARACTER_IMAGE_BASE_URL:}
-      fallback-sprite-sheet-url: ${CHARACTER_IMAGE_FALLBACK_SPRITE_SHEET_URL:https://cdn.commitgotchi.local/sprites/fallback-default.png}
+      fallback-sprite-sheet-url: ${CHARACTER_IMAGE_FALLBACK_SPRITE_SHEET_URL:/character-assets/default_image1.png}
       s3-object-prefix: ${CHARACTER_IMAGE_S3_OBJECT_PREFIX:s3://commitgotchi-character-images/sprites}
       s3-presigned-url-enabled: ${CHARACTER_IMAGE_S3_PRESIGNED_URL_ENABLED:false}
       s3-region: ${CHARACTER_IMAGE_S3_REGION:${AWS_REGION:ap-northeast-2}}
