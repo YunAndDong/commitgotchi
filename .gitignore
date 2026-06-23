@@ -1,5 +1,6 @@
 # Secrets / local env
 .env
+.env.prod
 .env.local
 .env.*.local
 
@@ -8,8 +9,14 @@
 
 # Per-service ignores live in vue/, springboot/, fastapi/
 
+# Deploy bundle artifact
+deploy-bundle.tar.gz
+
 # Hidden directories
 **/.*/
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 
 # BMad
 _bmad/

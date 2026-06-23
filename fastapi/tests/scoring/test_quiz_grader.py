@@ -59,6 +59,9 @@ class QuizGraderTest(unittest.TestCase):
         self.assertIn("scoreAllocation", client.prompts[0])
         self.assertIn("mustMention", client.prompts[0])
         self.assertIn("총합 10점으로 재분배하지 않습니다", client.prompts[0])
+        self.assertIn("귀엽고 다정한 Commitgotchi", client.prompts[0])
+        self.assertIn("삐진 듯한 귀여운 엄격함", client.prompts[0])
+        self.assertIn("시무룩하지만 다시 해볼 힘", client.prompts[0])
 
     def test_model_weird_fields_missing_fields_and_overages_are_corrected(self) -> None:
         client = FakeGradingClient(
@@ -181,6 +184,7 @@ class QuizGraderTest(unittest.TestCase):
         )
 
         self.assertEqual(result["status"], "GRADED")
+        self.assertIn("점수는 살짝 아껴둘게요", result["feedback"])
         self.assertEqual(
             result["scoreDelta"],
             {
@@ -205,6 +209,7 @@ class QuizGraderTest(unittest.TestCase):
         )
 
         self.assertEqual(result["status"], "UNGRADED")
+        self.assertIn("잠깐 시무룩", result["feedback"])
         self.assertEqual(
             result["scoreDelta"],
             {
