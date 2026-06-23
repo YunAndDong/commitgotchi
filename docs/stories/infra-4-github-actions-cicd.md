@@ -24,19 +24,19 @@ so that 검증된 이미지만 레지스트리에 쌓이고 수동 배포(INFRA-
 
 ## 범위
 
-- **CI (`ci.yml`)**: 백엔드 2종 + 웹 1종 대상. Chrome 확장 빌드는 파이프라인 밖(plan §2.1.1).
+- **CI (`ci.yml`)**: **백엔드 2종(springboot, fastapi)** 대상. Vue(Chrome 확장) 빌드/게시는 파이프라인 밖(plan §2.1.1).
 - **CD (`deploy.yml`)**: OIDC AssumeRole → ECR push → EC2에 SSM Run Command(권장)로 `deploy.sh` 실행.
 - 이미지 태그: `sha-<git-sha>`(불변) + `staging` + `vX.Y.Z`. `latest`는 운영 기준 미사용.
 
 ## Acceptance Criteria
 
 ### AC1 — PR: build only
-- **When** PR이 열리면 → Vue 웹 test/build, Spring test, FastAPI test, Docker image **build**만 수행하고 **ECR push 없음**.
+- **When** PR이 열리면 → Spring test, FastAPI test, Docker image **build**만 수행하고 **ECR push 없음**. (Vue는 선택적 lint/test 게이트만, 이미지화 없음)
 
 ### AC2 — main merge / tag: build + push + deploy
-- **When** main merge → test 통과 후 이미지 3종을 `sha-<git-sha>`+`staging`으로 ECR push, staging 배포.
+- **When** main merge → test 통과 후 **백엔드 이미지 2종**을 `sha-<git-sha>`+`staging`으로 ECR push, staging 배포.
 - **When** tag(`vX.Y.Z`)/manual dispatch → prod 배포(승격).
-- **And** vue 웹 이미지는 `VITE_API_BASE_URL` 빈 값(same-origin)으로 빌드.
+- **And** Vue는 배포 대상이 아니므로 CI/CD에서 이미지화하지 않는다.
 
 ### AC3 — secret 비보유 + 권한 분리
 - **Then** GitHub Actions는 OIDC로 deploy role을 Assume(앱 secret 미보유). CI push 권한과 EC2 pull 권한 분리.
@@ -47,6 +47,5 @@ so that 검증된 이미지만 레지스트리에 쌓이고 수동 배포(INFRA-
 
 ## 검증 / 보류
 - staging 자동 배포 happy path + 의도적 실패 롤백 확인. 배포 후 팀 runbook Smoke Tests/Release CORS Matrix를 release gate로.
-- 🔶 각 앱 test 명령/캐시(`./gradlew test`, FastAPI pytest, `npm test`).
+- 🔶 각 앱 test 명령/캐시(`./gradlew test`, FastAPI pytest).
 - 🔶 롤백 자동화 수준, 무중단 여부(MVP는 짧은 다운타임 허용).
-</content>

@@ -31,29 +31,24 @@
 
 ### 2.1 구성 요소 (레포 기준)
 
-`docker-compose.yml`은 4개 컨테이너로 구성된다. prod 운영 origin 모델은 팀이 **Option A: same-origin reverse proxy**로 확정했다(COR-1.2). 즉 공개 도메인 하나(`https://app.example.com`)에서 Nginx가 **Vue 정적 자산(`/`)** 과 **Spring Boot API(`/api/**`, `/character-assets/**`)** 를 함께 제공한다.
+`docker-compose.yml`은 로컬 개발용으로 4개 컨테이너(vue 포함)로 구성되지만, **prod 배포 대상은 백엔드 3종(Spring Boot·FastAPI·PostgreSQL) + API용 Nginx**다. **Vue는 Chrome 확장프로그램으로만 배포**되므로 EC2/ECR/CI/Nginx 서빙 대상이 아니다(§2.1.1). 운영 공개 진입점은 **API 도메인 하나**이며, Nginx는 `/api/**`·`/character-assets/**`만 Spring Boot로 프록시한다.
 
-| 서비스 | 역할 | 컨테이너 포트 | prod 운영 | 빌드 산출물 |
+| 서비스 | 역할 | 컨테이너 포트 | prod 배포 | 빌드 산출물 |
 |--------|------|---------------|-----------|-------------|
-| **vue** | SPA 프론트엔드. 빌드 후 `nginx:1.27-alpine`이 정적 자산 서빙 | 80 | ✅ EC2 (웹 빌드) | Docker image |
 | **springboot** | System of Record (인증·캐릭터·리포트·랭킹). multi-stage(gradle→temurin-jre) | 8080 | ✅ EC2 | Docker image |
 | **fastapi** | AI/Intelligence (채점·레포트·추천·이미지 생성). python:3.11-slim | 8000 | ✅ EC2 | Docker image |
 | **postgres** | 공유 PostgreSQL 16. 백엔드별 DB 1개씩(`SPRING_DB_NAME`, `FASTAPI_DB_NAME`) | 5432 | ✅ EC2 | 공식 이미지 + init 스크립트 |
+| **vue** | SPA 프론트엔드 | (로컬 80) | ❌ 배포 제외 (Chrome 확장) | Chrome 확장프로그램(.zip) |
 
-- 세 앱 모두 Dockerfile에 비-root 사용자 + `HEALTHCHECK`가 정의되어 있다 (springboot `/api/health`, fastapi `/api/health`, vue `/`).
-- 공개 Nginx 리버스 프록시 + TLS는 의도적으로 compose에 없음 — 서버 프로비저닝 후 인스턴스에 추가하는 전제(`docker-compose.yml` 주석). prod 예시는 팀 runbook에 있음.
+- 백엔드 두 앱 모두 Dockerfile에 비-root 사용자 + `HEALTHCHECK`(springboot `/api/health`, fastapi `/api/health`).
+- 공개 Nginx(API 전용) + TLS는 의도적으로 compose에 없음 — 서버 프로비저닝 후 인스턴스에 추가하는 전제. prod 예시는 팀 runbook 참고(§11에 API-only 정렬 노트).
 
-### 2.1.1 Vue 배포 = 웹 + Chrome 확장프로그램 (두 채널)
+### 2.1.1 Vue = Chrome 확장프로그램 전용 (배포 제외)
 
-같은 Vue 코드베이스에서 **빌드 2종**이 나오고, `VITE_API_BASE_URL`(build-time)만 다르다:
-
-| 채널 | `VITE_API_BASE_URL` | 어디서 서빙 | 파이프라인 |
-|------|---------------------|-------------|------------|
-| **운영 웹** | 빈 값 (상대 `/api/**`, same-origin) | EC2의 Nginx가 `/`에서 서빙 | ✅ 이 백엔드 CI/CD 대상 |
-| **Chrome 확장** | `https://app.example.com` (절대 URL) | Chrome Web Store | ❌ 파이프라인 밖(별도 절차) |
-
-- **운영 웹 빌드**는 EC2에 올라가므로 이 파이프라인이 빌드/배포한다.
-- **확장 빌드**는 스토어로 별도 배포된다. manifest `host_permissions`/`VITE_API_BASE_URL` 정렬은 팀 runbook의 extension 체크리스트 따름. 이 문서는 확장 빌드를 다루지 않는다.
+- Vue SPA는 **Chrome 확장프로그램**으로만 배포된다. EC2/ECR/compose(prod)/CI/Nginx 서빙 대상이 **아니다**.
+- 확장 빌드(`VITE_API_BASE_URL=https://<api-domain>` 절대 URL)는 **Chrome Web Store로 별도 배포** — 이 파이프라인 밖. manifest `host_permissions`/build는 팀 runbook의 extension 체크리스트 따름.
+- **Vue 소스·로컬 개발 흐름은 유지**한다. 로컬 `docker-compose.yml`의 vue 서비스는 로컬 개발/미리보기용으로 둘 수 있다(단, prod overlay/ECR/CI에서는 제외).
+- 확장은 백엔드 API를 **호출하는 클라이언트**일 뿐 — 백엔드(Spring·FastAPI·Postgres·API Nginx)는 그대로 배포된다.
 
 ### 2.1.2 미완성/전제
 
@@ -75,23 +70,20 @@
 ```mermaid
 flowchart LR
     Dev[개발자] -->|push / PR| GH[GitHub Repo]
-    GH --> GA[GitHub Actions<br/>백엔드+웹 CI/CD]
+    GH --> GA[GitHub Actions<br/>백엔드 CI/CD]
 
-    User[사용자 브라우저] -->|웹| WebApp[app.example.com 웹]
-    User -->|확장| Ext[Vue Chrome 확장<br/>스토어 - 파이프라인 밖]
+    User[사용자 브라우저] --> Ext[Vue Chrome 확장<br/>스토어 배포 - 파이프라인 밖]
 
     subgraph AWS
-      GA -->|OIDC AssumeRole<br/>docker push| ECR[(ECR<br/>springboot / fastapi / vue)]
+      GA -->|OIDC AssumeRole<br/>docker push| ECR[(ECR<br/>springboot / fastapi)]
       GA -->|SSM Run Command<br/>또는 SSH| EC2
 
       subgraph EC2[EC2 small - prod]
-        NGINX[Nginx 443<br/>TLS + same-origin proxy]
-        VUEC[Vue static<br/>웹 빌드 컨테이너]
+        NGINX[Nginx 443<br/>TLS + API-only proxy]
         SB[Spring Boot<br/>SoR]
         FA[FastAPI<br/>AI]
         PG[(PostgreSQL<br/>container + volume)]
 
-        NGINX -->|/| VUEC
         NGINX -->|/api/**| SB
         NGINX -->|/character-assets/**| SB
         SB -->|internal call| FA
@@ -107,15 +99,14 @@ flowchart LR
       SQS -.->|향후| FA
     end
 
-    WebApp -->|same-origin /api/**| NGINX
-    Ext -->|https://app.example.com /api/**| NGINX
+    Ext -->|https://<api-domain> /api/**| NGINX
 ```
 
 핵심 흐름:
-1. GitHub Actions가 백엔드 + 웹 이미지를 빌드 → ECR push.
+1. GitHub Actions가 **백엔드 이미지(springboot/fastapi)**를 빌드 → ECR push.
 2. EC2가 ECR에서 pull, SSM에서 env/secret 주입.
-3. 공개 진입점은 Nginx 443 하나(same-origin): `/`→Vue 웹, `/api/**`·`/character-assets/**`→Spring Boot.
-4. **웹**은 same-origin으로, **확장**은 `https://app.example.com` 절대 URL로 같은 `/api/**`를 호출한다.
+3. 공개 진입점은 Nginx 443 하나(**API 전용**): `/api/**`·`/character-assets/**`→Spring Boot. **프론트 서빙 없음.**
+4. **Chrome 확장**이 `https://<api-domain>` 절대 URL로 `/api/**`를 호출한다(스토어 배포, 파이프라인 밖).
 5. FastAPI는 외부 비공개 — Spring Boot internal 호출 전용(브라우저 직접 호출 없음).
 6. S3/SQS는 기능 완성 시점에 연결(점선).
 
@@ -125,8 +116,8 @@ flowchart LR
 
 | 항목 | MVP 1차 | 비고 |
 |------|---------|------|
-| **ECR** | ✅ 사용 | 이미지 레지스트리(springboot/fastapi/vue 웹) |
-| **EC2 small (단일)** | ✅ 사용 | compose로 Nginx + Vue(웹) + Spring Boot + FastAPI + PostgreSQL |
+| **ECR** | ✅ 사용 | 백엔드 이미지 레지스트리(springboot/fastapi) |
+| **EC2 small (단일)** | ✅ 사용 | compose로 API Nginx + Spring Boot + FastAPI + PostgreSQL (Vue 없음) |
 | **ECS / Fargate** | ❌ 미사용 | ⏭ 후속 확장 후보 |
 | **App Runner** | ❌ 미사용 | ⏭ 후속 후보 |
 | **RDS** | ❌ 미사용 | ⏭ PostgreSQL 컨테이너 → 후속 전환 후보 |
@@ -157,9 +148,8 @@ flowchart LR
 | 자격증명 | 로컬 값/개발 키 | EC2 instance role |
 | 진입점 | 각 포트 직접 접근 | Nginx 443 단일 진입점(same-origin) + HTTPS |
 | Spring 프로필 | `local` | `prod` (Swagger 비활성, CORS fail-fast, refresh cookie `Secure;SameSite=None`) |
-| Vue 웹 빌드 | `VITE_API_BASE_URL=http://localhost:8080` | 빈 값(상대 `/api/**`) |
-| Vue 확장 빌드 | (로컬 테스트) | `VITE_API_BASE_URL=https://app.example.com` (파이프라인 밖) |
-| CORS | `http://localhost:5173` | `CORS_ALLOWED_ORIGINS=https://app.example.com` |
+| Vue 확장 빌드 | 로컬 개발(`VITE_API_BASE_URL=http://localhost:8080`) | `VITE_API_BASE_URL=https://<api-domain>` (스토어, **파이프라인 밖**) |
+| CORS | `http://localhost:5173` | `CORS_ALLOWED_ORIGINS=https://<api-domain>` (부팅용 placeholder) + 확장 origin은 Spring 하드코딩 |
 | SQS | **기존 `fastapi/.env`의 큐 재사용**(§6.7) | **동일 스펙 prod 전용 큐**(§6.7) |
 | S3 | **공용 버킷 + `dev/` prefix**(§6.5) | **공용 버킷 + `prod/` prefix** |
 | AI 키 | `GEMINI_API_KEY`(로컬 값) | `GEMINI_API_KEY`(SSM SecureString) |
@@ -172,7 +162,8 @@ flowchart LR
 > 이 항목은 **이미 결정·구현된 사항**이며 인프라 미결 항목이 아니다(`cors-chrome-extension-allowlist.md`, COR-1).
 
 - ✅ CORS source of truth = `CommitgotchiCorsConfiguration`, 적용 경로는 `/api/**`뿐. **Nginx는 CORS 헤더를 붙이지 않고 패스스루**한다(양쪽이 붙이면 헤더 중복으로 깨짐).
-- ✅ 허용 = `CORS_ALLOWED_ORIGINS` exact origin + **하드코딩된 확장 origin** `chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn`(manifest `key`로 고정). prod는 최소 1개 HTTPS origin 필수.
+- ✅ 허용 = `CORS_ALLOWED_ORIGINS` exact origin + **하드코딩된 확장 origin** `chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn`(manifest `key`로 고정).
+- ⚠️ **확장 전용이어도 prod 부팅 조건**: `prod` 프로필은 `CORS_ALLOWED_ORIGINS`에 **HTTPS origin 최소 1개**를 요구해 fail-fast한다. 웹앱이 없어도 **API 자체 도메인**(`https://<api-domain>`)을 placeholder로 넣어 부팅을 통과시킨다. 확장 요청은 하드코딩 origin으로 허용되므로 별개.
 - ✅ method `GET/POST/PATCH/DELETE/OPTIONS`, header `Authorization, Content-Type`, `Access-Control-Allow-Credentials: true`.
 - ✅ **FastAPI는 CORS 대상 아님**(브라우저 직접 호출 없음, 서버-투-서버). browser-facing endpoint가 생기기 전엔 추가 금지(별도 decision record 필요).
 - ✅ `/character-assets/**`는 `/api/**` CORS 범위 밖(단순 `<img>`/CSS 표시). canvas/fetch/CDN 전환 시 별도 asset CORS 결정(runbook).
@@ -186,7 +177,7 @@ flowchart LR
 | `/commitgotchi/prod/db/DB_USER` | String | `DB_USER` |
 | `/commitgotchi/prod/db/DB_PASSWORD` | **SecureString** | `DB_PASSWORD` |
 | `/commitgotchi/prod/spring/JWT_SECRET_BASE64` | **SecureString** | `JWT_SECRET_BASE64` |
-| `/commitgotchi/prod/spring/CORS_ALLOWED_ORIGINS` | String | `https://app.example.com` |
+| `/commitgotchi/prod/spring/CORS_ALLOWED_ORIGINS` | String | `https://<api-domain>` (부팅용 placeholder) |
 | `/commitgotchi/prod/spring/SPRING_INTERNAL_API_SECRET` | **SecureString** | `SPRING_INTERNAL_API_SECRET` (compose 필수) |
 | `/commitgotchi/prod/spring/CHARACTER_IMAGE_ENABLED` | String | `CHARACTER_IMAGE_ENABLED` |
 | `/commitgotchi/prod/fastapi/GEMINI_API_KEY` | **SecureString** | `fastapi/.env` `GEMINI_API_KEY` |
@@ -198,7 +189,7 @@ flowchart LR
 > SQS 관련 다수 변수(`REPORT_REQUEST_QUEUE_*`, `AWS_*`)는 `REPORT_REQUEST_QUEUE_ENABLED=true`로 켤 때 한 묶음으로 SSM 적재.
 > **SQS는 local/prod 분리:** local은 기존 `fastapi/.env`의 큐를 재사용하고(SSM 미사용), prod는 동일 스펙의 **새 prod 전용 큐**를 만들어 SSM에 적재한다(§6.7).
 > **S3는 dev/prod 공용 버킷 1개**를 쓰되 `S3_OBJECT_PREFIX`(`dev/`·`prod/`)로 객체 경로를 분리한다(§6.5).
-> **`VITE_API_BASE_URL`은 SSM 대상이 아니다** — Vue 빌드 시점 baked-in(웹=빈 값, 확장=절대 URL).
+> **`VITE_API_BASE_URL`은 SSM 대상이 아니다** — Chrome 확장 빌드 시점 baked-in(`https://<api-domain>` 절대 URL). 확장 빌드/게시는 파이프라인 밖.
 > dev도 동일 트리(`/commitgotchi/dev/...`)를 쓸지, dev는 로컬 `.env`만 쓸지는 🔶 확정 필요(현재 제안: dev=로컬 `.env`).
 
 ---
@@ -216,7 +207,8 @@ flowchart LR
 ### 6.1 ECR repositories ✅
 - `commitgotchi-springboot`
 - `commitgotchi-fastapi`
-- `commitgotchi-vue` (**웹 빌드** 이미지. 확장 빌드는 ECR 대상 아님)
+
+> Vue는 ECR 대상이 아니다(Chrome 확장 .zip, 파이프라인 밖). 백엔드 이미지 **2개**만 ECR에 둔다.
 
 🔶 lifecycle policy(미사용 태그 만료, 최근 N개 보존)는 구현 시 확정.
 
@@ -276,11 +268,11 @@ flowchart LR
 
 ## 8. CI 계획
 
-대상은 **백엔드 2종 + 웹 1종(springboot, fastapi, vue 웹 빌드)**. Chrome 확장 빌드/게시는 파이프라인 밖(§2.1.1).
+대상은 **백엔드 2종(springboot, fastapi)**. Vue(Chrome 확장) 빌드/게시는 파이프라인 밖(§2.1.1). (원하면 PR 게이트로 Vue lint/test만 돌릴 수 있으나 이미지화·배포는 안 함.)
 
 | 트리거 | 동작 | ECR push |
 |--------|------|----------|
-| **PR** | Vue 웹 test/build, Spring Boot test, FastAPI test, Docker image **build only** | ❌ 없음 |
+| **PR** | Spring Boot test, FastAPI test, Docker image **build only** | ❌ 없음 |
 | **main merge** | 위 test + image build + ECR push + dev/staging 배포 | ✅ |
 | **tag / manual dispatch** | prod 배포 | ✅ (승격) |
 
@@ -290,8 +282,8 @@ flowchart LR
 - `vX.Y.Z` — prod 릴리스.
 - `latest`는 운영 기준으로 쓰지 않음.
 
-> 🔶 PR 단위 test 명령(`./gradlew test`, FastAPI pytest, `npm test`/`npm run build`)의 스텝/캐시 전략은 workflow 구현 시 확정.
-> Vue 웹 이미지 빌드 시 `VITE_API_BASE_URL`은 **빈 값**으로 baked-in(same-origin). 확장 빌드(절대 URL)는 별도.
+> 🔶 PR 단위 test 명령(`./gradlew test`, FastAPI pytest)의 스텝/캐시 전략은 workflow 구현 시 확정.
+> Chrome 확장 빌드(`VITE_API_BASE_URL=https://<api-domain>`)/게시는 이 파이프라인 밖이다.
 
 ---
 
@@ -313,7 +305,7 @@ flowchart LR
 - rollback 자동화 수준(수동 vs 헬스체크 실패 시 자동) — MVP 초기엔 수동 허용.
 - 무중단 여부 — MVP는 짧은 다운타임 허용.
 
-> 배포 후 검증은 팀 runbook의 **Smoke Tests**(웹/확장/거부 origin, PATCH/DELETE preflight, SSE)와 **Release CORS Matrix Checklist**를 release gate로 재사용한다.
+> 배포 후 검증은 팀 runbook의 **Smoke Tests**(확장/거부 origin, PATCH/DELETE preflight, SSE — 웹 origin 항목은 확장 전용이라 제외)와 **Release CORS Matrix Checklist**를 release gate로 재사용한다.
 
 ---
 
@@ -332,19 +324,21 @@ flowchart LR
 
 > prod 예시 server block / 배포 체크리스트 / smoke test는 팀 `public-nginx-reverse-proxy-runbook.md`에 이미 있다. 이 문서는 요약만.
 
-### 11.1 책임 (Option A same-origin)
-- 공개 진입점 = **Nginx 443 하나**(TLS 종료). same-origin이라 웹 API 요청은 상대 `/api/**`.
+### 11.1 책임 (API 전용)
+- 공개 진입점 = **Nginx 443 하나**(TLS 종료). **Vue를 서빙하지 않으므로 API 전용 프록시**다. `/`는 프론트 서빙 없음.
 - 라우팅:
-  - `/` → Vue 웹 static (compose의 vue 컨테이너 proxy 또는 호스트 static root)
   - `/api/**` → Spring Boot (8080)
-  - `/character-assets/**` → Spring Boot (8080) — 기본 sprite 제공 동안
-  - **FastAPI로는 절대 프록시하지 않음**
+  - `/character-assets/**` → Spring Boot (8080) — 기본 sprite 제공 동안(확장이 절대 URL로 가져감)
+  - **FastAPI로는 절대 프록시하지 않음** (외부 비공개)
 - `Host`, `X-Forwarded-*`, `Upgrade`, `Connection` 헤더 보존(SSE/`/api/game/.../events` 위해).
 - **CORS 헤더는 Nginx가 붙이지 않음** — Spring Boot가 소유(§5.1). Nginx는 패스스루.
 - **HTTPS:** MVP는 **Certbot(Let's Encrypt)**. ⏭ 후속 ALB + ACM 후보.
+- Chrome 확장은 `https://<api-domain>/api/**`(절대 URL)로 호출한다. 웹 정적 서빙 경로(`/`)는 없다.
 
 ### 11.2 asset 경로 보류
-- 현재 `/character-assets/**`는 Spring Boot가 repo sprite를 서빙. ⏭ S3/CloudFront 전환 시 asset 전용 CORS(웹 + 확장 origin) 별도 적용(runbook 예시 있음).
+- 현재 `/character-assets/**`는 Spring Boot가 repo sprite를 서빙. ⏭ S3/CloudFront 전환 시 asset 전용 CORS(확장 origin) 별도 적용(runbook 예시 있음).
+
+> 팀 `public-nginx-reverse-proxy-runbook.md`는 same-origin **웹 서빙**을 전제로 작성됨(COR-1.2). 본 배포는 **확장 전용/API-only**이므로 runbook의 `/`→Vue 서빙 부분은 적용하지 않는다(runbook 상단에 정렬 노트 추가). `/api/**`·`/character-assets/**` 프록시, 헤더 보존, smoke test(확장/거부 origin·PATCH/DELETE preflight·SSE)는 그대로 유효.
 
 ---
 
@@ -369,7 +363,7 @@ flowchart LR
 | 1 | **단일 EC2 = 단일 장애 지점** | 다운 시 전체 중단 | MVP 허용. 후속 ALB+다중/ECS |
 | 2 | **PostgreSQL 컨테이너 운영** | 볼륨 손상/백업 부재 시 유실 | 정기 `pg_dump`. 후속 RDS |
 | 3 | **Admin IAM 장기 사용** | 유출 시 피해 큼 | 부트스트랩 후 least-privilege 축소(§7) |
-| 4 | **Vue 채널별 build-time 변수** | 웹(빈 값)·확장(절대 URL) 빌드를 혼동하면 API 호출 실패 | 빌드 분리 + 팀 runbook의 "Common Wrong Combinations" 표 준수. (CORS 자체는 Spring에서 확정·구현됨) |
+| 4 | **확장 build-time 변수 / prod CORS 부팅** | 확장 빌드 `VITE_API_BASE_URL`을 잘못 주면 API 호출 실패. prod 프로필은 HTTPS origin 1개 없으면 부팅 실패 | 확장 빌드는 `https://<api-domain>` 절대 URL. `CORS_ALLOWED_ORIGINS`에 `https://<api-domain>` placeholder 유지(§5.1). CORS는 Spring 확정·구현됨 |
 | 5 | **S3 이미지 API 미완성** | 이미지 영속화 불가 | INFRA-5에서 연동. 현재는 Spring `/character-assets/**` 기본 sprite |
 | 6 | **Spring Boot 기능 미완성** | 전체 기능 배포 불가 | 점진 배포 |
 | 7 | **secret rotation 미구현** | 장기 노출 위험 | SSM 기반 rotation 후속 |
@@ -384,9 +378,9 @@ flowchart LR
 - [ ] **report consumer 워커 entrypoint + 별도 compose 서비스**(별도 프로세스, uvicorn 미탑재)(INFRA-0)
 - [ ] **.env 통합** — `.env.example`/`.env.prod.example` 정리, `GEMINI_API_KEY` compose 주입(INFRA-1)
 - [ ] **aws-cli 전용 named 프로필**(`default` 금지) 생성·사용 명시(INFRA-2)
-- [ ] `docker-compose.prod.yml` overlay (Nginx + 앱 포트 비공개, prod는 ECR 이미지 / 드라이런은 build)
-- [ ] Nginx config — 팀 runbook server block 기반(`/`→Vue, `/api/**`·`/character-assets/**`→Spring, TLS/Certbot, FastAPI 비프록시)
-- [ ] **aws-cli 부트스트랩 스크립트**(`scripts/aws/`, 멱등) — ECR×3, prod SQS 큐(+DLQ), S3 공용 버킷, IAM role, SSM 적재
+- [ ] `docker-compose.prod.yml` overlay (API Nginx + 앱 포트 비공개, prod는 ECR 이미지 / 드라이런은 build, **vue 제외**)
+- [ ] Nginx config(**API 전용**) — `/api/**`·`/character-assets/**`→Spring, TLS/Certbot, FastAPI 비프록시, `/`→Vue 서빙 없음. 팀 runbook 상단에 API-only 정렬 노트 추가
+- [ ] **aws-cli 부트스트랩 스크립트**(`scripts/aws/`, 멱등) — ECR×2(springboot/fastapi), prod SQS 큐(+DLQ), S3 공용 버킷, IAM role, SSM 적재
 - [ ] SSM parameter naming 확정 + 값 적재 (SecureString; `SPRING_INTERNAL_API_SECRET`, `GEMINI_API_KEY`, SQS/S3 포함)
 - [ ] EC2 bootstrap script (docker/compose, SSM agent, ECR login, instance role)
 - [ ] `.github/workflows/ci.yml` + `deploy.yml` (OIDC AssumeRole + ECR push + EC2 배포)
