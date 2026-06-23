@@ -47,6 +47,8 @@ services:
       context: ./springboot
     container_name: commitgotchi-springboot-prod
     restart: unless-stopped
+    volumes:
+      - ./docs:/docs:ro
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
