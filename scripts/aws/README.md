@@ -11,6 +11,10 @@
 
 Vue/ECR/front-end hosting is intentionally out of scope.
 
+`bootstrap-github-oidc.sh` prepares the INFRA-4 GitHub Actions OIDC deploy role.
+Its default mode is a non-mutating plan; actual IAM/OIDC changes require
+`--apply --confirm-apply commitgotchi-github-oidc`.
+
 The default S3 bucket name is account-scoped: `commitgotchi-character-images-<aws-account-id>`. With the current bootstrap profile, the planned default is `commitgotchi-character-images-491013322019`.
 
 ## Safety Defaults
@@ -31,6 +35,30 @@ The default S3 bucket name is account-scoped: `commitgotchi-character-images-<aw
 ```
 
 Review the printed plan before any apply. The plan includes the create/update AWS CLI commands that would run, always with `--profile commitgotchi-bootstrap` and `--region ap-northeast-2`.
+
+## GitHub Actions OIDC Plan
+
+Run this before INFRA-4 workflow apply to review the OIDC provider, deploy role,
+and inline policy shape. This does not mutate AWS resources:
+
+```bash
+./scripts/aws/bootstrap-github-oidc.sh \
+  --profile commitgotchi-bootstrap \
+  --region ap-northeast-2
+```
+
+Actual IAM/OIDC changes require operator approval and a verified current GitHub
+OIDC thumbprint:
+
+```bash
+export GITHUB_OIDC_THUMBPRINT='verify-current-github-thumbprint-before-apply'
+
+./scripts/aws/bootstrap-github-oidc.sh \
+  --profile commitgotchi-bootstrap \
+  --region ap-northeast-2 \
+  --apply \
+  --confirm-apply commitgotchi-github-oidc
+```
 
 ## Apply
 
