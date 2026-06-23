@@ -1,6 +1,6 @@
 ---
 story: INFRA-3.5
-status: in-progress
+status: done
 scope: infra (image-only deploy bundle + baked default character assets)
 phase: Phase 4.5
 plan: ../mvp-cicd-pipeline-plan.md
@@ -16,13 +16,13 @@ related_files:
 
 # Story INFRA-3.5: Deploy bundle + baked default character assets
 
-Status: in-progress
+Status: done
 
 > INFRA-3 production deploy is already live. This story removes the production
 > requirement that the whole repo exist on EC2 by moving runtime deploy to
 > immutable images, a small deploy bundle, and SSM-provided environment values.
-> Do not close this story as `done` until a real EC2 redeploy verifies
-> `/character-assets/default_image1.png` through the public domain.
+> Real EC2 redeploy verified `/character-assets/default_image1.png` through the
+> public domain on 2026-06-23.
 
 ## Story
 
@@ -127,22 +127,53 @@ runtime deploy.
 
 ## Operational Handoff Before Actual Redeploy
 
-Operator must approve the actual state-changing steps before they run:
+Operator approved the actual state-changing steps on 2026-06-23:
 
 1. Rebuild and push Spring Boot image containing the baked classpath sprites.
-2. Rebuild and push FastAPI image only if its image tag is being refreshed.
-3. Upload the generated bundle to:
+2. Upload the generated bundle to:
    `s3://commitgotchi-character-images-491013322019/prod/deploy-bundles/<commit>/deploy-bundle.tar.gz`
-4. On EC2, download and extract the bundle into `/opt/commitgotchi`.
-5. Run `./scripts/deploy.sh` on EC2 using the instance role.
-6. Recheck:
+3. On EC2, download and extract the bundle into `/opt/commitgotchi`.
+4. Run `./scripts/deploy.sh` on EC2 using the instance role.
+5. Recheck:
    - `https://commitgotchi.store/api/health`
    - `https://commitgotchi.store/character-assets/default_image1.png`
 
+## Production Redeploy Results
+
+2026-06-23 production redeploy:
+
+- ✅ Rebuilt and pushed Spring Boot ECR image:
+  - `491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-springboot:prod`
+  - digest: `sha256:5062e00c14333f56bc49c2d87ca9b23306cb272d812546a31144aa5b0844db8c`
+  - pushed at: `2026-06-23T23:33:48.396000+09:00`
+- ✅ FastAPI image was not rebuilt because INFRA-3.5 did not change FastAPI runtime code.
+- ✅ Generated and uploaded deploy bundle:
+  - source commit: `38bd9ffc4041ba7bc12d4ade6dbfd3c99abe2e3b`
+  - S3 URI: `s3://commitgotchi-character-images-491013322019/prod/deploy-bundles/38bd9ffc4041ba7bc12d4ade6dbfd3c99abe2e3b/deploy-bundle.tar.gz`
+  - size: `11997` bytes
+  - contents: `docker-compose.prod.yml`, `nginx/api-only.conf`, `postgres/init/`,
+    `scripts/deploy.sh`, `scripts/bootstrap-tls.sh`
+- ✅ EC2 bundle-based deploy completed through SSM Run Command.
+  - Bundle extracted to `/opt/commitgotchi`.
+  - `/opt/commitgotchi` contains deploy bundle files and generated `.env.prod` only.
+  - Confirmed no `docs/`, `springboot/`, `fastapi/`, or `vue/` directories exist on the EC2 deploy path.
+  - `./scripts/deploy.sh` ran on EC2 without `AWS_PROFILE` or static AWS credential env, using
+    `arn:aws:sts::491013322019:assumed-role/commitgotchi-prod-ec2-role/i-0df1583a004e52aaf`.
+  - macOS extended attribute warnings appeared during `tar` extraction, but extraction and deploy succeeded.
+- ✅ Container state after deploy:
+  - `commitgotchi-nginx-prod`: running
+  - `commitgotchi-postgres-prod`: running/healthy
+  - `commitgotchi-springboot-prod`: running/healthy
+  - `commitgotchi-fastapi-prod`: running/healthy
+- ✅ Public smoke tests:
+  - `https://commitgotchi.store/api/health` -> `{"status":"ok","db":"up","service":"springboot"}`
+  - `https://commitgotchi.store/character-assets/default_image1.png` -> HTTP 200, `content-type: image/png`
+  - `https://commitgotchi.store/` -> HTTP 404, expected for API-only deployment with no Vue serving.
+
 ## Current Status Notes
 
-- Implementation is local only in this story until the operator approves image
-  push, bundle upload, and EC2 redeploy.
+- INFRA-3.5 is complete: production no longer requires the full repo or host
+  `docs/` directory on EC2.
 - No secret plaintext should be printed, committed, or stored in the bundle.
-- No additional IAM appears necessary because `prod/deploy-bundles/...` is under
-  the existing `prod/` S3 object prefix.
+- No additional IAM was necessary because `prod/deploy-bundles/...` is under
+  the existing EC2 role `prod/` S3 object prefix.
