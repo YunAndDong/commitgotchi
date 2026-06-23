@@ -271,6 +271,7 @@ flowchart TB
 - `characterMetadata.emotion`: Spring Boot가 결정한 현재 캐릭터 감정. enum은 `JOY`(기쁨), `ANGRY`(화남), `SAD`(슬픔) 3개만 허용한다. FastAPI는 이 값을 새로 판정하지 않고 리포트 문장의 말투에만 반영한다.
 - `currentStats`: 진화 임계(1,000) 판정·점수 인플레 경계(SM-C1)를 위해 AI에 현재 능력치 컨텍스트로 제공. `[ASSUMPTION]`
 - 자정 리포트는 퀴즈 채점 결과를 종합하지 않고, 학습 리포트와 주간 추세만으로 리포트·점수 변화량·추천 퀴즈를 생성한다.
+- Spring Boot는 자정 스케줄러가 직접 `reports`를 스캔해 SQS 전송 여부를 추론하지 않고, `report_request_outbox`에 `PENDING` 요청을 먼저 기록한다. 스케줄러는 outbox의 `PENDING` 행을 읽어 SQS `SendMessage`를 단건 반복 호출하고, 성공한 행만 `SENT`로 전환한다. SQS batch API 사용 여부와 무관하게 outbox의 `request_id`가 멱등 키다.
 
 ### 4.2 흐름 A · 계약 ② — 리포트 결과 콜백 (FastAPI → Spring Boot)
 
@@ -592,6 +593,25 @@ erDiagram
     string title
     text content
   }
+  REPORT_REQUEST_OUTBOX {
+    bigint id PK
+    string request_id UK "SQS 요청/콜백 멱등 키"
+    bigint user_id FK
+    bigint user_character_id FK
+    date target_date
+    string report_title
+    text report_content
+    string weekly_study_streak
+    jsonb score_delta_hint
+    string focus
+    string status "PENDING|SENT|FAILED"
+    int attempt_count
+    timestamptz available_at
+    timestamptz sent_at "nullable"
+    text last_error "nullable"
+    timestamptz created_at
+    timestamptz updated_at
+  }
   QUIZZES {
     bigint id PK
     bigint user_character_id FK
@@ -654,6 +674,7 @@ CREATE UNIQUE INDEX uq_one_active_character_per_user
 점수는 **두 출처**(흐름 A 리포트·흐름 B 퀴즈)에서 활성 캐릭터에 **일 단위 누적**된다(주간은 집계·표시용일 뿐 반영 단위 아님) `[RESOLVES Q5 / PRD §4.4]`. 두 경로 모두 동일한 트랜잭션 골격을 쓴다:
 
 - **흐름 A(자정 리포트):** ① 콜백의 `requestId`·`targetDate`·`userId`로 대상 `reports` 행을 찾아 `report_id`로 매핑 → `report_results` insert(`request_id` 멱등 체크, `report_id` 1:1) → ② 활성 `user_character`의 `stat_*` 가산 → ③ `battle_power` 재계산(=5종 합) → ④ 진화 판정(§7.1) → ⑤ 감정·상태 메시지 갱신.
+- **흐름 A 요청 적재:** 리포트 저장 또는 자정 스케줄링 단계는 `report_request_outbox`에 `PENDING` 요청을 생성하거나 갱신한다. outbox는 SQS에 보낼 요청 스냅샷(`report_title`, `report_content`, 주간 추세, 방향 힌트)을 보관한다. `request_id`는 outbox와 `report_results`가 공유하는 멱등 키이며, `user_character_id + target_date`는 하루 1개 리포트 재작성 정책과 맞춰 유니크하게 운용한다. SQS 전송 성공 후에만 outbox를 `SENT`로 바꾸고, 콜백 성공 여부는 `report_results`가 별도로 기록한다.
 - **흐름 B(퀴즈 웹훅):** ① `quiz_submissions` upsert(`submission_id` 멱등, 제출 시 `GRADING`) → ② 웹훅 수신 시 활성 `user_character`의 `stat_*` 가산(이 퀴즈의 `score_delta`) → ③ `battle_power` 재계산 → ④ 진화 판정 → ⑤ 감정·상태 메시지 갱신. 부분 성공 없음.
 - **동시성:** 흐름 B는 낮 동안 여러 퀴즈가 빠르게 들어올 수 있으므로 활성 `user_character` 행에 **비관적 락(`SELECT ... FOR UPDATE`)** 또는 낙관적 버전 컬럼으로 합계 정합성을 보장한다. 흐름 A 콜백과 흐름 B 채점이 동시에 같은 `user_character`를 갱신해도 락으로 직렬화된다.
 - **이중계상 금지:** 퀴즈 점수는 흐름 B에서 1회만 반영, 리포트 콜백은 퀴즈 점수를 더하지 않는다(§4.5).
@@ -971,6 +992,7 @@ sequenceDiagram
 | AD-28 | **공유 게시판(`shared_posts`) 폐기, 리뷰는 공유 캐릭터(`characters`)에 직접 작성하고 캐릭터 상세에 통합. `reviews(character_id, user_id, rating 1..5, content)`** | N:M 공유 캐릭터 모델과 일치, 게시판 레이어 제거로 단순화 | 확정 `[§5.5]` |
 | AD-29 | **`users`·`user_character` soft delete(`deleted_at`). 이메일 재사용 불가(전역 UNIQUE 유지), 연쇄 soft delete, 조회 기본 `deleted_at IS NULL` 필터, 활성 단일성 인덱스에 `deleted_at IS NULL` 추가** | 데이터 보존·복구 가능성과 식별자 영구성 | 확정 `[§5.6]` |
 | AD-30 | **`study_logs` → `reports`로 리네임(`user_id` 제거, 유저는 `user_character` 경유). `report_results`는 `user_id` 대신 `report_id`(FK `reports.id`, 1:1 UNIQUE) 보유** | 리포트 결과를 학습 리포트 1건의 분석으로 정규화, 사용자 참조 중복 제거 | 확정 `[§5.1, §5.4, §7.4]` |
+| AD-31 | **자정 리포트 SQS 적재는 `report_request_outbox`를 통해 수행한다** | 스케줄러 재시도와 서버 재시작에도 `PENDING/SENT/FAILED` 상태를 보존하고, SQS 단건 반복 전송과 콜백 멱등 키(`request_id`)를 함께 추적 | 확정 `[§4.1, §5.3]` |
 | AD-21 | **Role은 `varchar(20)` + CHECK(`USER`,`ADMIN`), 공개 가입은 항상 `USER`** | PostgreSQL enum 결합도를 피하면서 허용값 강제 | 확정 |
 | AD-22 | **초기 ADMIN은 Secret 기반 일회성 Flyway placeholder 마이그레이션이 아니라 운영 CLI/수동 SQL 절차로 프로비저닝** | 자격 증명과 해시를 Git/마이그레이션 이력에서 분리 | 확정 |
 | AD-23 | **공통 인증 오류 응답과 traceId를 EntryPoint·DeniedHandler·ControllerAdvice에서 동일 계약으로 제공** | 401/403/400/409 구분과 민감정보 비노출 | 확정 |
@@ -999,7 +1021,7 @@ PRD FR-1~28 전부가 컴포넌트·계약·데이터 모델에 매핑됨(§3.2,
 ## 11. 다음 단계 (Handoff)
 
 1. **김윤석(Spring Boot) — 첫 구현 우선순위:** §12 인증 증분을 먼저 구현한다. `V1__create_users.sql` → `V2__create_refresh_tokens.sql` → SecurityFilterChain/JWT → 회원가입·로그인 → 재발급·로그아웃 → `/api/users/me`·`/api/admin/ping` → 통합 테스트 순서다.
-2. **김윤석(Spring Boot) — 인증 이후:** §5 나머지 도메인 스키마, §4.2 `POST /api/report`, §4.3 `grade-result` 웹훅 수신, §4.4 이미지 동기 HTTP 클라이언트, §4.6 멱등/DLQ, 자정 리포트 Producer, §5.4 리포트/퀴즈 페이지네이션 API 구현.
+2. **김윤석(Spring Boot) — 인증 이후:** §5 나머지 도메인 스키마, §4.1 `report_request_outbox` 기반 자정 리포트 Producer, §4.2 `POST /api/report`, §4.3 `grade-result` 웹훅 수신, §4.4 이미지 동기 HTTP 클라이언트, §4.6 멱등/DLQ, §5.4 리포트/퀴즈 페이지네이션 API 구현.
 3. **신동운(FastAPI):** §8.1 리포트 컨슈머, §8.2 비동기 채점 API(`/api/internal/quizzes/grade`) + Spring Boot 웹훅 호출, §8.3 `/api/ai/commitgotchi` 이미지 생성·S3 저장, §4 콜백, §7.2~7.3 감정·Fallback 구현.
 4. **공통:** §4의 4개 계약(JSON 스키마)을 양 팀 공유 단일 진실(SSOT)로 고정 — 변경 시 동시 합의. 프런트엔드는 §7.6 스프라이트 프레임 선택·bob 렌더, §5.4 2-리스트 페이지네이션, 퀴즈 `GRADING` 상태 조회 구현.
 5. **기존 문서 충돌 정리:** 최신 PRD/Addendum은 퀴즈 동기 채점·이미지 비동기 큐를 기술하지만 본 기존 아키텍처 §4·§8은 퀴즈 웹훅·이미지 동기 HTTP를 기술한다. 인증 증분과 무관하므로 이번 업데이트에서 임의 변경하지 않았으며, 인증 이후 별도 제품 결정으로 정합화해야 한다.

@@ -18,6 +18,9 @@ public record QuizGradeResultRequest(
         long userId,
 
         @Positive
+        Long characterId,
+
+        @Positive
         long quizId,
 
         @NotNull

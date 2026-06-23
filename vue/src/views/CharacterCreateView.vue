@@ -13,10 +13,12 @@ const form = reactive({ name: '', keyword: '', personality: '' })
 const error = ref('')
 const previewEmotion = ref('joy')
 const full = computed(() => gameState.characters.length >= MAX_CHARACTERS)
+const KEYWORD_MAX_LENGTH = 100
 
 const keywordChips = ['연두색 새싹', '동그란 눈', '흙갈색 화분', '작은 공룡', '픽셀 별', '몽실몽실 구름']
 function addChip(ch) {
-  form.keyword = form.keyword ? `${form.keyword} + ${ch}` : ch
+  const nextKeyword = form.keyword ? `${form.keyword} + ${ch}` : ch
+  form.keyword = nextKeyword.slice(0, KEYWORD_MAX_LENGTH)
 }
 
 async function submit() {
@@ -38,8 +40,27 @@ async function submit() {
 
 <template>
   <div class="create">
+    <header class="create-heading">
+      <h1 class="cg-section-title big">새 커밋고치 생성하기</h1>
+    </header>
+
+    <aside class="cg-screen col center preview">
+      <RouterLink to="/select" class="preview-back cg-btn cg-btn--sm" aria-label="캐릭터 선택 화면으로 돌아가기">←</RouterLink>
+      <span class="tiny muted">미리보기</span>
+      <CgSprite :size="160" :emotion="previewEmotion" />
+      <strong class="mono">{{ form.name || '이름 없음' }}</strong>
+      <div class="row" style="gap:6px">
+        <button v-for="e in ['joy','sad','angry']" :key="e"
+                class="cg-btn cg-btn--sm" :class="{ 'cg-btn--primary': previewEmotion === e }"
+                @click="previewEmotion = e">{{ e === 'joy' ? '😊' : e === 'sad' ? '😢' : '😠' }}</button>
+      </div>
+      <p class="tiny faint preview-note">
+        <span>이미지 생성은 약 1분 정도 걸려요!</span>
+        <span>잠시만 기다려주세요</span>
+      </p>
+    </aside>
+
     <section class="cg-card col">
-      <h1 class="cg-section-title big">새 분신 만들기</h1>
       <p class="muted tiny">캐릭터당 5개 스탯은 0에서 시작해요. 보유 {{ gameState.characters.length }}/{{ MAX_CHARACTERS }}.</p>
 
       <div v-if="full" class="cg-badge cg-badge--warn">캐릭터는 최대 {{ MAX_CHARACTERS }}개까지 만들 수 있어요.</div>
@@ -51,8 +72,11 @@ async function submit() {
         </div>
 
         <div class="cg-field">
-          <label class="cg-label" for="kw">디자인 키워드</label>
-          <textarea id="kw" class="cg-textarea" v-model="form.keyword" :disabled="full"
+          <div class="field-heading">
+            <label class="cg-label" for="kw">디자인 키워드</label>
+            <span class="tiny faint">{{ form.keyword.length }}/{{ KEYWORD_MAX_LENGTH }}자</span>
+          </div>
+          <textarea id="kw" class="cg-textarea keyword-textarea" v-model="form.keyword" :maxlength="KEYWORD_MAX_LENGTH" :disabled="full"
                     placeholder="AI가 이 키워드로 캐릭터 이미지를 생성해요."></textarea>
           <div class="row wrap" style="gap:6px">
             <button v-for="ch in keywordChips" :key="ch" type="button" class="cg-tag chipbtn"
@@ -71,24 +95,26 @@ async function submit() {
         <button class="cg-btn cg-btn--primary cg-btn--block" :disabled="full">✨ 분신 생성하기</button>
       </form>
     </section>
-
-    <aside class="cg-screen col center preview">
-      <span class="tiny muted">미리보기</span>
-      <CgSprite :size="160" :emotion="previewEmotion" />
-      <strong class="mono">{{ form.name || '이름 없음' }}</strong>
-      <div class="row" style="gap:6px">
-        <button v-for="e in ['joy','sad','angry']" :key="e"
-                class="cg-btn cg-btn--sm" :class="{ 'cg-btn--primary': previewEmotion === e }"
-                @click="previewEmotion = e">{{ e === 'joy' ? '😊' : e === 'sad' ? '😢' : '😠' }}</button>
-      </div>
-      <p class="tiny faint" style="text-align:center">실제 이미지는 생성 직후 비동기로 만들어져요 (흐름 C).</p>
-    </aside>
   </div>
 </template>
 
 <style scoped>
-.create { display: grid; grid-template-columns: 1fr 320px; gap: var(--sp-4); align-items: start; max-width: 900px; margin: 0 auto; }
+.create { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--sp-4); align-items: start; max-width: 900px; margin: 0 auto; }
+.create-heading { grid-column: 1 / -1; justify-self: start; }
 .preview { padding: var(--sp-5); gap: var(--sp-3); position: sticky; top: 90px; }
+.preview-back {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: 1;
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  font-size: 18px;
+}
+.preview-note { display: flex; flex-direction: column; text-align: center; }
+.field-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.keyword-textarea { min-height: 84px; height: 84px; }
 .chipbtn { cursor: pointer; }
 .err { color: var(--angry); font-family: var(--font-head); font-size: 13px; }
 @media (max-width: 760px) { .create { grid-template-columns: 1fr; } .preview { position: static; } }

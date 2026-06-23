@@ -5,7 +5,7 @@
  */
 import { ref, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { login, signup, authMessage, demoLogin } from '../stores/auth.js'
+import { login, signup, authMessage } from '../stores/auth.js'
 import CgSprite from '../components/CgSprite.vue'
 
 const route = useRoute()
@@ -38,11 +38,6 @@ async function submit() {
   } finally {
     busy.value = false
   }
-}
-
-function enterDemo() {
-  demoLogin()
-  router.push({ name: 'character-select', query: route.query.redirect ? { redirect: route.query.redirect } : {} })
 }
 
 </script>
@@ -95,9 +90,6 @@ function enterDemo() {
         <button class="cg-btn cg-btn--primary cg-btn--block" :disabled="busy">
           {{ busy ? '잠시만요…' : (mode === 'login' ? '로그인' : '가입하고 시작하기') }}
         </button>
-        <button type="button" class="cg-btn cg-btn--block" :disabled="busy" @click="enterDemo">
-          데모로 보기
-        </button>
       </form>
 
       <p class="auth__switch tiny muted">
@@ -117,6 +109,7 @@ function enterDemo() {
   display: flex; flex-direction: column; justify-content: space-between; min-height: 460px;
   background: linear-gradient(180deg, #bfe3ef 0%, var(--screen) 70%);
 }
+:global(html.is-ext-popup .auth__scene) { min-height: 360px; }
 [data-theme='cli'] .auth__scene { background: var(--screen); }
 .sky { position: relative; height: 90px; }
 .sun { position: absolute; right: 12px; top: 0; font-size: 34px; }

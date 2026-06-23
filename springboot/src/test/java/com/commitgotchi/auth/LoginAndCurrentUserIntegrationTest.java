@@ -10,6 +10,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -43,6 +44,9 @@ class LoginAndCurrentUserIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired
     private JwtEncoder jwtEncoder;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void cleanUsers() {
@@ -124,6 +128,44 @@ class LoginAndCurrentUserIntegrationTest extends PostgresIntegrationTest {
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .cookie(new MockCookie("cg_refresh", rotated)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void softDeletedUserCannotLoginRefreshOrUseProtectedApi() throws Exception {
+        signup();
+        MvcResult login = login("person@example.com", "very-secure-password");
+        String accessToken = com.jayway.jsonpath.JsonPath.read(
+                login.getResponse().getContentAsString(),
+                "$.accessToken"
+        );
+        String refreshToken = com.jayway.jsonpath.JsonPath.read(
+                login.getResponse().getContentAsString(),
+                "$.refreshToken"
+        );
+
+        jdbcTemplate.update("""
+                UPDATE users
+                SET deleted_at = CURRENT_TIMESTAMP
+                WHERE email = 'person@example.com'
+                """);
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType("application/json")
+                        .content("""
+                                {"email":"person@example.com","password":"very-secure-password"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_INVALID_CREDENTIALS"));
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType("application/json")
+                        .content("{\"refreshToken\":\"%s\"}".formatted(refreshToken)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REFRESH_TOKEN_INVALID"));
+
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_TOKEN_INVALID"));
     }
 
     @Test

@@ -78,19 +78,26 @@ public class RefreshTokenService {
 
         RefreshToken current = refreshTokenRepository.findByTokenHashForUpdate(hash(rawToken))
                 .orElseThrow(InvalidRefreshTokenException::new);
+        Instant now = clock.instant();
+        // soft-deleted 사용자는 UserMapper 기본 필터로 로딩되지 않으므로 재발급을 거부한다.
+        User user = current.getUser();
+        if (user == null) {
+            if (!current.isRevoked()) {
+                current.revoke(now);
+                refreshTokenRepository.save(current);
+            }
+            throw new InvalidRefreshTokenException();
+        }
         if (current.isRevoked()) {
-            reuseRevocationService.revokeAllActive(current.getUser().getId());
+            reuseRevocationService.revokeAllActive(user.getId());
             throw new ReusedRefreshTokenException();
         }
-        Instant now = clock.instant();
         if (current.isExpiredAt(now)) {
             throw new InvalidRefreshTokenException();
         }
 
-        // 잠금 조회가 join fetch로 소유 사용자를 같은 트랜잭션 내 현재 DB 상태로 로딩하고,
-        // FK ON DELETE CASCADE가 토큰 존재 시 사용자 존재를 보장하므로 그대로 사용한다.
-        User user = current.getUser();
         current.revoke(now);
+        refreshTokenRepository.save(current);
         IssuedRefreshToken refreshToken = issue(user);
         IssuedAccessToken accessToken = jwtTokenProvider.issue(user.getId(), user.getEmail(), user.getRole());
         return TokenPairResponse.from(accessToken, refreshToken);

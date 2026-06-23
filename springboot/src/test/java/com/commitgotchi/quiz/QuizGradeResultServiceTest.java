@@ -12,13 +12,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class QuizGradeResultServiceTest {
 
-    private final QuizGradeResultService service = new QuizGradeResultService();
+    private final QuizGradeResultService service = new QuizGradeResultService(null, null, null, null);
 
     @Test
     void gradeResultMapsFastApiScoreKeysToDbDomainOrderAndUsesWebhookEmotion() {
         QuizGradeResultRequest request = new QuizGradeResultRequest(
                 "submission-1",
                 42L,
+                null,
                 55L,
                 QuizGradeStatus.GRADED,
                 new FastApiScoreDelta(1, 2, 3, 4, 5),
@@ -45,6 +46,7 @@ class QuizGradeResultServiceTest {
         QuizGradeResultRequest request = new QuizGradeResultRequest(
                 "submission-2",
                 42L,
+                null,
                 55L,
                 QuizGradeStatus.UNGRADED,
                 new FastApiScoreDelta(1, 2, 3, 4, 5),

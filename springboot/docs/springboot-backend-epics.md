@@ -155,6 +155,11 @@ Acceptance Criteria:
 - 이미 요청한 리포트는 중복 적재하지 않는다.
 - 실패한 적재를 재시도할 수 있는 상태를 기록한다.
 
+구현 분해:
+- **BE-3.2a — Report Outbox 기반 요청 스냅샷 정규화**: `report_request_outbox` row 생성/갱신, 결정적 `requestId`, 즉시 SQS 전송 제거, FastAPI 메시지 스냅샷 계약 고정. 상세: `springboot/docs/stories/be-3-2a-report-outbox-foundation-and-request-snapshot.md`
+- **BE-3.2b — Asia/Seoul 자정 Report Outbox 적재 스케줄러**: 전날 리포트 대상 선정, `@Scheduled` cron/zone, 멱등 재실행, local/test 수동 실행 service. 상세: `springboot/docs/stories/be-3-2b-midnight-report-outbox-enqueue-scheduler.md`
+- **BE-3.2c — Report Outbox SQS Dispatcher와 Retry 상태 전이**: `PENDING` row 잠금 조회, SQS `SendMessage`, `SENT/FAILED` 상태 전이, attempt/backoff, fake/mocked producer 테스트. 상세: `springboot/docs/stories/be-3-2c-report-sqs-dispatcher-and-retry.md`
+
 ### Story BE-3.3: AI 일일 리포트 결과 수신
 
 Acceptance Criteria:
@@ -178,6 +183,10 @@ Acceptance Criteria:
 - 사용자는 대기, 실패, 완료 상태를 조회할 수 있다.
 - 오전 9시 제공이라는 제품 문구와 실제 API 상태 모델을 정합화한다.
 - Vue가 기대하는 `dailyReport`, `reports`, `quizzes` projection을 제공한다.
+
+구현 분해:
+- **BE-3.5a — 오전 9시 일일 리포트 결과 Read Model과 `/api/game/state` Projection**: pending/fallback/ready 상태 모델, 정규화 결과 저장소 기반 projection, 리포트/퀴즈 독립 목록, cross-owner 미노출. 상세: `springboot/docs/stories/be-3-5a-daily-report-result-read-model-and-game-state-projection.md`
+- **BE-3.5b — 일일 리포트 결과 SSE 알림**: 인증된 SSE stream, `report.snapshot`/`report.ready`/`report.failed`, callback 처리 after-commit publish, duplicate callback 이벤트 중복 방지. 상세: `springboot/docs/stories/be-3-5b-daily-report-sse-notification.md`
 
 ## BE-4: 추천 퀴즈 제출, 채점, 피드백 반영
 

@@ -1,101 +1,58 @@
 package com.commitgotchi.character.domain;
 
 import com.commitgotchi.user.domain.User;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.Objects;
 
-@Entity
-@Table(name = "characters")
 public class LearningCharacter {
 
     private static final int EVOLUTION_BATTLE_POWER_THRESHOLD = 1_000;
     private static final String DEFAULT_STATUS_MESSAGE = "Ready to learn";
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, length = 40)
     private String name;
 
-    @Column(name = "design_keyword", nullable = false, length = 120)
     private String designKeyword;
 
-    @Column(nullable = false, length = 500)
     private String personality;
 
-    @Column(name = "stat_db", nullable = false)
     private int statDb;
 
-    @Column(name = "stat_algorithm", nullable = false)
     private int statAlgorithm;
 
-    @Column(name = "stat_cs", nullable = false)
     private int statCs;
 
-    @Column(name = "stat_network", nullable = false)
     private int statNetwork;
 
-    @Column(name = "stat_framework", nullable = false)
     private int statFramework;
 
-    @Column(name = "battle_power", nullable = false)
     private int battlePower;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
     private CharacterEmotion emotion;
 
-    @Column(name = "status_message", nullable = false, length = 160)
     private String statusMessage;
 
-    @Column(name = "is_evolved", nullable = false)
     private boolean evolved;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "image_status", nullable = false, length = 20)
     private CharacterImageStatus imageStatus;
 
-    @Column(name = "sprite_sheet_url", columnDefinition = "TEXT")
     private String spriteSheetUrl;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "sprite_meta", columnDefinition = "jsonb")
     private String spriteMeta;
 
-    @Column(name = "is_active", nullable = false)
     private boolean active;
 
-    @Version
-    @Column(nullable = false)
     private long version;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    private Instant deletedAt;
 
     protected LearningCharacter() {
     }
@@ -193,6 +150,12 @@ public class LearningCharacter {
         touch();
     }
 
+    public void markDeleted(Instant deletedAt) {
+        this.deletedAt = Objects.requireNonNull(deletedAt, "deletedAt must not be null");
+        this.active = false;
+        touch();
+    }
+
     private int addDelta(int currentValue, int delta) {
         int nextValue = Math.addExact(currentValue, delta);
         if (nextValue < 0) {
@@ -210,20 +173,6 @@ public class LearningCharacter {
         if (!evolved && battlePower >= EVOLUTION_BATTLE_POWER_THRESHOLD) {
             this.evolved = true;
         }
-    }
-
-    @PrePersist
-    void prePersist() {
-        Instant now = Instant.now();
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        updatedAt = now;
-    }
-
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = Instant.now();
     }
 
     private void touch() {
@@ -327,5 +276,13 @@ public class LearningCharacter {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
     }
 }

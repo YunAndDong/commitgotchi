@@ -1,20 +1,32 @@
 package com.commitgotchi.game.domain;
 
-import jakarta.persistence.LockModeType;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-public interface GameStateRepository extends JpaRepository<GameState, Long> {
+@Repository
+public class GameStateRepository {
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            SELECT state
-            FROM GameState state
-            WHERE state.userId = :userId
-            """)
-    Optional<GameState> findByIdForUpdate(@Param("userId") Long userId);
+    private final GameStateMapper mapper;
+
+    public GameStateRepository(GameStateMapper mapper) {
+        this.mapper = mapper;
+    }
+
+    public Optional<GameState> findById(Long userId) {
+        return Optional.ofNullable(mapper.findById(userId));
+    }
+
+    public Optional<GameState> findByIdForUpdate(Long userId) {
+        return Optional.ofNullable(mapper.findByIdForUpdate(userId));
+    }
+
+    public GameState save(GameState state) {
+        mapper.upsert(state);
+        return state;
+    }
+
+    public GameState saveAndFlush(GameState state) {
+        return save(state);
+    }
 }

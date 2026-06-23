@@ -2,6 +2,9 @@ package com.commitgotchi.security;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 import java.util.List;
 
@@ -95,5 +98,31 @@ class CommitgotchiCorsConfigurationTest {
                 "spring.profiles.active=prod",
                 "commitgotchi.cors.allowed-origins=https://app.example.com"
         ).run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void corsSourceRegistersApiMatrixWithoutCoveringCharacterAssets() {
+        contextRunner.withPropertyValues(
+                "commitgotchi.cors.allowed-origins=http://localhost:5173"
+        ).run(context -> {
+            CorsConfigurationSource source = context.getBean(CorsConfigurationSource.class);
+
+            CorsConfiguration api = source.getCorsConfiguration(
+                    new MockHttpServletRequest("OPTIONS", "/api/game/characters/1")
+            );
+            CorsConfiguration characterAssets = source.getCorsConfiguration(
+                    new MockHttpServletRequest("GET", "/character-assets/default_image1.png")
+            );
+
+            assertThat(api).isNotNull();
+            assertThat(api.getAllowedOrigins()).containsExactly(
+                    "http://localhost:5173",
+                    "chrome-extension://daijhhcaecladkkpcjdlfgcokohehhmn"
+            );
+            assertThat(api.getAllowedMethods()).containsExactly("GET", "POST", "PATCH", "DELETE", "OPTIONS");
+            assertThat(api.getAllowedHeaders()).containsExactly("Authorization", "Content-Type");
+            assertThat(api.getAllowCredentials()).isTrue();
+            assertThat(characterAssets).isNull();
+        });
     }
 }
