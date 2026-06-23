@@ -71,6 +71,7 @@ services:
       - commitgotchi-net
 
   fastapi:
+    image: commitgotchi-fastapi:local
     build:
       context: ./fastapi
     container_name: commitgotchi-fastapi
@@ -92,6 +93,39 @@ services:
         condition: service_healthy
     networks:
       - commitgotchi-net
+
+  fastapi-report-worker:
+    profiles: ["worker"]
+    image: commitgotchi-fastapi:local
+    build:
+      context: ./fastapi
+    container_name: commitgotchi-fastapi-report-worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.integration.report_worker"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      FASTAPI_DB_NAME: ${FASTAPI_DB_NAME}
+      SPRING_BOOT_INTERNAL_BASE_URL: http://springboot:8080
+      SPRING_INTERNAL_API_SECRET: ${SPRING_INTERNAL_API_SECRET:?SPRING_INTERNAL_API_SECRET is required}
+      SPRING_REPORT_CALLBACK_PATH: /api/report
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      AWS_SQS_ENDPOINT: ${AWS_SQS_ENDPOINT:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      REPORT_REQUEST_QUEUE_URL: ${REPORT_REQUEST_QUEUE_URL:-}
+      REPORT_REQUEST_DLQ_URL: ${REPORT_REQUEST_DLQ_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      springboot:
+        condition: service_started
+    networks:
+      - commitgotchi-net
+    healthcheck:
+      disable: true
 
   vue:
     build:
