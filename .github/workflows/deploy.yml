@@ -7,9 +7,6 @@ on:
         description: Commit SHA, branch, or tag to deploy. Leave blank for the selected ref.
         required: false
         type: string
-  push:
-    tags:
-      - "v*"
 
 permissions:
   id-token: write

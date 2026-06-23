@@ -30,8 +30,8 @@ INFRA-4 adds two backend-only workflows:
 
 - `.github/workflows/ci.yml`: runs Spring Boot tests, FastAPI tests, and Docker
   build validation on pull requests and pushes. It never pushes images to ECR.
-- `.github/workflows/deploy.yml`: approval-gated production deploy through
-  GitHub Environment `prod`. It uses OIDC, pushes immutable `sha-<git-sha>` ECR
+- `.github/workflows/deploy.yml`: manual production deploy through
+  `workflow_dispatch` and GitHub Environment `prod`. It uses OIDC, pushes immutable `sha-<git-sha>` ECR
   images, uploads a deploy bundle to S3, and triggers EC2 through SSM Run
   Command.
 
@@ -51,10 +51,10 @@ Configure these GitHub repository variables before enabling deploys:
 | `SPRINGBOOT_ECR` | `491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-springboot` |
 | `FASTAPI_ECR` | `491013322019.dkr.ecr.ap-northeast-2.amazonaws.com/commitgotchi-fastapi` |
 
-Create and protect the GitHub Environment named `prod` before using
-`deploy.yml`. The environment approval gate should be required because the
-deploy workflow performs real ECR push, S3 upload, and SSM Run Command after
-approval.
+Create the GitHub Environment named `prod` before using `deploy.yml`. Required
+reviewer and wait timer protection may not be available on every GitHub
+repository plan; if protection is unavailable, keep production deploy
+`workflow_dispatch` only and do not add automatic tag triggers.
 
 Do not add app runtime secrets to GitHub Secrets. Runtime secret/config values
 remain in SSM Parameter Store and are read by the EC2 instance role when

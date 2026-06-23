@@ -25,7 +25,7 @@ Status: in-progress
 ## Story
 
 As a 개발자/운영자,
-I want PR/push backend CI and an approval-gated production deploy workflow,
+I want PR/push backend CI and a manual production deploy workflow,
 so that INFRA-3.5's ECR image + deploy bundle + SSM deployment flow can run
 from GitHub Actions without storing app secrets in GitHub.
 
@@ -54,9 +54,11 @@ from GitHub Actions without storing app secrets in GitHub.
   - Does not build or deploy Vue.
 
 - **Production CD (`deploy.yml`)**
-  - Runs from `workflow_dispatch` and optionally `v*` tags.
-  - Uses GitHub Environment `prod`; production execution requires Environment
-    approval before AWS credentials are configured.
+  - Runs from `workflow_dispatch` only until GitHub Environment reviewer
+    protection is available for this repository.
+  - Uses GitHub Environment `prod`; reviewer/wait timer protection could not be
+    enabled on the current repo/plan, so manual workflow dispatch is the
+    production safety gate for now.
   - Uses GitHub OIDC to assume the deploy role.
   - Builds and pushes immutable ECR tags only:
     `sha-<full-git-sha>`.
@@ -90,12 +92,14 @@ from GitHub Actions without storing app secrets in GitHub.
 - **Then** Spring Boot tests and FastAPI tests run, backend Docker images build,
   no ECR push occurs, and Vue is not built or deployed.
 
-### AC2 - Approval-gated prod deploy
+### AC2 - Manual prod deploy
 
 - **Given** repository variables are configured and the OIDC role exists,
-- **When** an operator starts `Production Deploy` manually or pushes a `v*` tag,
-- **Then** the `prod` GitHub Environment approval gate is reached before AWS
-  credentials are configured or any prod-changing step runs.
+- **When** an operator starts `Production Deploy` manually,
+- **Then** the workflow uses the `prod` GitHub Environment and only starts
+  prod-changing steps after explicit manual dispatch.
+- **And** automatic tag-triggered prod deploy remains future work until required
+  reviewer protection can be enabled.
 
 ### AC3 - Immutable image tag deploy
 
@@ -202,9 +206,9 @@ SSM Parameter Store and are read by the EC2 instance role at deploy time.
 ## Pending Operator Approvals
 
 - Apply/create the GitHub Actions OIDC deploy role if it is still absent.
-- Configure GitHub repo variables and the protected `prod` Environment.
+- Configure GitHub repo variables and the `prod` Environment.
 - Run GitHub Actions CI on the remote repository.
-- Run `Production Deploy` or push a `v*` tag.
+- Run `Production Deploy` manually.
 - Approve the real ECR push, S3 upload, and SSM Run Command performed by the
   GitHub workflow.
 

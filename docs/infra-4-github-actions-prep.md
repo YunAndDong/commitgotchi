@@ -91,7 +91,10 @@ repo:YunAndDong/commitgotchi:ref:refs/tags/v*
 repo:YunAndDong/commitgotchi:environment:prod
 ```
 
-Use GitHub Environment protection on `prod` before enabling production deploys.
+Create the GitHub Environment named `prod` before enabling production deploys.
+Required reviewer and wait timer protection were rejected by the current
+repository/plan during setup, so production deploy stays `workflow_dispatch`
+only until stronger environment protection is available.
 
 ## Required IAM Shape
 
@@ -125,6 +128,8 @@ Implemented workflow files:
 `deploy.yml`:
 
 - Uses `permissions: id-token: write, contents: read`.
+- Runs from `workflow_dispatch` only while environment reviewer protection is
+  unavailable.
 - Assumes the GitHub Actions OIDC role.
 - Builds and pushes immutable `sha-<commit>` backend image tags.
 - Creates and uploads the deploy bundle to S3.
