@@ -4,8 +4,65 @@ INFRA-3 adds two EC2-side runtime scripts:
 
 - `scripts/deploy.sh`: SSM -> `.env.prod` -> ECR pull -> `docker compose up -d` -> health check.
 - `scripts/bootstrap-tls.sh`: first Let's Encrypt certificate issuance before nginx starts.
+- `scripts/make-deploy-bundle.sh`: local-only packager for the minimal EC2
+  runtime bundle.
 
 Vue/Chrome extension deployment is intentionally out of scope.
+
+## Deploy Bundle
+
+INFRA-3.5 deploys from ECR images plus a small runtime bundle instead of a full
+repo clone on EC2. The bundle is intended to be extracted at `/opt/commitgotchi`
+and contains only:
+
+- `docker-compose.prod.yml`
+- `nginx/api-only.conf`
+- `postgres/init/*`
+- `scripts/deploy.sh`
+- `scripts/bootstrap-tls.sh`
+
+It does not contain `docs/`, source trees, `.env.prod`, or secret values.
+`deploy.sh` still creates `.env.prod` on the EC2 host from SSM at deploy time.
+
+Create the local bundle:
+
+```bash
+./scripts/make-deploy-bundle.sh
+tar -tzf deploy-bundle.tar.gz
+```
+
+The approved S3 handoff location stays under the existing prod prefix, avoiding
+new bucket or IAM policy changes:
+
+```text
+s3://commitgotchi-character-images-491013322019/prod/deploy-bundles/<commit>/deploy-bundle.tar.gz
+```
+
+After operator approval, upload from a trusted machine:
+
+```bash
+aws s3 cp deploy-bundle.tar.gz \
+  s3://commitgotchi-character-images-491013322019/prod/deploy-bundles/<commit>/deploy-bundle.tar.gz
+```
+
+After operator approval, fetch and extract on EC2 with the instance role:
+
+```bash
+aws s3 cp \
+  s3://commitgotchi-character-images-491013322019/prod/deploy-bundles/<commit>/deploy-bundle.tar.gz \
+  /tmp/deploy-bundle.tar.gz
+
+sudo install -d -m 0755 /opt/commitgotchi
+sudo tar -xzf /tmp/deploy-bundle.tar.gz -C /opt/commitgotchi
+sudo chown -R "$USER":"$USER" /opt/commitgotchi
+
+cd /opt/commitgotchi
+./scripts/deploy.sh
+```
+
+If the EC2 deploy user is not the interactive `$USER`, substitute the actual
+deploy user before running `chown`. Do not run the upload, EC2 fetch, or deploy
+commands before operator approval.
 
 ## `deploy.sh`
 

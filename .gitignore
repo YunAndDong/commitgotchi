@@ -9,6 +9,9 @@
 
 # Per-service ignores live in vue/, springboot/, fastapi/
 
+# Deploy bundle artifact
+deploy-bundle.tar.gz
+
 # Hidden directories
 **/.*/
 

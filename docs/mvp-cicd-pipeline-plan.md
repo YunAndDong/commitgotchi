@@ -53,7 +53,7 @@
 ### 2.1.2 미완성/전제
 
 - 🔶 **Spring Boot 전체 기능** — 인증 외 캐릭터/리포트/랭킹 등 진행 중(merge로 다수 추가됨).
-- 🔶 **FastAPI S3 기반 최종 이미지 생성 API** — 미완성. 현재 캐릭터 기본 sprite는 Spring Boot가 `/character-assets/**`로 서빙(repo `docs/default_image*.png`).
+- 🔶 **FastAPI S3 기반 최종 이미지 생성 API** — 미완성. 현재 캐릭터 기본 sprite는 Spring Boot가 `/character-assets/**`로 서빙(Spring Boot 이미지에 포함된 classpath resource; 루트 `docs/default_image*.png` 원본은 호환용으로 유지).
 - 🔶 **운영용 Nginx/HTTPS, AWS 리소스(ECR/EC2/SSM/S3/IAM)** — 미생성.
 
 ### 2.2 이미지 기반 배포가 적절한 이유
@@ -345,7 +345,7 @@ flowchart LR
 - Chrome 확장은 `https://commitgotchi.store/api/**`(절대 URL)로 호출한다. 웹 정적 서빙 경로(`/`)는 없다.
 
 ### 11.2 asset 경로 보류
-- 현재 `/character-assets/**`는 Spring Boot가 repo sprite를 서빙. ⏭ S3/CloudFront 전환 시 asset 전용 CORS(확장 origin) 별도 적용(runbook 예시 있음).
+- 현재 `/character-assets/**`는 Spring Boot가 이미지에 포함된 기본 sprite를 서빙. ⏭ S3/CloudFront 전환 시 asset 전용 CORS(확장 origin) 별도 적용(runbook 예시 있음).
 
 > 팀 `public-nginx-reverse-proxy-runbook.md`는 same-origin **웹 서빙**을 전제로 작성됨(COR-1.2). 본 배포는 **확장 전용/API-only**이므로 runbook의 `/`→Vue 서빙 부분은 적용하지 않는다(runbook 상단에 정렬 노트 추가). `/api/**`·`/character-assets/**` 프록시, 헤더 보존, smoke test(확장/거부 origin·PATCH/DELETE preflight·SSE)는 그대로 유효.
 
@@ -373,7 +373,7 @@ flowchart LR
 | 2 | **PostgreSQL 컨테이너 운영** | 볼륨 손상/백업 부재 시 유실 | 정기 `pg_dump`. 후속 RDS |
 | 3 | **Admin IAM 장기 사용** | 유출 시 피해 큼 | 부트스트랩 후 least-privilege 축소(§7) |
 | 4 | **확장 build-time 변수 / prod CORS 부팅** | 확장 빌드 `VITE_API_BASE_URL`을 잘못 주면 API 호출 실패. prod 프로필은 HTTPS origin 1개 없으면 부팅 실패 | 확장 빌드는 `https://commitgotchi.store` 절대 URL. `CORS_ALLOWED_ORIGINS`에 `https://commitgotchi.store` placeholder 유지(§5.1). CORS는 Spring 확정·구현됨 |
-| 5 | **S3 이미지 API 미완성** | 이미지 영속화 불가 | INFRA-5에서 연동. 현재는 Spring `/character-assets/**` 기본 sprite |
+| 5 | **S3 이미지 API 미완성** | 이미지 영속화 불가 | INFRA-5에서 연동. 현재는 Spring 이미지에 포함된 `/character-assets/**` 기본 sprite |
 | 6 | **Spring Boot 기능 미완성** | 전체 기능 배포 불가 | 점진 배포 |
 | 7 | **secret rotation 미구현** | 장기 노출 위험 | SSM 기반 rotation 후속 |
 | 8 | **rollback 자동화 미흡** | 복구 지연 | MVP 수동 롤백 허용, 후속 자동화 |

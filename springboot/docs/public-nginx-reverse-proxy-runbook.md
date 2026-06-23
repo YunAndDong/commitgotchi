@@ -59,7 +59,7 @@ For the MVP API-only deployment, the server-level public Nginx must:
 
 현재 character sprite asset은 Spring Boot가 `/character-assets/**`에서 제공한다.
 구현 기준은 `springboot/src/main/java/com/commitgotchi/character/image/CharacterAssetWebConfig.java`이며,
-이 설정은 repo `docs` 디렉터리의 기본 sprite PNG를 정적 리소스로 노출한다. Spring Security는
+이 설정은 Spring Boot 이미지에 포함된 `classpath:/character-assets/` 기본 sprite PNG를 정적 리소스로 노출한다. Spring Security는
 `springboot/src/main/java/com/commitgotchi/security/SecurityConfig.java`에서 `/character-assets/**`를
 `permitAll`로 열어 둔다.
 

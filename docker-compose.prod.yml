@@ -43,12 +43,8 @@ services:
 
   springboot:
     image: ${SPRINGBOOT_IMAGE:-commitgotchi-springboot:prod}
-    build:
-      context: ./springboot
     container_name: commitgotchi-springboot-prod
     restart: unless-stopped
-    volumes:
-      - ./docs:/docs:ro
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -90,8 +86,6 @@ services:
 
   fastapi:
     image: ${FASTAPI_IMAGE:-commitgotchi-fastapi:prod}
-    build:
-      context: ./fastapi
     container_name: commitgotchi-fastapi-prod
     restart: unless-stopped
     environment:
@@ -132,8 +126,6 @@ services:
   fastapi-report-worker:
     profiles: ["worker"]
     image: ${FASTAPI_IMAGE:-commitgotchi-fastapi:prod}
-    build:
-      context: ./fastapi
     container_name: commitgotchi-fastapi-report-worker-prod
     restart: unless-stopped
     command: ["python", "-m", "app.integration.report_worker"]
