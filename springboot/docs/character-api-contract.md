@@ -174,11 +174,13 @@ Spring Boot가 FastAPI로 보낼 리포트 요청 메시지는 `characterMetadat
 
 ### `POST /api/internal/quizzes/grade-result`
 
-정식 BE-3 퀴즈 채점 webhook 후보 endpoint다. 현재 `/api/game/quizzes/{id}/submit`은 keyword 기반 동기 채점 compatibility bridge로 유지하며, 이 webhook 계약과 섞지 않는다.
+정식 BE-3 퀴즈 채점 webhook endpoint다. 현재 `/api/game/quizzes/{id}/submit`은 keyword 기반 동기 채점 compatibility bridge로 유지하지만, 두 경로 모두 캐릭터 성장은 `CharacterCommandService` 경계를 통해 반영한다.
 
-허용 필드는 `submissionId`, `userId`, `quizId`, `status`, `scoreAllocation`, `scoreDelta`, `feedback`, `emotion`, `statusMessage`, 선택적 `failedReason`이다. `scoreAllocation`과 `scoreDelta`는 FastAPI internal stat keys `db`, `algorithm`, `cs`, `network`, `framework`를 사용하고, `scoreDelta[field] <= scoreAllocation[field]`여야 한다. `status=UNGRADED`는 `scoreDelta` 합이 0이어야 한다.
+허용 필드는 `submissionId`, `userId`, 선택적 `characterId`, `quizId`, `status`, `scoreAllocation`, `scoreDelta`, `feedback`, `emotion`, `statusMessage`, 선택적 `failedReason`이다. `scoreAllocation`과 `scoreDelta`는 FastAPI internal stat keys `db`, `algorithm`, `cs`, `network`, `framework`를 사용하고, `scoreDelta[field] <= scoreAllocation[field]`여야 한다. `status=UNGRADED`는 `scoreDelta` 합이 0이어야 한다.
 
 Architecture §4.3에 맞춰 FastAPI는 `emotion`/`statusMessage`를 webhook에 포함한다. Spring Boot는 해당 값을 수락하고 성장 반영 트랜잭션에서 캐릭터 감정과 상태 메시지 갱신에 사용한다.
+
+`characterId`가 있으면 Spring Boot는 해당 사용자의 소유 캐릭터에 성장 결과를 반영한다. `characterId`가 없으면 BE-3 handoff fallback으로 현재 active 캐릭터를 대상으로 삼고, 성장 write가 성공한 경우에만 해당 캐릭터 SSE 채널에 최신 projection 이벤트를 발행한다.
 
 ## BE-3 Handoff Guardrails
 
