@@ -7,8 +7,33 @@
 
 /* 크롬 확장 드롭다운 팝업: 고정 크기(최대 800x600 제약 내) + 세로 스크롤.
    웹/dev 에서는 .is-ext-popup 가 없으므로 적용되지 않는다. */
-html.is-ext-popup, html.is-ext-popup body { width: 780px; height: 600px; }
-html.is-ext-popup body { overflow-y: auto; overflow-x: hidden; }
+html.is-ext-popup {
+  --cg-ext-popup-width: 780px;
+  --cg-ext-popup-height: 500px;
+  width: var(--cg-ext-popup-width);
+  min-width: var(--cg-ext-popup-width);
+  max-width: var(--cg-ext-popup-width);
+  height: var(--cg-ext-popup-height);
+  min-height: var(--cg-ext-popup-height);
+  max-height: var(--cg-ext-popup-height);
+  overflow: hidden;
+}
+html.is-ext-popup body {
+  width: var(--cg-ext-popup-width);
+  min-width: var(--cg-ext-popup-width);
+  max-width: var(--cg-ext-popup-width);
+  height: var(--cg-ext-popup-height);
+  min-height: var(--cg-ext-popup-height);
+  max-height: var(--cg-ext-popup-height);
+  overflow: hidden;
+}
+html.is-ext-popup #app {
+  width: var(--cg-ext-popup-width);
+  height: var(--cg-ext-popup-height);
+  max-height: var(--cg-ext-popup-height);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 html.is-ext-popup .cg-main { padding-bottom: 32px; }
 
 html, body, #app { height: 100%; }

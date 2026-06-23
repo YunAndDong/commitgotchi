@@ -7,7 +7,7 @@
  * manifest 의 action 에 "default_popup": "index.html" 을 추가하면 된다
  * (단, 드롭다운은 최대 ~800x600 이라 데스크톱 레이아웃은 좁아진다).
  */
-const POPUP = { width: 1240, height: 860 }
+const POPUP = { width: 1240, height: 660 }
 const STORAGE_KEY = 'commitgotchi.activeGotchi'
 let popupWindowId = null
 

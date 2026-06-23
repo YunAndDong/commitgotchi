@@ -12,11 +12,35 @@
          (인라인 <style> 은 script-src 대상이 아니라 허용된다.) -->
     <script src="/ext-popup.js"></script>
     <style>
-      html.is-ext-popup, html.is-ext-popup body {
-        width: 780px; min-width: 780px; height: 600px; margin: 0;
+      html.is-ext-popup {
+        --cg-ext-popup-width: 780px;
+        --cg-ext-popup-height: 500px;
+        width: var(--cg-ext-popup-width);
+        min-width: var(--cg-ext-popup-width);
+        max-width: var(--cg-ext-popup-width);
+        height: var(--cg-ext-popup-height);
+        min-height: var(--cg-ext-popup-height);
+        max-height: var(--cg-ext-popup-height);
+        margin: 0;
+        overflow: hidden;
       }
-      html.is-ext-popup body { overflow-x: hidden; overflow-y: auto; }
-      html.is-ext-popup #app { width: 780px; }
+      html.is-ext-popup body {
+        width: var(--cg-ext-popup-width);
+        min-width: var(--cg-ext-popup-width);
+        max-width: var(--cg-ext-popup-width);
+        height: var(--cg-ext-popup-height);
+        min-height: var(--cg-ext-popup-height);
+        max-height: var(--cg-ext-popup-height);
+        margin: 0;
+        overflow: hidden;
+      }
+      html.is-ext-popup #app {
+        width: var(--cg-ext-popup-width);
+        height: var(--cg-ext-popup-height);
+        max-height: var(--cg-ext-popup-height);
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
     </style>
     <!-- Galmuri pixel font family (DESIGN.md typography SSOT) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/quiple/galmuri/dist/galmuri.css" />

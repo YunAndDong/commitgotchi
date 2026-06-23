@@ -5,7 +5,7 @@
  * persisted through /api/game/** and then replaced with the backend response.
  */
 import { reactive, computed } from 'vue'
-import { apiAssetUrl, game as gameApi } from '../api/client.js'
+import { apiAssetUrl, game as gameApi, openCharacterEventStream } from '../api/client.js'
 import {
   clearActiveGotchi,
   publishActiveGotchi,
@@ -130,7 +130,7 @@ function mockState() {
         score: 1840,
         desc: '매일 아침 알고리즘 한 문제로 자라는 커밋고치예요.',
         rating: 5,
-        reviews: [{ id: 'r1', author: 'sora', stars: 5, text: '꾸준함이 멋져요.' }],
+        reviews: [{ id: 'r1', author: 'sora', stars: 5, text: '꾸준함이 멋져요.', createdAt: new Date().toISOString() }],
       },
     ],
   }
@@ -186,6 +186,7 @@ function normalizeReview(raw) {
     author: String(raw?.author || ''),
     stars: Math.min(5, Math.max(1, Number(raw?.stars) || 1)),
     text: String(raw?.text || ''),
+    createdAt: raw?.createdAt || raw?.created_at || raw?.date || null,
   }
 }
 
@@ -247,6 +248,39 @@ function normalizeReport(raw) {
 
 let mockMode = true
 const state = reactive(mockState())
+const characterEventStreams = new Map()
+const characterEventReconnectTimers = new Map()
+const characterSseResultNotices = reactive({})
+
+function characterNoticeKey(characterId) {
+  return String(characterId)
+}
+
+function markCharacterSseResult(characterId) {
+  if (characterId == null) return
+  characterSseResultNotices[characterNoticeKey(characterId)] = true
+}
+
+export function hasCharacterSseResult(characterId) {
+  return !!characterSseResultNotices[characterNoticeKey(characterId)]
+}
+
+export function clearCharacterSseResult(characterId) {
+  delete characterSseResultNotices[characterNoticeKey(characterId)]
+}
+
+function clearAllCharacterSseResults() {
+  Object.keys(characterSseResultNotices).forEach(characterId => {
+    delete characterSseResultNotices[characterId]
+  })
+}
+
+function pruneCharacterSseResults() {
+  const characterIds = new Set(state.characters.map(character => characterNoticeKey(character.id)))
+  Object.keys(characterSseResultNotices).forEach(characterId => {
+    if (!characterIds.has(characterId)) delete characterSseResultNotices[characterId]
+  })
+}
 
 function applyGameState(next = {}) {
   const fallback = blankState()
@@ -261,11 +295,14 @@ function applyGameState(next = {}) {
   state.boardPosts = Array.isArray(next.boardPosts)
     ? next.boardPosts.map(normalizeBoardPost).filter(Boolean)
     : []
+  pruneCharacterSseResults()
 }
 
 export function resetGameState() {
   mockMode = true
+  disconnectCharacterEvents()
   applyGameState(mockState())
+  clearAllCharacterSseResults()
   setActiveGotchiPublishingEnabled(false)
   void clearActiveGotchi()
 }
@@ -274,6 +311,7 @@ export async function loadGameState() {
   const response = await gameApi.state()
   mockMode = false
   applyGameState(response.state)
+  syncCharacterEventStreams()
   syncActiveGotchi()
   return state
 }
@@ -281,6 +319,7 @@ export async function loadGameState() {
 async function mutate(request) {
   const response = await request
   applyGameState(response.state)
+  syncCharacterEventStreams()
   syncActiveGotchi()
   return response.item
 }
@@ -308,6 +347,71 @@ function syncActiveGotchi() {
     setActiveGotchiPublishingEnabled(false)
     void clearActiveGotchi()
   }
+}
+
+export function disconnectCharacterEvents() {
+  characterEventReconnectTimers.forEach(timer => globalThis.clearTimeout(timer))
+  characterEventReconnectTimers.clear()
+  characterEventStreams.forEach(stream => stream.close())
+  characterEventStreams.clear()
+}
+
+function syncCharacterEventStreams() {
+  if (mockMode) {
+    disconnectCharacterEvents()
+    return
+  }
+  const characterIds = new Set(state.characters.map(character => String(character.id)))
+  characterEventStreams.forEach((stream, characterId) => {
+    if (!characterIds.has(characterId)) {
+      stream.close()
+      characterEventStreams.delete(characterId)
+    }
+  })
+  characterIds.forEach(characterId => {
+    if (!characterEventStreams.has(characterId)) openCharacterEventSubscription(characterId)
+  })
+}
+
+function openCharacterEventSubscription(characterId) {
+  const key = String(characterId)
+  if (characterEventReconnectTimers.has(key)) {
+    globalThis.clearTimeout(characterEventReconnectTimers.get(key))
+    characterEventReconnectTimers.delete(key)
+  }
+  const stream = openCharacterEventStream(key, {
+    onEvent(eventName, payload) {
+      if (eventName === 'character.snapshot') {
+        applyCharacterSnapshot(payload)
+        return
+      }
+      if (eventName === 'character.updated') {
+        const character = applyCharacterSnapshot(payload)
+        if (character) markCharacterSseResult(character.id)
+      }
+    },
+    onClose() {
+      characterEventStreams.delete(key)
+      if (!mockMode && state.characters.some(character => String(character.id) === key)) {
+        const timer = globalThis.setTimeout(() => {
+          characterEventReconnectTimers.delete(key)
+          if (!characterEventStreams.has(key)) openCharacterEventSubscription(key)
+        }, 3000)
+        characterEventReconnectTimers.set(key, timer)
+      }
+    },
+  })
+  characterEventStreams.set(key, stream)
+}
+
+function applyCharacterSnapshot(payload) {
+  const character = normalizeCharacter(payload)
+  if (!character) return null
+  const index = state.characters.findIndex(item => String(item.id) === String(character.id))
+  if (index >= 0) Object.assign(state.characters[index], character)
+  else state.characters.unshift(character)
+  syncActiveGotchi()
+  return character
 }
 
 function requireActiveCharacter() {
@@ -532,7 +636,13 @@ function localAddReview(postId, stars, text) {
   const clean = text?.trim()
   const score = Number(stars)
   if (!post || !clean || !Number.isInteger(score) || score < 1 || score > 5) return null
-  const review = normalizeReview({ id: `rv${Date.now()}-${post.reviews.length + 1}`, author: CURRENT_OWNER, stars: score, text: clean })
+  const review = normalizeReview({
+    id: `rv${Date.now()}-${post.reviews.length + 1}`,
+    author: CURRENT_OWNER,
+    stars: score,
+    text: clean,
+    createdAt: new Date().toISOString(),
+  })
   post.reviews.unshift(review)
   recalculateRating(post)
   return review
@@ -589,6 +699,7 @@ export function codex() {
   const owned = state.characters.map(c => ({
     id: c.id,
     name: c.name,
+    personality: c.personality,
     emotion: c.emotion,
     isEvolved: c.isEvolved,
     spriteSheetUrl: c.spriteSheetUrl,
