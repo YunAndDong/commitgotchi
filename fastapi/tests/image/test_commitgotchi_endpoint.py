@@ -60,7 +60,7 @@ class CommitgotchiEndpointTest(unittest.TestCase):
             self.assertTrue(all(isinstance(axis, int) for axis in coord))
         self.assertTrue(body["spriteMeta"]["transparent"])
 
-    def test_generator_receives_prompt_as_design_keyword_only(self) -> None:
+    def test_generator_receives_prompt_user_and_s3_object_url(self) -> None:
         self._no_auth_settings()
         generator = RecordingGenerator(ready_image_result(local_path="/runtime/x.png"))
         app.dependency_overrides[get_sprite_generator] = lambda: generator
@@ -71,7 +71,9 @@ class CommitgotchiEndpointTest(unittest.TestCase):
         call = generator.calls[0]
         self.assertEqual(call["design_keyword"], _request_payload()["prompt"])
         self.assertEqual(call["user_id"], 1)
-        # s3ObjectUrl must never reach the generator as a storage destination.
+        # prompt is the design keyword; s3_object_url is the Spring-chosen upload
+        # location (INFRA-5). The raw camelCase request field is not forwarded.
+        self.assertEqual(call["s3_object_url"], _request_payload()["s3ObjectUrl"])
         self.assertNotIn("s3ObjectUrl", call)
 
     def test_fallback_result_returns_section_4_4_fail_shape(self) -> None:

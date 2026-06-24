@@ -69,6 +69,14 @@ services:
       REPORT_REQUEST_DISPATCHER_ENABLED: ${REPORT_REQUEST_DISPATCHER_ENABLED:-false}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       S3_OBJECT_PREFIX: ${S3_OBJECT_PREFIX:-}
+      # INFRA-5 read-side: persist s3:// key + mint presigned GET at read time.
+      CHARACTER_IMAGE_S3_PRESIGNED_GET_ENABLED: ${CHARACTER_IMAGE_S3_PRESIGNED_GET_ENABLED:-false}
+      # s3://bucket/prefix Spring writes to / presigns from (e.g. .../dev).
+      CHARACTER_IMAGE_S3_OBJECT_PREFIX: ${CHARACTER_IMAGE_S3_OBJECT_PREFIX:-}
+      # presign credentials via the mounted AWS profile (no static keys).
+      AWS_PROFILE: ${AWS_PROFILE:-}
+      AWS_CONFIG_FILE: /aws/config
+      AWS_SHARED_CREDENTIALS_FILE: /aws/credentials
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
     ports:
       - "${SPRING_PORT}:8080"
@@ -77,6 +85,9 @@ services:
         condition: service_healthy
     networks:
       - commitgotchi-net
+    volumes:
+      # Host AWS profile, read-only. Used only when S3/presign is enabled.
+      - ${HOME}/.aws:/aws:ro
 
   fastapi:
     image: commitgotchi-fastapi:local
@@ -113,6 +124,12 @@ services:
       REPORT_REQUEST_DLQ_URL: ${REPORT_REQUEST_DLQ_URL:-}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       S3_OBJECT_PREFIX: ${S3_OBJECT_PREFIX:-}
+      # INFRA-5 write-side: local (default) or s3 upload to Spring's s3ObjectUrl.
+      CHARACTER_IMAGE_STORAGE_BACKEND: ${CHARACTER_IMAGE_STORAGE_BACKEND:-local}
+      # S3 upload credentials via the mounted AWS profile (no static keys).
+      AWS_PROFILE: ${AWS_PROFILE:-}
+      AWS_CONFIG_FILE: /aws/config
+      AWS_SHARED_CREDENTIALS_FILE: /aws/credentials
     ports:
       - "${FASTAPI_PORT}:8000"
     depends_on:
@@ -120,6 +137,8 @@ services:
         condition: service_healthy
     networks:
       - commitgotchi-net
+    volumes:
+      - ${HOME}/.aws:/aws:ro
 
   fastapi-report-worker:
     profiles: ["worker"]
@@ -152,6 +171,10 @@ services:
       REPORT_REQUEST_DLQ_URL: ${REPORT_REQUEST_DLQ_URL:-}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       S3_OBJECT_PREFIX: ${S3_OBJECT_PREFIX:-}
+      # SQS consume credentials via the mounted AWS profile (no static keys).
+      AWS_PROFILE: ${AWS_PROFILE:-}
+      AWS_CONFIG_FILE: /aws/config
+      AWS_SHARED_CREDENTIALS_FILE: /aws/credentials
     depends_on:
       postgres:
         condition: service_healthy
@@ -161,6 +184,8 @@ services:
       - commitgotchi-net
     healthcheck:
       disable: true
+    volumes:
+      - ${HOME}/.aws:/aws:ro
 
   vue:
     build:

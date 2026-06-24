@@ -7,6 +7,10 @@ plugins {
 group = 'com.commitgotchi'
 version = '0.0.1-SNAPSHOT'
 
+// Override Spring Boot 3.3 managed Testcontainers (1.19.x ships docker-java 3.3,
+// which fails Docker Engine 29 API negotiation). 1.21.x bundles docker-java 3.4+.
+ext['testcontainers.version'] = '1.21.3'
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
@@ -25,6 +29,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation platform('software.amazon.awssdk:bom:2.32.22')
     implementation 'software.amazon.awssdk:sqs'
+    implementation 'software.amazon.awssdk:s3'
     implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.4'
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'

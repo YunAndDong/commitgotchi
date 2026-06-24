@@ -35,8 +35,18 @@ class Settings(BaseSettings):
     gemini_image_timeout_seconds: float = 30.0
     gemini_image_retry_limit: int = 1
     character_image_storage_root: str = "runtime/data/character-images"
+    # local (default, no AWS) or s3 (upload to the bucket location Spring provides).
+    character_image_storage_backend: str = "local"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("character_image_storage_backend")
+    @classmethod
+    def _validate_storage_backend(cls, value: str) -> str:
+        normalized = (value or "local").strip().lower()
+        if normalized not in {"local", "s3"}:
+            raise ValueError("character_image_storage_backend must be 'local' or 's3'")
+        return normalized
 
     @field_validator("spring_boot_internal_base_url")
     @classmethod

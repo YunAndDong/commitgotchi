@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
@@ -13,6 +14,8 @@ from app.scoring.policy import zero_score_vector
 from .schemas import SpringCallbackResult
 from .spring_client import SpringCallbackClient
 
+
+logger = logging.getLogger(__name__)
 
 ReportService = Callable[..., Mapping[str, Any]]
 
@@ -121,6 +124,7 @@ def process_report_request_message(
 ) -> ReportMessageProcessResult:
     request = _parse_report_request(message_body)
     if request is None:
+        logger.warning("report message rejected: %s", INVALID_SCHEMA_ERROR)
         return ReportMessageProcessResult(
             callback_attempted=False,
             callback_ok=False,
@@ -129,6 +133,14 @@ def process_report_request_message(
             poison=True,
             error=INVALID_SCHEMA_ERROR,
         )
+
+    logger.info(
+        "processing report request requestId=%s userId=%s characterId=%s targetDate=%s",
+        request.request_id,
+        request.user_id,
+        request.character_metadata.character_id,
+        request.target_date,
+    )
 
     try:
         report_result = report_service(
@@ -175,6 +187,14 @@ def process_report_request_message(
             error=CALLBACK_FAILED_ERROR,
         )
 
+    logger.info(
+        "report callback result requestId=%s ok=%s status=%s%s",
+        request.request_id,
+        callback_result.ok,
+        callback_result.status_code,
+        "" if callback_result.ok else f" error={callback_result.error}",
+    )
+
     return _process_result_from_callback(
         callback_result,
         request_id=request.request_id,
@@ -202,7 +222,10 @@ def poll_report_request_queue(
             WaitTimeSeconds=wait_time_seconds,
             MaxNumberOfMessages=max_number_of_messages,
         )
-        for message in response.get("Messages", []):
+        messages = response.get("Messages", [])
+        if messages:
+            logger.info("received %d report message(s) from SQS", len(messages))
+        for message in messages:
             body = message.get("Body", "")
             result = process_report_request_message(
                 body,
@@ -216,6 +239,7 @@ def poll_report_request_queue(
                     QueueUrl=queue_url,
                     ReceiptHandle=receipt_handle,
                 )
+                logger.info("deleted SQS message after successful callback")
     return results
 
 

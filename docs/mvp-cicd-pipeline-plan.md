@@ -227,10 +227,12 @@ flowchart LR
 
 ### 6.5 S3 bucket ✅ (dev/prod 공용, prefix 분리)
 - **dev와 prod가 같은 버킷 1개**를 공용한다(aws-cli로 생성, §6.0). 비용·운영 단순화 목적.
-- 객체 경로를 **prefix로 분리**: dev=`dev/characters/...`, prod=`prod/characters/...` (`S3_OBJECT_PREFIX`).
-- 퍼블릭 접근 차단 + Presigned URL 또는 same-origin 프록시. asset CORS는 API CORS와 분리(runbook).
-- ⚠️ **위험(§13 #9):** 공용 버킷이라 dev가 prod 객체를 덮어쓸 수 있다 → prefix 경계를 코드/IAM에서 강제하고, prod prefix는 dev 자격증명으로 쓰기 금지하는 방향을 후속 검토.
-- FastAPI storage adapter가 이 버킷에 1×3 sprite를 업로드(INFRA-5). 미완성 동안은 Spring `/character-assets/**` 기본 sprite.
+- 객체 경로를 **prefix로 분리**: dev=`dev/characters/{id}/sprite-sheet.png`, prod=`prod/characters/{id}/...` (`S3_OBJECT_PREFIX`). key는 characterId 기반 결정적.
+- **퍼블릭 차단 유지.** 표시는 **조회 시 Spring이 발급하는 presigned GET URL**(매 조회 재발급). DB엔 만료 URL이 아니라 **key**를 저장(INFRA-5). public 전환/CloudFront는 후속 후보(비권장).
+- **자격증명 = credential chain**(로컬 AWS profile / prod EC2 instance role). **정적 access/secret key는 `.env`·SSM에 두지 않는다**(SQS와 동일 방식). Spring presign은 SDK `S3Presigner`로.
+- storage backend는 `CHARACTER_IMAGE_STORAGE_BACKEND=local|s3` (기본 local, S3 opt-in). 로컬 S3 dev는 `dev/` prefix + AWS profile.
+- ⚠️ **위험(§13 #9):** 공용 버킷이라 dev가 prod 객체를 덮어쓸 수 있다 → prefix 경계 강제, prod prefix는 dev 자격증명으로 쓰기 금지 + dev 전용 least-privilege 프로필을 후속 검토.
+- FastAPI가 생성 sprite를 이 버킷에 업로드(INFRA-5, S3 backend면 메모리→S3 직행). 미완성 동안은 Spring 이미지에 포함된 기본 sprite(`/character-assets/**`).
 
 ### 6.6 PostgreSQL ✅(MVP) / ⏭(후속)
 - MVP: EC2 내부 컨테이너 + named volume(`postgres-data`).
@@ -396,7 +398,7 @@ flowchart LR
 - [ ] (후속, ALB 도입 시) **Route53 호스티드 존 생성 + 가비아 NS 변경** → apex alias→ALB, ACM DNS 검증
 - [ ] `.github/workflows/ci.yml` + `deploy.yml` (OIDC AssumeRole + ECR push + EC2 배포)
 - [ ] prod health check + 팀 runbook **Smoke Tests / Release CORS Matrix** release gate 연결
-- [ ] FastAPI S3 storage adapter (공용 버킷 + `S3_OBJECT_PREFIX`, 업로드/Presigned URL) + asset CORS(전환 시)
+- [ ] INFRA-5: FastAPI S3 업로드(메모리→S3) + Spring 조회 시 presigned GET(key 저장, SDK S3Presigner, credential chain) + 로컬 S3 dev 셋업 문서
 - [ ] (파이프라인 밖) Chrome 확장 빌드/스토어 게시 — runbook extension 체크리스트 따름
 
 ---

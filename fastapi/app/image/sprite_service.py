@@ -7,6 +7,7 @@ from .config import CharacterImageSettings
 from .frame_normalizer import normalize_sprite_grid
 from .gemini_client import GeminiImageGenerationClient
 from .local_storage import LocalSpriteImageStorage, StoredImage
+from .s3_storage import S3SpriteImageStorage
 from .png_validation import PNG_SIGNATURE, PngValidationError, validate_transparent_png
 from .prompts import DesignKeywordError, build_sprite_prompt
 from .quality_gate import evaluate_sprite_quality
@@ -45,6 +46,7 @@ def generate_commitgotchi_sprite(
     design_keyword: str | None,
     user_id: int | str | None = None,
     image_request_id: str | None = None,
+    s3_object_url: str | None = None,
     client: ImageGenerationClient | None = None,
     storage: SpriteImageStorage | None = None,
     settings: CharacterImageSettings | None = None,
@@ -81,20 +83,40 @@ def generate_commitgotchi_sprite(
     except PngValidationError as exc:
         return fallback_image_result(_png_reason_to_fallback(exc.reason))
 
+    if storage is None:
+        try:
+            storage = _select_storage(image_settings, s3_object_url)
+        except Exception:
+            return fallback_image_result("INVALID_STORAGE_CONFIG")
+
     try:
-        image_storage = storage or LocalSpriteImageStorage(image_settings.storage_root)
-        stored = image_storage.save_png(
+        stored = storage.save_png(
             processed_bytes,
             user_id=user_id,
             image_request_id=image_request_id,
         )
     except Exception:
-        return fallback_image_result("LOCAL_STORAGE_FAILED")
+        reason = (
+            "S3_STORAGE_FAILED"
+            if image_settings.storage_backend == "s3"
+            else "LOCAL_STORAGE_FAILED"
+        )
+        return fallback_image_result(reason)
 
     return ready_image_result(
         local_path=stored.local_path,
         content_type=stored.content_type,
     )
+
+
+def _select_storage(
+    settings: CharacterImageSettings,
+    s3_object_url: str | None,
+) -> SpriteImageStorage:
+    if settings.storage_backend == "s3":
+        # raises S3StorageError if s3_object_url is missing/malformed
+        return S3SpriteImageStorage(s3_object_url=s3_object_url, region=settings.s3_region)
+    return LocalSpriteImageStorage(settings.storage_root)
 
 
 def _generate_with_retries(

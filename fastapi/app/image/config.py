@@ -21,6 +21,8 @@ class CharacterImageSettings:
     timeout_seconds: float
     retry_limit: int
     storage_root: Path
+    storage_backend: str = "local"
+    s3_region: str = "ap-northeast-2"
 
     @classmethod
     def from_app_settings(
@@ -36,6 +38,8 @@ class CharacterImageSettings:
             storage_root=resolve_character_image_storage_root(
                 app_settings.character_image_storage_root
             ),
+            storage_backend=app_settings.character_image_storage_backend,
+            s3_region=app_settings.aws_region,
         )
 
     @property

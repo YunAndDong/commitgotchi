@@ -308,7 +308,7 @@ class SpriteGenerationServiceTest(unittest.TestCase):
         self.assertEqual(storage.calls, [])
 
 
-def _fake_settings(*, retry_limit: int = 0):
+def _fake_settings(*, retry_limit: int = 0, storage_backend: str = "local"):
     from app.image.config import CharacterImageSettings
 
     return CharacterImageSettings(
@@ -317,7 +317,53 @@ def _fake_settings(*, retry_limit: int = 0):
         timeout_seconds=1.0,
         retry_limit=retry_limit,
         storage_root=Path("unused"),
+        storage_backend=storage_backend,
+        s3_region="ap-northeast-2",
     )
+
+
+class S3BackendSelectionTest(unittest.TestCase):
+    def test_s3_backend_uploads_to_provided_location(self) -> None:
+        from app.image.s3_storage import S3SpriteImageStorage
+        from app.image.sprite_service import generate_commitgotchi_sprite
+        from tests.image.test_s3_storage import FakeS3Client
+
+        s3_client = FakeS3Client()
+        storage = S3SpriteImageStorage(
+            s3_object_url="s3://bucket/dev/characters/42/sprite-sheet.png",
+            region="ap-northeast-2",
+            client=s3_client,
+        )
+
+        result = generate_commitgotchi_sprite(
+            design_keyword="커비",
+            user_id=1,
+            s3_object_url="s3://bucket/dev/characters/42/sprite-sheet.png",
+            client=FakeImageClient(),
+            storage=storage,
+            settings=_fake_settings(storage_backend="s3"),
+        )
+
+        self.assertEqual(result.image_status, "READY")
+        self.assertEqual(len(s3_client.calls), 1)
+        self.assertEqual(s3_client.calls[0]["ContentType"], "image/png")
+        self.assertEqual(s3_client.calls[0]["Key"], "dev/characters/42/sprite-sheet.png")
+        self.assertEqual(result.local_path, "s3://bucket/dev/characters/42/sprite-sheet.png")
+
+    def test_s3_backend_without_object_url_returns_invalid_storage_config(self) -> None:
+        from app.image.sprite_service import generate_commitgotchi_sprite
+
+        result = generate_commitgotchi_sprite(
+            design_keyword="커비",
+            user_id=1,
+            s3_object_url=None,
+            client=FakeImageClient(),
+            storage=None,
+            settings=_fake_settings(storage_backend="s3"),
+        )
+
+        self.assertEqual(result.image_status, "FALLBACK")
+        self.assertEqual(result.fallback_reason, "INVALID_STORAGE_CONFIG")
 
 
 if __name__ == "__main__":

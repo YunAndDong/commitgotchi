@@ -1,6 +1,6 @@
 ---
 story: INFRA-4
-status: in-progress
+status: done
 scope: infra (GitHub Actions CI + prod CD)
 phase: Phase 5
 plan: ../mvp-cicd-pipeline-plan.md
@@ -16,11 +16,10 @@ related_files:
 
 # Story INFRA-4: GitHub Actions CI/CD (OIDC + ECR + S3 bundle + SSM)
 
-Status: in-progress
+Status: done
 
-> Local workflow/docs implementation is present. This story must not be marked
-> done until the operator approves the state-changing steps and the GitHub
-> Actions prod path is run successfully.
+Completed after PR merge, main CI verification, and a successful manual
+`Production Deploy` run against prod.
 
 ## Story
 
@@ -46,7 +45,7 @@ from GitHub Actions without storing app secrets in GitHub.
 ## Scope
 
 - **CI (`ci.yml`)**
-  - Runs on pull requests and pushes.
+  - Runs on pull requests to `main` and pushes to `main`.
   - Runs Spring Boot tests with Gradle.
   - Runs FastAPI tests with pytest.
   - Builds Spring Boot and FastAPI Docker images for validation only.
@@ -203,14 +202,20 @@ SSM Parameter Store and are read by the EC2 instance role at deploy time.
   - Local TLS certificate warnings are expected outside the EC2 host.
 - ✅ `git diff --check`
 
-## Pending Operator Approvals
+## Remote Completion Results
 
-- Apply/create the GitHub Actions OIDC deploy role if it is still absent.
-- Configure GitHub repo variables and the `prod` Environment.
-- Run GitHub Actions CI on the remote repository.
-- Run `Production Deploy` manually.
-- Approve the real ECR push, S3 upload, and SSM Run Command performed by the
-  GitHub workflow.
+2026-06-24 remote verification:
+
+- ✅ PR #14 merged to `main`.
+  - Merge commit: `72f42175a06af937a9cd24ba1eacb8e7fa7c7860`
+- ✅ `Backend CI` passed on `main`.
+  - Run: `https://github.com/YunAndDong/commitgotchi/actions/runs/28038254902`
+- ✅ Manual `Production Deploy` passed on `main`.
+  - Run: `https://github.com/YunAndDong/commitgotchi/actions/runs/28038723964`
+- ✅ Production health check passed:
+  - `https://commitgotchi.store/api/health`
+- ✅ Default sprite smoke check returned HTTP 200:
+  - `https://commitgotchi.store/character-assets/default_image1.png`
 
 ## Future Work
 
