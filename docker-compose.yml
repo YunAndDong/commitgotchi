@@ -77,6 +77,8 @@ services:
       AWS_PROFILE: ${AWS_PROFILE:-}
       AWS_CONFIG_FILE: /aws/config
       AWS_SHARED_CREDENTIALS_FILE: /aws/credentials
+      # Demo debug controller (flow A immediate trigger). Off unless set true.
+      COMMITGOTCHI_DEBUG_ENABLED: ${COMMITGOTCHI_DEBUG_ENABLED:-false}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
     ports:
       - "${SPRING_PORT}:8080"

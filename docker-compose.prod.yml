@@ -82,6 +82,10 @@ services:
       # auto-inject --env-file values into the container; they must be listed here.
       CHARACTER_IMAGE_S3_PRESIGNED_GET_ENABLED: ${CHARACTER_IMAGE_S3_PRESIGNED_GET_ENABLED:-false}
       CHARACTER_IMAGE_S3_OBJECT_PREFIX: ${CHARACTER_IMAGE_S3_OBJECT_PREFIX:-}
+      # Demo debug controller (flow A immediate trigger). Default off in prod;
+      # set true (via SSM spring/COMMITGOTCHI_DEBUG_ENABLED) only for a live demo,
+      # then back to false. Random-token guarded, no auth — solo demo only.
+      COMMITGOTCHI_DEBUG_ENABLED: ${COMMITGOTCHI_DEBUG_ENABLED:-false}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
     depends_on:
       postgres:

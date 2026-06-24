@@ -4,7 +4,7 @@ import com.commitgotchi.report.application.ReportMidnightEnqueueService;
 import com.commitgotchi.report.application.ReportOutboxDispatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,8 +26,11 @@ import java.util.Set;
  *
  * <p><b>경계/주의 (파트너가 이어받을 부분):</b>
  * <ul>
- *   <li>{@code @Profile("local","dev")} 로 운영(prod) 프로파일에는 빈 자체가 등록되지 않는다.
- *       즉 prod에서는 이 엔드포인트가 존재하지 않는다(404).</li>
+ *   <li>{@code @ConditionalOnProperty("commitgotchi.debug.enabled"=true)} 로 가드한다.
+ *       이 값은 <b>기본 false</b>(application.yml)라, 따로 켜지 않으면 어떤 환경(local/dev/prod)에서도
+ *       빈이 등록되지 않는다(엔드포인트 없음 → 404). prod에서 시연할 때만 SSM/환경변수
+ *       {@code COMMITGOTCHI_DEBUG_ENABLED=true} 로 켜고, <b>발표가 끝나면 다시 false 로 돌려 끈다</b>
+ *       (코드 재배포 없이 값만 변경). 프로파일에 묶지 않은 이유 = prod에서도 토글로 켜고 끄기 위함.</li>
  *   <li>인증을 붙이지 않았다. 대신 추측이 어려운 <b>난수 경로 토큰</b>({@link #DEMO_TOKEN})으로만
  *       호출할 수 있게 했다. <b>이건 "혼자 하는 시연" 한정 임시 방편</b>이며, 운영/공유 환경에서는
  *       반드시 내부 인증(예: {@code Authorization: Internal <secret>}) 또는 ADMIN 권한으로 교체해야 한다.</li>
@@ -35,15 +38,19 @@ import java.util.Set;
  *       {@link ReportMidnightEnqueueService#enqueueForTargetDate(LocalDate)} (outbox 적재) +
  *       {@link ReportOutboxDispatcher#dispatchAvailable(Instant)} (outbox → SQS 전송).
  *       즉 흐름 A①을 즉시 수행한다. 이후 FastAPI 워커가 SQS를 소비해
- *       {@code POST /api/report} 콜백으로 결과/추천 퀴즈를 돌려준다(흐름 A②).</li>
- *   <li>SecurityConfig 에서 {@code /api/debug/**} 를 permitAll 로 열어두었다(인증 미적용과 짝).</li>
+ *       {@code POST /api/report} 콜백으로 결과/추천 퀴즈를 돌려준다(흐름 A②).
+ *       <b>실제 동작하려면</b> 큐가 켜져 있어야 한다({@code REPORT_REQUEST_QUEUE_ENABLED=true} +
+ *       워커 가동). 꺼져 있으면 no-op 프로듀서라 dispatch 는 성공하지만 워커가 받을 메시지가 없다.</li>
+ *   <li>SecurityConfig 에서 {@code /api/debug/**} 를 permitAll 로 열어두었다(인증 미적용과 짝).
+ *       debug 가 꺼져 있으면 핸들러가 없어 그냥 404 이므로 permitAll 은 무해하다.</li>
  * </ul>
  *
- * <p>TODO(파트너): 시연 후 (1) 내부 인증/ADMIN 가드로 교체하거나 (2) 이 컨트롤러와
+ * <p>TODO(파트너): 시연 후 (1) {@code COMMITGOTCHI_DEBUG_ENABLED} 를 false 로 되돌리고,
+ * 장기적으로 (2) 내부 인증/ADMIN 가드로 교체하거나 (3) 이 컨트롤러와
  * SecurityConfig 의 /api/debug/** permitAll 을 함께 제거할 것.
  */
 @RestController
-@Profile({"local", "dev"})
+@ConditionalOnProperty(name = "commitgotchi.debug.enabled", havingValue = "true")
 public class DebugController {
 
     private static final Logger log = LoggerFactory.getLogger(DebugController.class);
