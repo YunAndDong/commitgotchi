@@ -75,4 +75,15 @@ public class LearningCharacterRepository {
     public Optional<LearningCharacter> findActiveByUserIdForUpdate(long userId) {
         return Optional.ofNullable(mapper.findActiveByUserIdForUpdate(userId));
     }
+
+    public List<CodexCharacterProjection> findCodexCharactersAfterId(Long afterId, int limit) {
+        return mapper.findCodexCharactersAfterId(afterId, limit);
+    }
+
+    public List<CodexCharacterProjection> findCodexCharactersByIds(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return mapper.findCodexCharactersByIds(ids);
+    }
 }

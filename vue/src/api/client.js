@@ -69,6 +69,16 @@ export function apiAssetUrl(path) {
   return `${NORMALIZED_BASE}${value}`
 }
 
+function withQuery(path, params = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value == null || value === '') return
+    search.set(key, String(value))
+  })
+  const query = search.toString()
+  return query ? `${path}?${query}` : path
+}
+
 export class ApiError extends Error {
   constructor(status, code, message, payload) {
     super(message || code || `HTTP ${status}`)
@@ -275,6 +285,11 @@ export function openReportEventStream(handlers = {}) {
 
 export const users = {
   me: () => authed('GET', '/api/users/me'),
+}
+
+export const codex = {
+  listCharacters: ({ afterId, limit } = {}) => authed('GET', withQuery('/api/codex/characters', { afterId, limit })),
+  spriteUrls: (ids) => authed('POST', '/api/codex/characters/sprite-urls', { body: { ids } }),
 }
 
 export const game = {
