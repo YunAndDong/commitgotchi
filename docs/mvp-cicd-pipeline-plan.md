@@ -180,6 +180,7 @@ flowchart LR
 | `/commitgotchi/prod/spring/CORS_ALLOWED_ORIGINS` | String | `https://commitgotchi.store` (부팅용 placeholder) |
 | `/commitgotchi/prod/spring/SPRING_INTERNAL_API_SECRET` | **SecureString** | `SPRING_INTERNAL_API_SECRET` (compose 필수) |
 | `/commitgotchi/prod/spring/CHARACTER_IMAGE_ENABLED` | String | `CHARACTER_IMAGE_ENABLED` |
+| `/commitgotchi/prod/spring/COMMITGOTCHI_DEBUG_ENABLED` | String | 데모용 `/api/debug/**` 토글. 기본 `false`; 발표 시에만 `true` |
 | `/commitgotchi/prod/fastapi/GEMINI_API_KEY` | **SecureString** | `fastapi/.env` `GEMINI_API_KEY` |
 | `/commitgotchi/prod/fastapi/AWS_REGION` | String | `AWS_REGION` |
 | `/commitgotchi/prod/shared/S3_BUCKET_NAME` | String | **공용 버킷명**(dev/prod 동일, §6.5) |
@@ -189,6 +190,7 @@ flowchart LR
 > SQS 관련 다수 변수(`REPORT_REQUEST_QUEUE_*`, `AWS_*`)는 `REPORT_REQUEST_QUEUE_ENABLED=true`로 켤 때 한 묶음으로 SSM 적재.
 > **SQS는 local/prod 분리:** local은 기존 `fastapi/.env`의 큐를 재사용하고(SSM 미사용), prod는 동일 스펙의 **새 prod 전용 큐**를 만들어 SSM에 적재한다(§6.7).
 > **S3는 dev/prod 공용 버킷 1개**를 쓰되 `S3_OBJECT_PREFIX`(`dev/`·`prod/`)로 객체 경로를 분리한다(§6.5).
+> **데모용 debug 토글은 live reload가 아니다:** `COMMITGOTCHI_DEBUG_ENABLED`나 `REPORT_REQUEST_QUEUE_ENABLED`를 SSM에서 바꾼 뒤에는 `deploy.sh`/배포 workflow를 다시 실행하거나 컨테이너를 재시작해야 `.env.prod` 재생성 및 Spring/FastAPI 재부팅으로 반영된다. 코드 재빌드는 필요 없지만, 실행 중 컨테이너가 SSM을 자동 재조회하지는 않는다.
 > **`VITE_API_BASE_URL`은 SSM 대상이 아니다** — Chrome 확장 빌드 시점 baked-in(`https://commitgotchi.store` 절대 URL). 확장 빌드/게시는 파이프라인 밖.
 > dev도 동일 트리(`/commitgotchi/dev/...`)를 쓸지, dev는 로컬 `.env`만 쓸지는 🔶 확정 필요(현재 제안: dev=로컬 `.env`).
 
@@ -310,6 +312,11 @@ flowchart LR
    - `docker compose -f docker-compose.prod.yml up -d`
    - **health check**(컨테이너 `HEALTHCHECK` + Nginx 경유 외부 확인 + 팀 runbook smoke test)
 4. 실패 시 **직전 image 태그(`sha-...`)로 rollback** 후 재기동.
+
+데모/운영 토글 절차:
+- `COMMITGOTCHI_DEBUG_ENABLED=true`와 `REPORT_REQUEST_QUEUE_ENABLED=true`는 SSM에 값을 저장한 뒤 **배포 workflow 또는 `scripts/deploy.sh` 재실행**으로 반영한다. 이때 `deploy.sh`가 `.env.prod`를 다시 만들고, 큐가 켜져 있으면 worker compose profile을 자동 활성화한다.
+- 발표 종료 후 두 값을 `false`로 되돌린 뒤에도 **한 번 더 deploy/restart**해서 Spring의 debug controller 빈과 worker 프로세스가 내려간 상태를 확인한다.
+- 이 토글은 발표용 임시 경로다. 장기 운영에서는 `/api/debug/**`를 제거하거나 내부 인증/ADMIN 가드로 교체한다.
 
 🔶 결정 필요:
 - 배포 채널: SSM Run Command vs SSH (권장: SSM).

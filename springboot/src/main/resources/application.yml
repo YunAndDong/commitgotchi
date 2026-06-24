@@ -36,6 +36,11 @@ management:
 commitgotchi:
   internal-api:
     secret: ${SPRING_INTERNAL_API_SECRET:}
+  # Demo/debug controller toggle. Default OFF everywhere; the DebugController bean
+  # only registers when this is true. Turn on (env COMMITGOTCHI_DEBUG_ENABLED=true)
+  # only for a live demo, then turn back off — no redeploy needed, just the value.
+  debug:
+    enabled: ${COMMITGOTCHI_DEBUG_ENABLED:false}
   report:
     scheduler:
       enabled: ${REPORT_MIDNIGHT_SCHEDULER_ENABLED:true}

@@ -374,6 +374,9 @@ load_env_from_ssm() {
   fetch_parameter_env "CHARACTER_IMAGE_ENABLED" "spring/CHARACTER_IMAGE_ENABLED" "false" "true" "false"
   fetch_parameter_env "REPORT_REQUEST_QUEUE_ENABLED" "spring/REPORT_REQUEST_QUEUE_ENABLED" "false" "false" "false"
   fetch_parameter_env "REPORT_REQUEST_DISPATCHER_ENABLED" "spring/REPORT_REQUEST_DISPATCHER_ENABLED" "false" "false" "false"
+  # Demo debug controller toggle. Default false; set the SSM param to "true" only
+  # for a live demo, then back to false (random-token guarded, no auth).
+  fetch_parameter_env "COMMITGOTCHI_DEBUG_ENABLED" "spring/COMMITGOTCHI_DEBUG_ENABLED" "false" "false" "false"
 
   fetch_parameter_env "GEMINI_API_KEY" "fastapi/GEMINI_API_KEY" "true" "" "true"
   fetch_parameter_env "AWS_REGION" "shared/AWS_REGION" "false" "$AWS_REGION_NAME" "false"

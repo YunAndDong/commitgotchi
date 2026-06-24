@@ -169,7 +169,9 @@ body: { "userAnswer": "..." }
 ```
 POST /api/debug/{token}/report/run-now?date=YYYY-MM-DD&emotion=JOY|SAD|ANGRY
 ```
-- `token`: 고정 난수 경로 토큰(코드 `DebugController.DEMO_TOKEN`). **인증 없음, local/dev 프로파일에서만 존재**(`@Profile`). prod엔 빈 자체가 없음.
+- `token`: 고정 난수 경로 토큰(코드 `DebugController.DEMO_TOKEN`). **인증 없음** — 난수 경로로만 가드.
+- **활성화 토글**: `COMMITGOTCHI_DEBUG_ENABLED=true` 일 때만 컨트롤러 빈이 등록된다(`@ConditionalOnProperty`, **기본 false**). 안 켜면 어떤 환경에서도 404. prod에서도 시연 때만 SSM `spring/COMMITGOTCHI_DEBUG_ENABLED=true` 로 켜고 **끝나면 다시 false**(재배포 불필요).
+- prod에서 실제 동작하려면 큐도 켜져 있어야 함: `REPORT_REQUEST_QUEUE_ENABLED=true` + 워커 가동(꺼져 있으면 no-op 프로듀서라 dispatch 는 성공해도 워커가 받을 게 없음).
 - `date` 생략 시 오늘. `emotion` 지정 시 감정 톤 시연(생략 시 작성 시점 감정).
 - 동작: 해당 날짜 리포트 요청을 outbox 적재 → 강제 PENDING 재설정(재시연 가능) → SQS dispatch. 이후 워커가 분석·콜백.
 
