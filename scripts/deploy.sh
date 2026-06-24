@@ -290,6 +290,18 @@ get_env_value() {
   return 1
 }
 
+derived_s3_object_prefix_uri() {
+  local bucket="$1"
+  local prefix="$2"
+  prefix="${prefix#/}"
+  prefix="${prefix%/}"
+  if [[ -n "$prefix" ]]; then
+    printf 's3://%s/%s' "$bucket" "$prefix"
+  else
+    printf 's3://%s' "$bucket"
+  fi
+}
+
 set_env_default() {
   local key="$1"
   local value="$2"
@@ -367,6 +379,17 @@ load_env_from_ssm() {
   fetch_parameter_env "AWS_REGION" "shared/AWS_REGION" "false" "$AWS_REGION_NAME" "false"
   fetch_parameter_env "S3_BUCKET_NAME" "shared/S3_BUCKET_NAME" "true" "" "false"
   fetch_parameter_env "S3_OBJECT_PREFIX" "shared/S3_OBJECT_PREFIX" "true" "" "false"
+  if has_env_key "S3_BUCKET_NAME" && has_env_key "S3_OBJECT_PREFIX"; then
+    local s3_bucket_name
+    local s3_object_prefix
+    s3_bucket_name="$(get_env_value S3_BUCKET_NAME)"
+    s3_object_prefix="$(get_env_value S3_OBJECT_PREFIX)"
+    set_env_default "CHARACTER_IMAGE_STORAGE_BACKEND" "s3" "false"
+    set_env_default "CHARACTER_IMAGE_S3_PRESIGNED_GET_ENABLED" "true" "false"
+    set_env_default "CHARACTER_IMAGE_S3_OBJECT_PREFIX" \
+      "$(derived_s3_object_prefix_uri "$s3_bucket_name" "$s3_object_prefix")" \
+      "false"
+  fi
   fetch_parameter_env "REPORT_REQUEST_QUEUE_NAME" "shared/REPORT_REQUEST_QUEUE_NAME" "false" "" "false"
   fetch_parameter_env "REPORT_REQUEST_QUEUE_URL" "shared/REPORT_REQUEST_QUEUE_URL" "false" "" "false"
   fetch_parameter_env "REPORT_REQUEST_QUEUE_ARN" "shared/REPORT_REQUEST_QUEUE_ARN" "false" "" "false"

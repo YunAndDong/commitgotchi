@@ -77,6 +77,11 @@ services:
       REPORT_REQUEST_QUEUE_URL: ${REPORT_REQUEST_QUEUE_URL:-}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       S3_OBJECT_PREFIX: ${S3_OBJECT_PREFIX:-}
+      # Read-side presigned GET. Without these the projection returns the raw
+      # s3:// key and the frontend cannot load the image. compose does NOT
+      # auto-inject --env-file values into the container; they must be listed here.
+      CHARACTER_IMAGE_S3_PRESIGNED_GET_ENABLED: ${CHARACTER_IMAGE_S3_PRESIGNED_GET_ENABLED:-false}
+      CHARACTER_IMAGE_S3_OBJECT_PREFIX: ${CHARACTER_IMAGE_S3_OBJECT_PREFIX:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
     depends_on:
       postgres:
@@ -108,6 +113,10 @@ services:
       GEMINI_IMAGE_TIMEOUT_SECONDS: ${GEMINI_IMAGE_TIMEOUT_SECONDS:-30}
       GEMINI_IMAGE_RETRY_LIMIT: ${GEMINI_IMAGE_RETRY_LIMIT:-1}
       CHARACTER_IMAGE_STORAGE_ROOT: ${CHARACTER_IMAGE_STORAGE_ROOT:-runtime/data/character-images}
+      # Sprite upload backend. Defaults to local; set to "s3" in .env.prod so the
+      # generated sprite is uploaded to S3 (compose does not auto-inject env-file
+      # values into the container — the key must be declared here).
+      CHARACTER_IMAGE_STORAGE_BACKEND: ${CHARACTER_IMAGE_STORAGE_BACKEND:-local}
       AWS_REGION: ${AWS_REGION:-ap-northeast-2}
       AWS_SQS_ENDPOINT: ${AWS_SQS_ENDPOINT:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}

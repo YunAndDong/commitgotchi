@@ -7,6 +7,10 @@ plugins {
 group = 'com.commitgotchi'
 version = '0.0.1-SNAPSHOT'
 
+// Override Spring Boot 3.3 managed Testcontainers (1.19.x ships docker-java 3.3,
+// which fails Docker Engine 29 API negotiation). 1.21.x bundles docker-java 3.4+.
+ext['testcontainers.version'] = '1.21.3'
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)

@@ -82,7 +82,10 @@ commitgotchi:
       s3-endpoint-url: ${CHARACTER_IMAGE_S3_ENDPOINT_URL:}
       s3-presigned-url-ttl: ${CHARACTER_IMAGE_S3_PRESIGNED_URL_TTL:PT10M}
       connect-timeout: ${CHARACTER_IMAGE_CONNECT_TIMEOUT:PT2S}
-      read-timeout: ${CHARACTER_IMAGE_READ_TIMEOUT:PT5S}
+      # Synchronous Gemini image generation takes ~10s and FastAPI allows up to
+      # gemini-image-timeout * (retry+1). 5s was too short and forced fallback;
+      # keep Spring's read timeout above the FastAPI worst case.
+      read-timeout: ${CHARACTER_IMAGE_READ_TIMEOUT:PT90S}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   jwt:

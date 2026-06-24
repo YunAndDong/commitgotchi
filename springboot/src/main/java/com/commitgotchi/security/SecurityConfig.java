@@ -64,6 +64,10 @@ public class SecurityConfig {
                                 "/api/health",
                                 "/actuator/health",
                                 "/character-assets/**",
+                                // Demo/debug endpoints (DebugController, @Profile local/dev only;
+                                // guarded by a random path token, not auth). Remove or replace
+                                // with internal/ADMIN auth after the demo. prod has no such bean.
+                                "/api/debug/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
