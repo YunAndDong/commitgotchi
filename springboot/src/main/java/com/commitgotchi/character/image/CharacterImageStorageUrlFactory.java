@@ -57,8 +57,8 @@ public class CharacterImageStorageUrlFactory {
     /**
      * Deterministic s3://bucket/key location for a character sprite sheet.
      * Persisted as the stable identifier; presigned GET URLs are derived from it
-     * at read time (see CharacterImagePresignService). characterId-based, so it
-     * never needs a separate stored key column.
+     * at read time (see CharacterImagePresignService). Catalog character id based,
+     * so it never needs a separate stored key column.
      */
     public String objectLocation(long userId, long characterId) {
         return s3ObjectUrl(userId, characterId);

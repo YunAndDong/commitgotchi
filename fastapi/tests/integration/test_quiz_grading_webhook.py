@@ -59,6 +59,7 @@ class RecordingCallbackClient:
         self,
         *,
         user_id: int,
+        character_id: int,
         quiz_id: int,
         grading_result: Mapping[str, Any],
         emotion: str | None = None,
@@ -68,6 +69,7 @@ class RecordingCallbackClient:
         self.calls.append(
             {
                 "user_id": user_id,
+                "character_id": character_id,
                 "quiz_id": quiz_id,
                 "grading_result": dict(grading_result),
                 "failed_reason": failed_reason,
@@ -78,6 +80,7 @@ class RecordingCallbackClient:
         self.payloads.append(
             build_quiz_grade_result_callback_payload(
                 user_id=user_id,
+                character_id=character_id,
                 quiz_id=quiz_id,
                 grading_result=grading_result,
                 emotion=emotion,

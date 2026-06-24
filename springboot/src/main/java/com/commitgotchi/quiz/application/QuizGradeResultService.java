@@ -46,6 +46,9 @@ public class QuizGradeResultService {
         validateDeltaBounds(request.scoreAllocation(), request.scoreDelta());
         QuizGrowthDecision decision = toGrowthDecision(request);
         QuizStateUpdate stateUpdate = applyQuizResult(request);
+        if (!stateUpdate.found()) {
+            return QuizGradeResultResponse.acceptedResult();
+        }
         if (stateUpdate.duplicate()) {
             return QuizGradeResultResponse.duplicateResult();
         }
@@ -105,22 +108,12 @@ public class QuizGradeResultService {
             QuizGrowthDecision decision,
             Long stateCharacterId
     ) {
-        Long targetCharacterId = request.characterId() == null ? stateCharacterId : request.characterId();
-        if (targetCharacterId == null) {
-            return characterCommandService.applyScoreDeltasToActive(
-                    request.userId(),
-                    decision.dbDelta(),
-                    decision.algorithmDelta(),
-                    decision.csDelta(),
-                    decision.networkDelta(),
-                    decision.frameworkDelta(),
-                    decision.emotion(),
-                    decision.statusMessage()
-            );
+        if (stateCharacterId == null) {
+            return Optional.empty();
         }
         return characterCommandService.applyScoreDeltas(
                 request.userId(),
-                targetCharacterId,
+                stateCharacterId,
                 decision.dbDelta(),
                 decision.algorithmDelta(),
                 decision.csDelta(),
@@ -144,9 +137,8 @@ public class QuizGradeResultService {
             return QuizStateUpdate.notFound();
         }
 
-        if (request.submissionId().equals(quiz.path("submissionId").asText())
-                && (quiz.path("scored").asBoolean(false)
-                || (quiz.path("gradeFailed").asBoolean(false) && !quiz.path("grading").asBoolean(false)))) {
+        if (quiz.path("scored").asBoolean(false)
+                || (quiz.path("gradeFailed").asBoolean(false) && !quiz.path("grading").asBoolean(false))) {
             return QuizStateUpdate.duplicate(parseCharacterId(quiz.path("characterId")), quiz.deepCopy());
         }
 
@@ -178,14 +170,15 @@ public class QuizGradeResultService {
     }
 
     private ObjectNode findQuiz(ObjectNode state, QuizGradeResultRequest request) {
+        if (request.characterId() == null) {
+            return null;
+        }
         for (JsonNode node : array(state, "quizzes")) {
             if (!(node instanceof ObjectNode quiz)) {
                 continue;
             }
-            if (request.submissionId().equals(quiz.path("submissionId").asText())) {
-                return quiz;
-            }
-            if (quiz.path("quizId").asLong(0L) == request.quizId()) {
+            if (quiz.path("quizId").asLong(0L) == request.quizId()
+                    && request.characterId().equals(parseCharacterId(quiz.path("characterId")))) {
                 return quiz;
             }
         }

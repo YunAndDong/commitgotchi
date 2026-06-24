@@ -28,6 +28,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.commitgotchi.support.RecommendedQuizTestHelper.MODEL_ANSWER;
+import static com.commitgotchi.support.RecommendedQuizTestHelper.createRecommendedQuiz;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -37,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "commitgotchi.internal-api.secret=test-internal-secret")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CharacterActivationApiIntegrationTest extends PostgresIntegrationTest {
@@ -106,14 +108,14 @@ class CharacterActivationApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
         Number characterId = itemId(created);
-        String quizId = JsonPath.read(created.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        String quizId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), characterId.longValue());
 
         mockMvc.perform(post("/api/game/quizzes/{id}/submit", quizId)
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
-                                """))
+                                {"userAnswer":"%s"}
+                                """.formatted(MODEL_ANSWER)))
                 .andExpect(status().isOk());
         Map<String, Object> before = stableCharacterColumns(characterId);
 
@@ -195,11 +197,11 @@ class CharacterActivationApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.state.reports[0].characterId").value(firstId.toString()))
                 .andExpect(jsonPath("$.state.characters[1].id").value(firstId))
                 .andExpect(jsonPath("$.state.characters[1].active").value(true))
-                .andExpect(jsonPath("$.state.characters[1].stats.algo").value(3));
+                .andExpect(jsonPath("$.state.characters[1].stats.algo").value(0));
     }
 
     @Test
-    void deliveringPreSwitchPendingReportAfterActivationUsesNewActiveCharacter() throws Exception {
+    void deliveringPreSwitchPendingReportAfterActivationKeepsSavedReportCharacterSnapshot() throws Exception {
         AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
         Number firstId = itemId(createCharacter(user.bearer(), "First", "first keyword", "first personality")
                 .andExpect(status().isOk())
@@ -225,13 +227,13 @@ class CharacterActivationApiIntegrationTest extends PostgresIntegrationTest {
         mockMvc.perform(post("/api/game/daily-report/deliver")
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
-                        .content("{}"))
+                .content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.state.dailyReport.characterId").value(firstId.toString()))
-                .andExpect(jsonPath("$.state.reports[0].characterId").value(firstId.toString()))
+                .andExpect(jsonPath("$.state.dailyReport.characterId").value(secondId.toString()))
+                .andExpect(jsonPath("$.state.reports[0].characterId").value(secondId.toString()))
                 .andExpect(jsonPath("$.state.characters[1].id").value(firstId))
                 .andExpect(jsonPath("$.state.characters[1].active").value(true))
-                .andExpect(jsonPath("$.state.characters[1].stats.algo").value(3))
+                .andExpect(jsonPath("$.state.characters[1].stats.algo").value(0))
                 .andExpect(jsonPath("$.state.characters[0].id").value(secondId))
                 .andExpect(jsonPath("$.state.characters[0].stats.algo").value(0));
     }

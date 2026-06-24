@@ -44,6 +44,13 @@ public class ReportRequestOutboxRepository {
         return mapper.claimAvailable(now, limit);
     }
 
+    public Optional<ReportRequestOutbox> claimPendingRequest(String requestId) {
+        if (requestId == null || requestId.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(mapper.claimPendingRequest(requestId.strip()));
+    }
+
     public void markSent(long id, Instant sentAt) {
         mapper.markSent(id, sentAt);
     }

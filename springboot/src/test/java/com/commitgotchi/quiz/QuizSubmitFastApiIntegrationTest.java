@@ -27,6 +27,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.commitgotchi.support.RecommendedQuizTestHelper.createRecommendedQuiz;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -84,7 +85,8 @@ class QuizSubmitFastApiIntegrationTest extends PostgresIntegrationTest {
                                 """))
                 .andExpect(status().isOk())
                 .andReturn();
-        String quizId = JsonPath.read(created.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        Number characterId = JsonPath.read(created.getResponse().getContentAsString(), "$.item.id");
+        String quizId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), characterId.longValue());
 
         MvcResult submitted = mockMvc.perform(post("/api/game/quizzes/{id}/submit", quizId)
                         .header("Authorization", user.bearer())
@@ -107,6 +109,7 @@ class QuizSubmitFastApiIntegrationTest extends PostgresIntegrationTest {
         assertThat(captured.authorization()).isEqualTo("Internal test-internal-secret");
         assertThat(captured.body().path("submissionId").asText()).isEqualTo(submissionId);
         assertThat(captured.body().path("userId").asLong()).isEqualTo(user.id());
+        assertThat(captured.body().path("characterId").asLong()).isEqualTo(characterId.longValue());
         assertThat(captured.body().path("question").asText()).contains("다익스트라");
         assertThat(captured.body().path("userAnswer").asText()).contains("음수 간선");
         assertThat(captured.body().path("scoreAllocation").path("algorithm").asInt()).isEqualTo(10);
@@ -121,6 +124,7 @@ class QuizSubmitFastApiIntegrationTest extends PostgresIntegrationTest {
                                 {
                                   "submissionId":"%s",
                                   "userId":%d,
+                                  "characterId":%d,
                                   "quizId":%d,
                                   "status":"GRADED",
                                   "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
@@ -129,7 +133,7 @@ class QuizSubmitFastApiIntegrationTest extends PostgresIntegrationTest {
                                   "emotion":"JOY",
                                   "statusMessage":"좋아요, 핵심은 잡았어요!"
                                 }
-                                """.formatted(submissionId, user.id(), fastApiQuizId)))
+                                """.formatted(submissionId, user.id(), characterId.longValue(), fastApiQuizId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accepted").value(true))
                 .andExpect(jsonPath("$.duplicate").value(false));
@@ -152,6 +156,7 @@ class QuizSubmitFastApiIntegrationTest extends PostgresIntegrationTest {
                                 {
                                   "submissionId":"%s",
                                   "userId":%d,
+                                  "characterId":%d,
                                   "quizId":%d,
                                   "status":"GRADED",
                                   "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
@@ -160,7 +165,7 @@ class QuizSubmitFastApiIntegrationTest extends PostgresIntegrationTest {
                                   "emotion":"JOY",
                                   "statusMessage":"duplicate"
                                 }
-                                """.formatted(submissionId, user.id(), fastApiQuizId)))
+                                """.formatted(submissionId, user.id(), characterId.longValue(), fastApiQuizId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accepted").value(true))
                 .andExpect(jsonPath("$.duplicate").value(true));

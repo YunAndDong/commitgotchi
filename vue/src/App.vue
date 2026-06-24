@@ -2,8 +2,9 @@
 import { computed, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { authState } from './stores/auth.js'
-import { gameState, clearNotice } from './stores/game.js'
+import { gameState, clearNotice, dismissEvolution } from './stores/game.js'
 import AppNav from './components/AppNav.vue'
+import CgEvolutionOverlay from './components/CgEvolutionOverlay.vue'
 
 const route = useRoute()
 let noticeTimer = null
@@ -40,6 +41,14 @@ onBeforeUnmount(() => {
         <span>{{ gameState.notice }}</span>
         <button class="cg-btn cg-btn--sm cg-btn--ghost" aria-label="닫기">✕</button>
       </div>
+    </Transition>
+
+    <Transition name="fade">
+      <CgEvolutionOverlay
+        v-if="gameState.evolution"
+        :evolution="gameState.evolution"
+        @close="dismissEvolution"
+      />
     </Transition>
   </div>
 </template>

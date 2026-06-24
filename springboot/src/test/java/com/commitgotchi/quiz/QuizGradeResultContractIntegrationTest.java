@@ -17,6 +17,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.commitgotchi.support.RecommendedQuizTestHelper.createRecommendedQuiz;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -55,6 +57,7 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
                                 {
                                   "submissionId":"quiz-submission-1",
                                   "userId":42,
+                                  "characterId":10,
                                   "quizId":55,
                                   "status":"GRADED",
                                   "scoreAllocation":{"db":0,"algorithm":3,"cs":0,"network":0,"framework":0},
@@ -78,6 +81,7 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
                                 {
                                   "submissionId":"quiz-submission-2",
                                   "userId":42,
+                                  "characterId":10,
                                   "quizId":55,
                                   "status":"GRADED",
                                   "scoreAllocation":{"db":0,"algorithm":3,"cs":0,"network":0,"framework":0},
@@ -99,6 +103,8 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
                 user.id(),
                 new CharacterCreateRequest("Quiz Growth", "mint quiz pet", "careful")
         ).getId();
+        String quizStateId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), characterId);
+        long quizId = fastApiQuizId(quizStateId);
 
         mockMvc.perform(post("/api/internal/quizzes/grade-result")
                         .header("Authorization", "Internal test-internal-secret")
@@ -108,7 +114,7 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
                                   "submissionId":"quiz-submission-growth",
                                   "userId":%d,
                                   "characterId":%d,
-                                  "quizId":55,
+                                  "quizId":%d,
                                   "status":"GRADED",
                                   "scoreAllocation":{"db":0,"algorithm":3,"cs":0,"network":0,"framework":0},
                                   "scoreDelta":{"db":0,"algorithm":2,"cs":0,"network":0,"framework":0},
@@ -116,7 +122,7 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
                                   "emotion":"JOY",
                                   "statusMessage":"FastAPI hint"
                                 }
-                                """.formatted(user.id(), characterId)))
+                                """.formatted(user.id(), characterId, quizId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accepted").value(true))
                 .andExpect(jsonPath("$.duplicate").value(false));
@@ -128,8 +134,159 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
                 .containsEntry("status_message", "FastAPI hint");
     }
 
+    @Test
+    void gradeResultMatchesOnlyQuizIdWithCharacterId() throws Exception {
+        AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        long firstCharacterId = characterCreationService.create(
+                user.id(),
+                new CharacterCreateRequest("Quiz Same Id A", "mint quiz pet", "careful")
+        ).getId();
+        long secondCharacterId = characterCreationService.create(
+                user.id(),
+                new CharacterCreateRequest("Quiz Same Id B", "blue quiz pet", "careful")
+        ).getId();
+        String firstQuizStateId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), firstCharacterId);
+        long firstQuizId = fastApiQuizId(firstQuizStateId);
+        String secondQuizStateId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), secondCharacterId);
+        long secondQuizId = fastApiQuizId(secondQuizStateId);
+
+        mockMvc.perform(post("/api/internal/quizzes/grade-result")
+                        .header("Authorization", "Internal test-internal-secret")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "submissionId":"quiz-id-with-wrong-character",
+                                  "userId":%d,
+                                  "characterId":%d,
+                                  "quizId":%d,
+                                  "status":"GRADED",
+                                  "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
+                                  "scoreDelta":{"db":0,"algorithm":8,"cs":0,"network":0,"framework":0},
+                                  "feedback":"quiz id alone must not match",
+                                  "emotion":"JOY",
+                                  "statusMessage":"FastAPI hint"
+                                }
+                                """.formatted(user.id(), secondCharacterId, firstQuizId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(true))
+                .andExpect(jsonPath("$.duplicate").value(false));
+
+        assertThat(characterColumns(firstCharacterId))
+                .containsEntry("stat_algorithm", 0)
+                .containsEntry("battle_power", 0);
+        assertThat(characterColumns(secondCharacterId))
+                .containsEntry("stat_algorithm", 0)
+                .containsEntry("battle_power", 0);
+
+        mockMvc.perform(post("/api/internal/quizzes/grade-result")
+                        .header("Authorization", "Internal test-internal-secret")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "submissionId":"callback-without-stored-submission",
+                                  "userId":%d,
+                                  "characterId":%d,
+                                  "quizId":%d,
+                                  "status":"GRADED",
+                                  "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
+                                  "scoreDelta":{"db":0,"algorithm":2,"cs":0,"network":0,"framework":0},
+                                  "feedback":"fallback matched by quiz and character",
+                                  "emotion":"JOY",
+                                  "statusMessage":"FastAPI hint"
+                                }
+                                """.formatted(user.id(), secondCharacterId, secondQuizId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(true))
+                .andExpect(jsonPath("$.duplicate").value(false));
+
+        mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.quizzes[0].characterId").value(Long.toString(firstCharacterId)))
+                .andExpect(jsonPath("$.state.quizzes[0].scored").value(false))
+                .andExpect(jsonPath("$.state.quizzes[1].characterId").value(Long.toString(secondCharacterId)))
+                .andExpect(jsonPath("$.state.quizzes[1].scored").value(true));
+
+        assertThat(characterColumns(firstCharacterId))
+                .containsEntry("stat_algorithm", 0)
+                .containsEntry("battle_power", 0);
+        assertThat(characterColumns(secondCharacterId))
+                .containsEntry("stat_algorithm", 2)
+                .containsEntry("battle_power", 2);
+    }
+
+    @Test
+    void gradeResultDoesNotApplyBySubmissionIdWhenQuizAndCharacterDoNotMatch() throws Exception {
+        AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        long firstCharacterId = characterCreationService.create(
+                user.id(),
+                new CharacterCreateRequest("Quiz Submission A", "mint quiz pet", "careful")
+        ).getId();
+        long secondCharacterId = characterCreationService.create(
+                user.id(),
+                new CharacterCreateRequest("Quiz Submission B", "blue quiz pet", "careful")
+        ).getId();
+        String firstQuizStateId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), firstCharacterId);
+        long firstQuizId = fastApiQuizId(firstQuizStateId);
+        String sharedSubmissionId = "shared-submission-id";
+
+        mockMvc.perform(post("/api/internal/quizzes/grade-result")
+                        .header("Authorization", "Internal test-internal-secret")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "submissionId":"%s",
+                                  "userId":%d,
+                                  "characterId":%d,
+                                  "quizId":%d,
+                                  "status":"GRADED",
+                                  "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
+                                  "scoreDelta":{"db":0,"algorithm":2,"cs":0,"network":0,"framework":0},
+                                  "feedback":"first callback",
+                                  "emotion":"JOY",
+                                  "statusMessage":"FastAPI hint"
+                                }
+                                """.formatted(sharedSubmissionId, user.id(), firstCharacterId, firstQuizId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(true))
+                .andExpect(jsonPath("$.duplicate").value(false));
+
+        mockMvc.perform(post("/api/internal/quizzes/grade-result")
+                        .header("Authorization", "Internal test-internal-secret")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "submissionId":"%s",
+                                  "userId":%d,
+                                  "characterId":%d,
+                                  "quizId":999,
+                                  "status":"GRADED",
+                                  "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
+                                  "scoreDelta":{"db":0,"algorithm":8,"cs":0,"network":0,"framework":0},
+                                  "feedback":"same submission id must not select another quiz",
+                                  "emotion":"JOY",
+                                  "statusMessage":"FastAPI hint"
+                                }
+                                """.formatted(sharedSubmissionId, user.id(), secondCharacterId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(true))
+                .andExpect(jsonPath("$.duplicate").value(false));
+
+        assertThat(characterColumns(firstCharacterId))
+                .containsEntry("stat_algorithm", 2)
+                .containsEntry("battle_power", 2);
+        assertThat(characterColumns(secondCharacterId))
+                .containsEntry("stat_algorithm", 0)
+                .containsEntry("battle_power", 0);
+    }
+
     private String uniqueEmail() {
         return "quiz-" + java.util.UUID.randomUUID() + "@example.com";
+    }
+
+    private long fastApiQuizId(String stateQuizId) {
+        String digits = stateQuizId.replaceAll("\\D+", "");
+        assertThat(digits).isNotBlank();
+        return Long.parseLong(digits);
     }
 
     private Map<String, Object> characterColumns(long characterId) {

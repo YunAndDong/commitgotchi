@@ -69,6 +69,7 @@ def build_report_callback_payload(
 def build_quiz_grade_result_callback_payload(
     *,
     user_id: int,
+    character_id: int,
     quiz_id: int,
     grading_result: Mapping[str, Any],
     emotion: str | None = None,
@@ -100,6 +101,7 @@ def build_quiz_grade_result_callback_payload(
     payload = {
         "submissionId": submission_id,
         "userId": user_id,
+        "characterId": character_id,
         "quizId": quiz_id,
         "status": status,
         "scoreAllocation": score_allocation,

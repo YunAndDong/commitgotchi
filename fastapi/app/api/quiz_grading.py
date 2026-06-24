@@ -37,6 +37,7 @@ class QuizGradeResultSender(Protocol):
         self,
         *,
         user_id: int,
+        character_id: int,
         quiz_id: int,
         grading_result: Mapping[str, Any],
         emotion: str | None = None,
@@ -197,6 +198,7 @@ def process_quiz_grading_request(
     try:
         callback_result = callback_client.send_quiz_grade_result(
             user_id=request.userId,
+            character_id=request.characterId,
             quiz_id=request.quizId,
             grading_result=grading_result,
             failed_reason=failed_reason,

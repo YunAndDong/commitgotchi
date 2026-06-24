@@ -16,11 +16,32 @@ import {
 let pass = 0, fail = 0
 const ok = (cond, msg) => { if (cond) { pass++; console.log('  ✓', msg) } else { fail++; console.error('  ✗', msg) } }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const seedQuiz = (characterId, id = 'test-q1') => {
+  const quiz = {
+    id,
+    date: new Intl.DateTimeFormat('en-CA').format(new Date()),
+    sourceReportRequestId: 'test-report-request',
+    tag: 'algo',
+    question: '테스트 퀴즈',
+    answer: 0,
+    submitted: false,
+    selected: null,
+    correct: null,
+    scored: false,
+    gradeFailed: false,
+    feedback: null,
+    deltaStat: 'algo',
+    deltaAmount: 12,
+    characterId,
+  }
+  gameState.quizzes.push(quiz)
+  return quiz
+}
 
 console.log('AC3 — 퀴즈 채점 실패 Fallback')
 setActive(gameState.characters[0].id)
 {
-  const q = gameState.quizzes[0]
+  const q = seedQuiz(activeCharacter.value.id)
   const before = nurtureScore(activeCharacter.value)
   const res = await submitQuiz(q.id, 0, { fail: true })
   ok(res && res.ok === false, '실패는 { ok:false } 로 반환')

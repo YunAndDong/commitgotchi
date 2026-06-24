@@ -9,7 +9,7 @@ import {
   activeCharacter,
   clearCharacterSseResult,
   gameState,
-  hasCharacterSseResult,
+  hasUnreadCharacterSseResult,
   nurtureScore,
   setActive,
   MAX_CHARACTERS,
@@ -105,8 +105,8 @@ function proceedWithSelected() {
             </div>
 
             <div class="select-list__action">
-              <span v-if="hasCharacterSseResult(character.id)"
-                    class="select-list__result-badge"
+              <span v-if="hasUnreadCharacterSseResult(character.id)"
+                    class="select-list__result-badge select-list__result-badge--unread"
                     role="status"
                     aria-live="polite">
                 결과 도착
@@ -222,6 +222,8 @@ function proceedWithSelected() {
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+}
+.select-list__result-badge--unread {
   animation: result-badge-blink .95s ease-in-out infinite;
 }
 @keyframes result-badge-blink {
@@ -273,7 +275,7 @@ function proceedWithSelected() {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .select-list__result-badge {
+  .select-list__result-badge--unread {
     animation: none;
   }
 }

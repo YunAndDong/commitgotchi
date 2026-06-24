@@ -2,6 +2,7 @@ package com.commitgotchi.character;
 
 import com.commitgotchi.support.AdminTestFixture;
 import com.commitgotchi.support.PostgresIntegrationTest;
+import com.commitgotchi.report.application.ReportRequestProducer;
 import com.commitgotchi.user.domain.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -28,7 +30,12 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.commitgotchi.support.RecommendedQuizTestHelper.MODEL_ANSWER;
+import static com.commitgotchi.support.RecommendedQuizTestHelper.createRecommendedQuiz;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -36,7 +43,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "commitgotchi.report.queue.enabled=true",
+        "commitgotchi.internal-api.secret=test-internal-secret"
+})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationTest {
@@ -55,6 +65,9 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockBean
+    private ReportRequestProducer reportRequestProducer;
 
     @BeforeEach
     void cleanDatabase() {
@@ -109,14 +122,14 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                 .andExpect(status().isOk())
                 .andReturn();
         Number characterId = itemId(created);
-        String quizId = JsonPath.read(created.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        String quizId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), characterId.longValue());
 
         mockMvc.perform(post("/api/game/quizzes/{id}/submit", quizId)
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
-                                """))
+                                {"userAnswer":"%s"}
+                                """.formatted(MODEL_ANSWER)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.scored").value(true))
                 .andExpect(jsonPath("$.item.deltaAmount").value(12))
@@ -132,8 +145,8 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
-                                """))
+                                {"userAnswer":"%s"}
+                                """.formatted(MODEL_ANSWER)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.scored").value(true))
                 .andExpect(jsonPath("$.state.characters[0].stats.algo").value(12))
@@ -152,7 +165,7 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                 .andExpect(status().isOk())
                 .andReturn();
         Number characterId = itemId(created);
-        String quizId = JsonPath.read(created.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        String quizId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), characterId.longValue());
 
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -185,14 +198,14 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                 .andExpect(status().isOk())
                 .andReturn();
         Number failureCharacterId = itemId(failureCreated);
-        String failureQuizId = JsonPath.read(failureCreated.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        String failureQuizId = createRecommendedQuiz(mockMvc, failureUser.bearer(), failureUser.id(), failureCharacterId.longValue());
 
         mockMvc.perform(post("/api/game/quizzes/{id}/submit", failureQuizId)
                         .header("Authorization", failureUser.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다.","fail":true}
-                                """))
+                                {"userAnswer":"%s","fail":true}
+                                """.formatted(MODEL_ANSWER)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.ok").value(false))
                 .andExpect(jsonPath("$.item.quiz.scored").value(false))
@@ -206,15 +219,15 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                 .andExpect(status().isOk())
                 .andReturn();
         Number staleCharacterId = itemId(staleCreated);
-        String staleQuizId = JsonPath.read(staleCreated.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        String staleQuizId = createRecommendedQuiz(mockMvc, staleUser.bearer(), staleUser.id(), staleCharacterId.longValue());
         deleteCharacterRow(staleCharacterId);
 
         mockMvc.perform(post("/api/game/quizzes/{id}/submit", staleQuizId)
                         .header("Authorization", staleUser.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
-                                """))
+                                {"userAnswer":"%s"}
+                                """.formatted(MODEL_ANSWER)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.scored").value(false))
                 .andExpect(jsonPath("$.item.gradeFailed").value(true))
@@ -228,7 +241,7 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
     }
 
     @Test
-    void deliverDailyReportAppliesDeltasOnceAndMarksAppliedAfterGrowth() throws Exception {
+    void deliverDailyReportDispatchesWorkerRequestWithoutApplyingMockDeltas() throws Exception {
         AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
         Number characterId = itemId(createCharacter(user.bearer(), "Daily", "daily keyword", "steady")
                 .andExpect(status().isOk())
@@ -241,36 +254,39 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.item.status").value("ready"))
-                .andExpect(jsonPath("$.state.reports[0].status").value("reflected"))
-                .andExpect(jsonPath("$.state.reports[0].scoreApplied").value(true))
-                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(3))
-                .andExpect(jsonPath("$.state.characters[0].stats.net").value(1))
-                .andExpect(jsonPath("$.state.characters[0].battlePower").value(4));
+                .andExpect(jsonPath("$.item.status").value("pending"))
+                .andExpect(jsonPath("$.item.requestId").isNotEmpty())
+                .andExpect(jsonPath("$.state.reports[0].status").value("analyzing"))
+                .andExpect(jsonPath("$.state.reports[0].scoreApplied").value(false))
+                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(0))
+                .andExpect(jsonPath("$.state.characters[0].stats.net").value(0))
+                .andExpect(jsonPath("$.state.characters[0].battlePower").value(0));
 
         assertThat(characterColumns(characterId))
-                .containsEntry("stat_algorithm", 3)
-                .containsEntry("stat_network", 1)
-                .containsEntry("battle_power", 4);
+                .containsEntry("stat_algorithm", 0)
+                .containsEntry("stat_network", 0)
+                .containsEntry("battle_power", 0);
         assertStoredCharactersEmpty(user.id());
+        verify(reportRequestProducer, times(1)).send(any());
 
         mockMvc.perform(post("/api/game/daily-report/deliver")
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(3))
-                .andExpect(jsonPath("$.state.characters[0].stats.net").value(1))
-                .andExpect(jsonPath("$.state.characters[0].battlePower").value(4));
+                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(0))
+                .andExpect(jsonPath("$.state.characters[0].stats.net").value(0))
+                .andExpect(jsonPath("$.state.characters[0].battlePower").value(0));
 
         assertThat(characterColumns(characterId))
-                .containsEntry("stat_algorithm", 3)
-                .containsEntry("stat_network", 1)
-                .containsEntry("battle_power", 4);
+                .containsEntry("stat_algorithm", 0)
+                .containsEntry("stat_network", 0)
+                .containsEntry("battle_power", 0);
+        verify(reportRequestProducer, times(1)).send(any());
     }
 
     @Test
-    void concurrentDailyReportDeliveriesApplyDeltasOnlyOnce() throws Exception {
+    void concurrentDailyReportDeliveriesDispatchWorkerRequestOnlyOnce() throws Exception {
         AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
         Number characterId = itemId(createCharacter(user.bearer(), "Concurrent Daily", "daily keyword", "steady")
                 .andExpect(status().isOk())
@@ -295,12 +311,13 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
         }
 
         assertThat(characterColumns(characterId))
-                .containsEntry("stat_algorithm", 3)
-                .containsEntry("stat_network", 1)
-                .containsEntry("battle_power", 4);
+                .containsEntry("stat_algorithm", 0)
+                .containsEntry("stat_network", 0)
+                .containsEntry("battle_power", 0);
         JsonNode storedReport = storedState(user.id()).path("reports").get(0);
-        assertThat(storedReport.path("scoreApplied").asBoolean()).isTrue();
+        assertThat(storedReport.path("scoreApplied").asBoolean()).isFalse();
         assertStoredCharactersEmpty(user.id());
+        verify(reportRequestProducer, times(1)).send(any());
     }
 
     @Test
@@ -319,10 +336,11 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                                 {"fail":true}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.item.status").value("failed"))
+                .andExpect(jsonPath("$.item.status").value("pending"))
                 .andExpect(jsonPath("$.state.reports[0].scoreApplied").value(false))
                 .andExpect(jsonPath("$.state.characters[0].battlePower").value(0));
         assertThat(characterColumns(failureCharacterId)).containsEntry("battle_power", 0);
+        verify(reportRequestProducer, times(1)).send(any());
 
         AdminTestFixture.ProvisionedUser staleUser = fixture.provisionUser(uniqueEmail(), "very-secure-password");
         Number staleCharacterId = itemId(createCharacter(staleUser.bearer(), "Stale Daily", "stale keyword", "steady")
@@ -370,10 +388,11 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.state.dailyReport.characterId").value(firstId.toString()))
-                .andExpect(jsonPath("$.state.reports[0].characterId").value(firstId.toString()))
-                .andExpect(jsonPath("$.state.characters[1].stats.algo").value(3));
+                .andExpect(jsonPath("$.state.dailyReport.characterId").value(secondId.toString()))
+                .andExpect(jsonPath("$.state.reports[0].characterId").value(secondId.toString()))
+                .andExpect(jsonPath("$.state.characters[1].stats.algo").value(0));
         assertStoredCharactersEmpty(user.id());
+        verify(reportRequestProducer, times(1)).send(any());
 
         retryImage(user.bearer(), firstId)
                 .andExpect(status().isOk())
@@ -383,10 +402,10 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
         deleteCharacter(user.bearer(), firstId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.dailyReport.characterId").value(secondId))
-                .andExpect(jsonPath("$.state.reports[0].characterId").value(firstId.toString()));
+                .andExpect(jsonPath("$.state.reports[0].characterId").value(secondId.toString()));
 
         JsonNode stored = storedState(user.id());
-        assertThat(stored.path("reports").get(0).path("characterId").asText()).isEqualTo(firstId.toString());
+        assertThat(stored.path("reports").get(0).path("characterId").asText()).isEqualTo(secondId.toString());
         assertThat(stored.path("dailyReport").path("characterId").asLong()).isEqualTo(secondId.longValue());
         for (JsonNode quiz : stored.path("quizzes")) {
             if (!quiz.path("scored").asBoolean(false)) {
@@ -442,8 +461,8 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
                             .header("Authorization", bearer)
                             .contentType("application/json")
                             .content("""
-                                    {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
-                                    """))
+                                    {"userAnswer":"%s"}
+                                    """.formatted(MODEL_ANSWER)))
                     .andReturn()
                     .getResponse()
                     .getStatus();

@@ -36,6 +36,39 @@ public class ReportOutboxDispatcher {
     public DispatchResult dispatchAvailable(Instant now) {
         Instant dispatchTime = Objects.requireNonNull(now, "now must not be null");
         List<ReportRequestOutbox> claimed = outboxRepository.claimAvailable(dispatchTime, properties.getBatchSize());
+        DispatchResult result = dispatchClaimed(claimed, dispatchTime);
+        if (!claimed.isEmpty()) {
+            log.info(
+                    "Report outbox dispatch completed claimed={} sent={} retry={} failed={}",
+                    result.claimedCount(),
+                    result.sentCount(),
+                    result.retryCount(),
+                    result.failedCount()
+            );
+        }
+        return result;
+    }
+
+    @Transactional
+    public DispatchResult dispatchRequest(String requestId, Instant now) {
+        Instant dispatchTime = Objects.requireNonNull(now, "now must not be null");
+        List<ReportRequestOutbox> claimed = outboxRepository.claimPendingRequest(requestId)
+                .map(List::of)
+                .orElseGet(List::of);
+        DispatchResult result = dispatchClaimed(claimed, dispatchTime);
+        if (!claimed.isEmpty()) {
+            log.info(
+                    "Report outbox dispatch request completed requestId={} sent={} retry={} failed={}",
+                    requestId,
+                    result.sentCount(),
+                    result.retryCount(),
+                    result.failedCount()
+            );
+        }
+        return result;
+    }
+
+    private DispatchResult dispatchClaimed(List<ReportRequestOutbox> claimed, Instant dispatchTime) {
         int sent = 0;
         int retry = 0;
         int failed = 0;
@@ -55,15 +88,6 @@ public class ReportOutboxDispatcher {
             }
         }
 
-        if (!claimed.isEmpty()) {
-            log.info(
-                    "Report outbox dispatch completed claimed={} sent={} retry={} failed={}",
-                    claimed.size(),
-                    sent,
-                    retry,
-                    failed
-            );
-        }
         return new DispatchResult(claimed.size(), sent, retry, failed);
     }
 

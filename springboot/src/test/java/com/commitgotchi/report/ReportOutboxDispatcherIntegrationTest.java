@@ -37,13 +37,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
         "commitgotchi.report.dispatcher.max-attempts=2",
-        "commitgotchi.report.dispatcher.retry-delay=PT5M"
+        "commitgotchi.report.dispatcher.retry-delay=PT5M",
+        "commitgotchi.report.queue.enabled=true",
+        "commitgotchi.report.queue.request-queue-url=http://localhost/queue",
+        "commitgotchi.report.queue.access-key-id=test",
+        "commitgotchi.report.queue.secret-access-key=test"
 })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -102,6 +109,56 @@ class ReportOutboxDispatcherIntegrationTest extends PostgresIntegrationTest {
         assertThat(row).containsEntry("status", "SENT");
         assertThat(row.get("sent_at")).isNotNull();
         assertThat(row.get("last_error")).isNull();
+    }
+
+    @Test
+    void dispatchRequestSendsOnlyMatchingPendingSnapshot() throws Exception {
+        AdminTestFixture.ProvisionedUser first = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        AdminTestFixture.ProvisionedUser second = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        createCharacter(first.id(), "Immediate One");
+        createCharacter(second.id(), "Immediate Two");
+        saveReport(first.bearer(), "First report", "Studied immediate dispatch.", "[\"algo\"]");
+        saveReport(second.bearer(), "Second report", "Should stay pending.", "[\"db\"]");
+
+        String requestId = outboxRequestId(first.id());
+        ReportOutboxDispatcher.DispatchResult result =
+                dispatcher.dispatchRequest(requestId, Instant.now().plusSeconds(1));
+
+        assertThat(result.claimedCount()).isEqualTo(1);
+        assertThat(result.sentCount()).isEqualTo(1);
+        assertThat(result.retryCount()).isZero();
+        assertThat(result.failedCount()).isZero();
+
+        ArgumentCaptor<ReportRequestMessage> messageCaptor = ArgumentCaptor.forClass(ReportRequestMessage.class);
+        verify(reportRequestProducer, times(1)).send(messageCaptor.capture());
+        assertThat(messageCaptor.getValue().requestId()).isEqualTo(requestId);
+        assertThat(messageCaptor.getValue().userId()).isEqualTo(first.id());
+        verifyNoMoreInteractions(reportRequestProducer);
+
+        assertThat(outboxRow(first.id())).containsEntry("status", "SENT");
+        assertThat(outboxRow(second.id())).containsEntry("status", "PENDING");
+    }
+
+    @Test
+    void runNowEndpointDispatchesMatchingPendingReportRequest() throws Exception {
+        AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        createCharacter(user.id(), "Run Now");
+        saveReport(user.bearer(), "Run-now report", "Studied immediate submit.", "[\"algo\"]");
+
+        String requestId = outboxRequestId(user.id());
+
+        mockMvc.perform(post("/api/game/reports/run-now")
+                        .header("Authorization", user.bearer())
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.item.status").value("pending"))
+                .andExpect(jsonPath("$.item.requestId").value(requestId));
+
+        ArgumentCaptor<ReportRequestMessage> messageCaptor = ArgumentCaptor.forClass(ReportRequestMessage.class);
+        verify(reportRequestProducer, times(1)).send(messageCaptor.capture());
+        assertThat(messageCaptor.getValue().requestId()).isEqualTo(requestId);
+        assertThat(outboxRow(user.id())).containsEntry("status", "SENT");
     }
 
     @Test
@@ -201,6 +258,18 @@ class ReportOutboxDispatcherIntegrationTest extends PostgresIntegrationTest {
                         FROM report_request_outbox
                         WHERE user_id = ?
                         """,
+                userId
+        );
+    }
+
+    private String outboxRequestId(long userId) {
+        return jdbcTemplate.queryForObject(
+                """
+                        SELECT request_id
+                        FROM report_request_outbox
+                        WHERE user_id = ?
+                        """,
+                String.class,
                 userId
         );
     }

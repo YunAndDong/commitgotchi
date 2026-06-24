@@ -15,6 +15,9 @@ const props = defineProps({
 const cx = computed(() => props.size / 2)
 const cy = computed(() => props.size / 2)
 const radius = computed(() => props.size / 2 - 34)
+const labelBleed = computed(() => Math.max(20, Math.round(props.size * 0.09)))
+const svgWidth = computed(() => props.size + labelBleed.value * 2)
+const viewBox = computed(() => `${-labelBleed.value} 0 ${svgWidth.value} ${props.size}`)
 const axisMax = computed(() => {
   if (props.max > 0) return props.max
   const m = Math.max(...STAT_KEYS.map(k => stat(k)), 50)
@@ -37,7 +40,7 @@ function labelPos(i) { return point(i, radius.value + 20) }
 </script>
 
 <template>
-  <svg :width="size" :height="size" :viewBox="`0 0 ${size} ${size}`" class="radar">
+  <svg :width="svgWidth" :height="size" :viewBox="viewBox" class="radar">
     <polygon v-for="(s, idx) in rings" :key="idx" :points="ringPath(s)"
              fill="none" stroke="var(--surface-edge)" stroke-width="1.5" />
     <line v-for="(k, i) in STAT_KEYS" :key="'ax' + i"
@@ -55,6 +58,7 @@ function labelPos(i) { return point(i, radius.value + 20) }
 </template>
 
 <style scoped>
+.radar { display: block; overflow: visible; }
 .radar__label { font-family: var(--font-head); font-size: 12px; fill: var(--ink-soft); }
 .radar__val { font-size: 11px; fill: var(--ink); }
 </style>

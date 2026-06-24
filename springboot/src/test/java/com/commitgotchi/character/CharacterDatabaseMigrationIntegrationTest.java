@@ -83,19 +83,36 @@ class CharacterDatabaseMigrationIntegrationTest extends PostgresIntegrationTest 
                 FROM characters
                 WHERE id = 1
                 """, String.class))
-                .isEqualTo("/character-assets/default_image1.png");
+                .isEqualTo("s3://commitgotchi-character-images/sprites/1/sprite-sheet.png");
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT sprite_sheet_url
                 FROM characters
                 WHERE id = 2
                 """, String.class))
-                .isEqualTo("/character-assets/default_image2.png");
+                .isEqualTo("s3://commitgotchi-character-images/sprites/2/sprite-sheet.png");
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT sprite_sheet_url
                 FROM characters
                 WHERE id = 3
                 """, String.class))
-                .isEqualTo("/character-assets/default_image3.png");
+                .isEqualTo("s3://commitgotchi-character-images/sprites/3/sprite-sheet.png");
+    }
+
+    @Test
+    void generatedCharacterCatalogIdsAreReservedAfterDefaultBabyRows() {
+        Long generatedId = jdbcTemplate.queryForObject("""
+                INSERT INTO characters (
+                    personality,
+                    design_keyword,
+                    image_status
+                )
+                VALUES ('generated-personality', 'generated-design', 'PENDING')
+                RETURNING id
+                """, Long.class);
+
+        assertThat(generatedId).isNotNull().isGreaterThan(3L);
+
+        jdbcTemplate.update("DELETE FROM characters WHERE id = ?", generatedId);
     }
 
     @Test

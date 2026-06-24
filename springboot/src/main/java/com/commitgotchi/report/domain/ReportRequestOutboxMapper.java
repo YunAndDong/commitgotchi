@@ -168,6 +168,29 @@ public interface ReportRequestOutboxMapper {
     @org.apache.ibatis.annotations.ResultMap("ReportRequestOutboxResult")
     List<ReportRequestOutbox> claimAvailable(@Param("now") Instant now, @Param("limit") int limit);
 
+    @Select("""
+            SELECT
+            """ + OUTBOX_COLUMNS + """
+            FROM report_request_outbox
+            WHERE request_id = #{requestId}
+              AND status = 'PENDING'
+              AND EXISTS (
+                  SELECT 1
+                  FROM users
+                  WHERE users.id = report_request_outbox.user_id
+                    AND users.deleted_at IS NULL
+              )
+              AND EXISTS (
+                  SELECT 1
+                  FROM user_character
+                  WHERE user_character.id = report_request_outbox.user_character_id
+                    AND user_character.deleted_at IS NULL
+              )
+            FOR UPDATE SKIP LOCKED
+            """)
+    @org.apache.ibatis.annotations.ResultMap("ReportRequestOutboxResult")
+    ReportRequestOutbox claimPendingRequest(String requestId);
+
     @Insert("""
             INSERT INTO report_request_outbox (
                 request_id,

@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "commitgotchi.internal-api.secret=test-internal-secret")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
@@ -221,7 +221,7 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult created = createCharacter(user.bearer(), "Commit Buddy", "green study slime", "Kind but precise")
                 .andExpect(status().isOk())
                 .andReturn();
-        String quizId = JsonPath.read(created.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        Number characterId = JsonPath.read(created.getResponse().getContentAsString(), "$.item.id");
 
         mockMvc.perform(post("/api/game/reports")
                         .header("Authorization", user.bearer())
@@ -238,11 +238,12 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.state.characters[0].emotion").value("sad"))
                 .andExpect(jsonPath("$.state.characters[0].message").value("힘든 날도 있지. 기록한 것만으로 충분해."));
 
+        String quizId = createRecommendedQuiz(user.bearer(), user.id(), characterId.longValue());
         mockMvc.perform(post("/api/game/quizzes/{id}/submit", quizId)
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
+                                {"userAnswer":"다익스트라는 한 번 확정한 최단거리를 다시 갱신하지 않는 그리디 전제에 기대기 때문에 음수 간선을 처리하지 못합니다."}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.characters[0].stats.algo").value(12))
@@ -258,15 +259,16 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(15))
-                .andExpect(jsonPath("$.state.characters[0].stats.net").value(1));
+                .andExpect(jsonPath("$.state.dailyReport.status").value("pending"))
+                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(12))
+                .andExpect(jsonPath("$.state.characters[0].stats.net").value(0));
 
         mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(15))
-                .andExpect(jsonPath("$.state.characters[0].stats.net").value(1))
+                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(12))
+                .andExpect(jsonPath("$.state.characters[0].stats.net").value(0))
                 .andExpect(jsonPath("$.state.characters[0].message")
-                        .value("어제 공부가 몸에 스며들었어! 레이더가 차오르는 게 느껴져."));
+                        .value("좋은 답변이야! 핵심을 잡았어."));
     }
 
     @Test
@@ -388,6 +390,38 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
                 .content(json));
     }
 
+    private String createRecommendedQuiz(String bearer, long userId, long characterId) throws Exception {
+        String requestId = "test-quiz-" + UUID.randomUUID();
+        mockMvc.perform(post("/api/report")
+                        .header("Authorization", "Internal test-internal-secret")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "requestId":"%s",
+                                  "userId":%d,
+                                  "characterId":%d,
+                                  "targetDate":"%s",
+                                  "status":"SUCCESS",
+                                  "scoreDelta":{"db":0,"algorithm":0,"cs":0,"network":0,"framework":0},
+                                  "statusMessage":"추천 퀴즈가 준비됐어요.",
+                                  "dailyReport":{"text":"quiz seed","feedback":"quiz seed"},
+                                  "nextRecommendation":{"topics":["algorithm"],"rationale":"quiz seed"},
+                                  "recommendedQuizzes":[{
+                                    "problemId":101,
+                                    "question":"다익스트라 알고리즘이 음의 가중치 간선을 처리하지 못하는 이유를 설명해 주세요.",
+                                    "modelAnswer":"다익스트라는 한 번 확정한 최단거리를 다시 갱신하지 않는 그리디 전제에 기대기 때문에 음수 간선을 처리하지 못합니다.",
+                                    "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0}
+                                  }]
+                                }
+                                """.formatted(requestId, userId, characterId, java.time.LocalDate.now().minusDays(1))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.duplicate").value(false));
+        MvcResult state = mockMvc.perform(get("/api/game/state").header("Authorization", bearer))
+                .andExpect(status().isOk())
+                .andReturn();
+        return JsonPath.read(state.getResponse().getContentAsString(), "$.state.dailyReport.recommendedQuizIds[0]");
+    }
+
     private Callable<Integer> concurrentCreate(CountDownLatch start, String bearer, String name) {
         return () -> {
             start.await();
@@ -414,7 +448,7 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
 
     private String babyPresetSpriteSheetUrl(Number characterId) {
         long presetId = (characterId.longValue() % 3L) + 1L;
-        return "/character-assets/default_image" + presetId + ".png";
+        return "s3://commitgotchi-character-images/sprites/" + presetId + "/sprite-sheet.png";
     }
 
     private String uniqueEmail() {

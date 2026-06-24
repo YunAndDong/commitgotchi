@@ -25,6 +25,7 @@ class FakeCallbackClient:
         self,
         *,
         user_id: int,
+        character_id: int,
         quiz_id: int,
         grading_result: dict[str, Any],
         emotion: str | None = None,
@@ -34,6 +35,7 @@ class FakeCallbackClient:
         self.calls.append(
             {
                 "user_id": user_id,
+                "character_id": character_id,
                 "quiz_id": quiz_id,
                 "grading_result": dict(grading_result),
                 "failed_reason": failed_reason,

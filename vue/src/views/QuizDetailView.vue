@@ -1,7 +1,7 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { gameState, STAT_LABELS } from '../stores/game.js'
+import { clearStudyAnalysisNotice, gameState, STAT_LABELS } from '../stores/game.js'
 
 const route = useRoute()
 const quiz = computed(() => gameState.quizzes.find(item => String(item.id) === String(route.params.id)) || null)
@@ -11,6 +11,9 @@ const character = computed(() => gameState.characters.find(
 const backTarget = computed(() => (
   character.value ? { name: 'character', params: { id: character.value.id } } : { name: 'dashboard' }
 ))
+watch(quiz, value => {
+  if (value) clearStudyAnalysisNotice('quiz', value.id)
+}, { immediate: true })
 const status = computed(() => {
   if (!quiz.value) return { label: '', className: '' }
   if (quiz.value.gradeFailed) return { label: '재시도 필요', className: 'cg-badge--warn' }

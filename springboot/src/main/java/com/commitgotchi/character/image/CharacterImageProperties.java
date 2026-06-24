@@ -12,7 +12,7 @@ public class CharacterImageProperties {
 
     private boolean enabled = false;
     private String baseUrl = "";
-    private String fallbackSpriteSheetUrl = "/character-assets/default_image1.png";
+    private String fallbackSpriteSheetUrl = "s3://commitgotchi-character-images/sprites/default_image1.png";
     private String s3ObjectPrefix = "s3://commitgotchi-character-images/sprites";
     private boolean s3PresignedUrlEnabled = false;
     private boolean s3PresignedGetEnabled = false;

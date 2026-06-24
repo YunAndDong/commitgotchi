@@ -77,6 +77,7 @@ class QuizGradeResultPayloadTest(unittest.TestCase):
     def test_quiz_payload_combines_metadata_and_adapter_defaults(self) -> None:
         payload = build_quiz_grade_result_callback_payload(
             user_id=1,
+            character_id=10,
             quiz_id=55,
             grading_result={
                 "submissionId": "sub-1",
@@ -90,6 +91,7 @@ class QuizGradeResultPayloadTest(unittest.TestCase):
 
         self.assertEqual(payload["submissionId"], "sub-1")
         self.assertEqual(payload["userId"], 1)
+        self.assertEqual(payload["characterId"], 10)
         self.assertEqual(payload["quizId"], 55)
         self.assertEqual(payload["status"], "GRADED")
         self.assertEqual(
@@ -107,6 +109,7 @@ class QuizGradeResultPayloadTest(unittest.TestCase):
     def test_quiz_payload_accepts_custom_emotion_and_status_message(self) -> None:
         payload = build_quiz_grade_result_callback_payload(
             user_id=1,
+            character_id=10,
             quiz_id=55,
             emotion="HAPPY",
             status_message="연속 정답 흐름이 좋아요.",
@@ -119,6 +122,7 @@ class QuizGradeResultPayloadTest(unittest.TestCase):
     def test_ungraded_quiz_payload_forces_zero_score_delta(self) -> None:
         payload = build_quiz_grade_result_callback_payload(
             user_id=1,
+            character_id=10,
             quiz_id=55,
             failed_reason="LLM_TIMEOUT",
             grading_result={

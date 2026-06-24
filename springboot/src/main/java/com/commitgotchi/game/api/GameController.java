@@ -111,6 +111,16 @@ public class GameController {
         return gameService.setActiveCharacter(principal.userId(), id);
     }
 
+    @Operation(summary = "시연용 캐릭터 스탯 보강", description = "지정한 자기 캐릭터의 선택 스탯을 데모용으로 200 올립니다.")
+    @PostMapping("/characters/{id}/demo-stat-boost")
+    public GameMutationResponse boostCharacterStat(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+            @Parameter(description = "Character id", example = "1") @PathVariable String id,
+            @RequestBody(required = false) JsonNode request
+    ) {
+        return gameService.boostCharacterStat(principal.userId(), id, request);
+    }
+
     @Operation(summary = "캐릭터 이미지 재시도", description = "READY는 no-op이고 PENDING, FAILED, FALLBACK은 이미지 생성을 다시 시도합니다.")
     @PostMapping("/characters/{id}/retry-image")
     public GameMutationResponse retryImage(
@@ -135,6 +145,22 @@ public class GameController {
             @RequestBody JsonNode request
     ) {
         return gameService.saveReport(principal.userId(), request);
+    }
+
+    @PostMapping("/reports/run-now")
+    public GameMutationResponse runReportNow(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+            @RequestBody(required = false) JsonNode request
+    ) {
+        return gameService.runReportNow(principal.userId(), request);
+    }
+
+    @PostMapping("/quizzes/demo")
+    public GameMutationResponse createDemoRecommendedQuizzes(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+            @RequestBody(required = false) JsonNode request
+    ) {
+        return gameService.createDemoRecommendedQuizzes(principal.userId(), request);
     }
 
     @PostMapping("/quizzes/{id}/submit")

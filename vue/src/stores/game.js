@@ -5,7 +5,7 @@
  * persisted through /api/game/** and then replaced with the backend response.
  */
 import { reactive, computed } from 'vue'
-import { apiAssetUrl, game as gameApi, openCharacterEventStream } from '../api/client.js'
+import { apiAssetUrl, game as gameApi, openCharacterEventStream, openReportEventStream } from '../api/client.js'
 import {
   clearActiveGotchi,
   publishActiveGotchi,
@@ -18,6 +18,8 @@ export const EVOLVE_THRESHOLD = 1000
 export const MAX_CHARACTERS = 3
 export const CURRENT_OWNER = '나'
 export const REPORT_SUBMITTED_NOTICE = '리포트 저장됨 - 자정에 분석돼요. 내일 오전 9시 도착.'
+const REPORT_RESULT_TIMEOUT_MS = 45000
+const REPORT_RESULT_POLL_INTERVAL_MS = 1500
 
 const todayISO = () => new Intl.DateTimeFormat('en-CA').format(new Date())
 const MOCK_SPRITE_META = Object.freeze({
@@ -57,12 +59,13 @@ function blankState() {
       nextRecommendation: null,
     },
     notice: null,
+    evolution: null,
+    evolutionQueue: [],
     boardPosts: [],
   }
 }
 
 function mockState() {
-  const date = todayISO()
   const first = {
     id: 101,
     name: '새싹이',
@@ -97,27 +100,7 @@ function mockState() {
     ...blankState(),
     nextId: 103,
     characters: [first, second],
-    quizzes: [
-      {
-        id: 'q1',
-        date,
-        tag: 'algo',
-        question: '이진 탐색의 전제 조건은 무엇인가요?',
-        modelAnswer: '탐색 대상이 정렬되어 있어야 합니다.',
-        answerKeywords: ['정렬'],
-        options: ['정렬된 데이터', '해시된 데이터', '압축된 데이터'],
-        answer: 0,
-        submitted: false,
-        selected: null,
-        correct: null,
-        scored: false,
-        gradeFailed: false,
-        feedback: null,
-        deltaStat: 'algo',
-        deltaAmount: 12,
-        characterId: null,
-      },
-    ],
+    quizzes: [],
     boardPosts: [
       {
         id: 'b1',
@@ -236,9 +219,13 @@ function normalizeQuiz(raw) {
   return {
     id: raw?.id,
     date: raw?.date || todayISO(),
+    sourceReportRequestId: raw?.sourceReportRequestId ?? null,
+    problemId: raw?.problemId ?? null,
+    quizId: raw?.quizId ?? null,
     tag: raw?.tag || raw?.deltaStat || 'algo',
     question: String(raw?.question || ''),
     modelAnswer: String(raw?.modelAnswer || ''),
+    scoreAllocation: raw?.scoreAllocation && typeof raw.scoreAllocation === 'object' ? raw.scoreAllocation : null,
     answerKeywords: Array.isArray(raw?.answerKeywords) ? raw.answerKeywords : [],
     userAnswer: raw?.userAnswer ?? '',
     options: Array.isArray(raw?.options) ? raw.options : [],
@@ -256,6 +243,10 @@ function normalizeQuiz(raw) {
   }
 }
 
+function isRecommendedQuiz(quiz) {
+  return !!quiz?.sourceReportRequestId
+}
+
 function normalizeReport(raw) {
   return {
     id: raw?.id,
@@ -267,31 +258,163 @@ function normalizeReport(raw) {
     status: raw?.status || 'analyzing',
     scoreApplied: !!raw?.scoreApplied,
     characterId: raw?.characterId ?? null,
+    requestId: raw?.requestId ?? null,
+    summary: raw?.summary == null ? null : String(raw.summary),
+    feedback: raw?.feedback == null ? null : String(raw.feedback),
+    nextRecommendation: raw?.nextRecommendation ?? null,
+    deltas: raw?.deltas && typeof raw.deltas === 'object' ? raw.deltas : null,
   }
-}
-
-function normalizeNotice(raw) {
-  const notice = raw ?? null
-  return notice === REPORT_SUBMITTED_NOTICE ? null : notice
 }
 
 let mockMode = true
 const state = reactive(mockState())
 const characterEventStreams = new Map()
 const characterEventReconnectTimers = new Map()
+let reportEventStream = null
+let reportEventReconnectTimer = null
+const reportResultWaiters = new Set()
 const characterSseResultNotices = reactive({})
+const studyAnalysisNotices = reactive({})
+const announcedEvolutionIds = new Set()
+
+function evolutionProgress(character) {
+  return {
+    isEvolved: !!character?.isEvolved,
+    score: nurtureScore(character),
+  }
+}
+
+function snapshotEvolutionProgress(characters = state.characters) {
+  return new Map(characters.map(character => [
+    String(character.id),
+    evolutionProgress(character),
+  ]))
+}
+
+function hasNewEvolution(previous, character) {
+  if (!previous || !character) return false
+  const beforeReached = previous.isEvolved || previous.score >= EVOLVE_THRESHOLD
+  const afterReached = !!character.isEvolved || nurtureScore(character) >= EVOLVE_THRESHOLD
+  return !beforeReached && afterReached
+}
+
+function evolutionPayload(character) {
+  return {
+    id: character.id,
+    name: character.name,
+    score: nurtureScore(character),
+    emotion: character.emotion,
+    spriteSheetUrl: character.spriteSheetUrl,
+    spriteMeta: character.spriteMeta,
+    imageStatus: character.imageStatus,
+    createdAt: Date.now(),
+  }
+}
+
+function announceEvolution(character) {
+  if (!character?.id) return
+  const key = String(character.id)
+  if (announcedEvolutionIds.has(key)) return
+  announcedEvolutionIds.add(key)
+  const payload = evolutionPayload(character)
+  if (state.evolution) state.evolutionQueue.push(payload)
+  else state.evolution = payload
+}
+
+function detectEvolutionArrivals(previousById) {
+  if (!previousById) return
+  state.characters.forEach(character => {
+    if (hasNewEvolution(previousById.get(String(character.id)), character)) {
+      announceEvolution(character)
+    }
+  })
+}
+
+function markCharacterEvolutionIfReady(character, previous = evolutionProgress(character)) {
+  if (!character) return false
+  if (nurtureScore(character) >= EVOLVE_THRESHOLD) character.isEvolved = true
+  const evolvedNow = hasNewEvolution(previous, character)
+  if (evolvedNow) announceEvolution(character)
+  return evolvedNow
+}
+
+export function dismissEvolution() {
+  state.evolution = state.evolutionQueue.shift() || null
+}
 
 function characterNoticeKey(characterId) {
   return String(characterId)
 }
 
-function markCharacterSseResult(characterId) {
+function studyAnalysisNoticeKey(type, id) {
+  if (id == null) return null
+  return `${type}:${String(id)}`
+}
+
+function studyAnalysisNoticeParts(key) {
+  const separator = String(key).indexOf(':')
+  if (separator < 0) return null
+  return {
+    type: String(key).slice(0, separator),
+    id: String(key).slice(separator + 1),
+  }
+}
+
+function studyRecordCharacterId(type, id) {
+  if (type === 'report') {
+    return state.reports.find(report => String(report.id) === String(id))?.characterId ?? null
+  }
+  if (type === 'quiz') {
+    return state.quizzes.find(quiz => String(quiz.id) === String(id))?.characterId ?? null
+  }
+  return null
+}
+
+function studyAnalysisNoticeCharacterId(key) {
+  const notice = studyAnalysisNotices[key]
+  if (notice && typeof notice === 'object' && notice.characterId != null) {
+    return notice.characterId
+  }
+  const parts = studyAnalysisNoticeParts(key)
+  return parts ? studyRecordCharacterId(parts.type, parts.id) : null
+}
+
+function hasUnreadStudyAnalysisForCharacter(characterId) {
+  if (characterId == null) return false
+  return Object.keys(studyAnalysisNotices).some(key => (
+    String(studyAnalysisNoticeCharacterId(key)) === String(characterId)
+  ))
+}
+
+function syncCharacterNoticeReadState(characterId) {
   if (characterId == null) return
-  characterSseResultNotices[characterNoticeKey(characterId)] = true
+  const key = characterNoticeKey(characterId)
+  if (hasUnreadStudyAnalysisForCharacter(characterId)) {
+    characterSseResultNotices[key] = 'unread'
+  } else if (characterSseResultNotices[key] === 'unread') {
+    characterSseResultNotices[key] = 'read'
+  }
+}
+
+export function markCharacterResultArrived(characterId) {
+  if (characterId == null) return
+  characterSseResultNotices[characterNoticeKey(characterId)] = 'unread'
 }
 
 export function hasCharacterSseResult(characterId) {
   return !!characterSseResultNotices[characterNoticeKey(characterId)]
+}
+
+export function hasUnreadCharacterSseResult(characterId) {
+  return characterSseResultNotices[characterNoticeKey(characterId)] === 'unread'
+}
+
+export function markCharacterResultRead(characterId) {
+  if (characterId == null) return
+  const key = characterNoticeKey(characterId)
+  const hadCharacterNotice = !!characterSseResultNotices[key]
+  clearStudyAnalysisNoticesForCharacter(characterId)
+  if (hadCharacterNotice) characterSseResultNotices[key] = 'read'
 }
 
 export function clearCharacterSseResult(characterId) {
@@ -304,6 +427,44 @@ function clearAllCharacterSseResults() {
   })
 }
 
+function clearStudyAnalysisNoticeKey(key) {
+  if (!key) return
+  const characterId = studyAnalysisNoticeCharacterId(key)
+  delete studyAnalysisNotices[key]
+  syncCharacterNoticeReadState(characterId)
+}
+
+function markStudyAnalysisNotice(type, id, characterId = studyRecordCharacterId(type, id)) {
+  const key = studyAnalysisNoticeKey(type, id)
+  if (!key) return
+  studyAnalysisNotices[key] = { characterId: characterId ?? null }
+  if (characterId != null) markCharacterResultArrived(characterId)
+}
+
+export function hasStudyAnalysisNotice(type, id) {
+  const key = studyAnalysisNoticeKey(type, id)
+  return !!(key && studyAnalysisNotices[key])
+}
+
+export function clearStudyAnalysisNotice(type, id) {
+  clearStudyAnalysisNoticeKey(studyAnalysisNoticeKey(type, id))
+}
+
+function clearStudyAnalysisNoticesForCharacter(characterId) {
+  if (characterId == null) return
+  Object.keys(studyAnalysisNotices).forEach(key => {
+    if (String(studyAnalysisNoticeCharacterId(key)) === String(characterId)) {
+      delete studyAnalysisNotices[key]
+    }
+  })
+}
+
+function clearAllStudyAnalysisNotices() {
+  Object.keys(studyAnalysisNotices).forEach(key => {
+    delete studyAnalysisNotices[key]
+  })
+}
+
 function pruneCharacterSseResults() {
   const characterIds = new Set(state.characters.map(character => characterNoticeKey(character.id)))
   Object.keys(characterSseResultNotices).forEach(characterId => {
@@ -311,7 +472,18 @@ function pruneCharacterSseResults() {
   })
 }
 
-function applyGameState(next = {}) {
+function pruneStudyAnalysisNotices() {
+  const validKeys = new Set([
+    ...state.reports.map(report => studyAnalysisNoticeKey('report', report.id)),
+    ...state.quizzes.map(quiz => studyAnalysisNoticeKey('quiz', quiz.id)),
+  ].filter(Boolean))
+  Object.keys(studyAnalysisNotices).forEach(key => {
+    if (!validKeys.has(key)) clearStudyAnalysisNoticeKey(key)
+  })
+}
+
+function applyGameState(next = {}, { detectEvolution = false } = {}) {
+  const previousEvolution = detectEvolution ? snapshotEvolutionProgress() : null
   const fallback = blankState()
   state.nextId = Number(next.nextId) || fallback.nextId
   state.characters = Array.isArray(next.characters)
@@ -320,18 +492,26 @@ function applyGameState(next = {}) {
   state.reports = Array.isArray(next.reports) ? next.reports.map(normalizeReport).filter(r => r.id != null) : []
   state.quizzes = Array.isArray(next.quizzes) ? next.quizzes.map(normalizeQuiz).filter(q => q.id != null) : []
   state.dailyReport = next.dailyReport || fallback.dailyReport
-  state.notice = normalizeNotice(next.notice)
+  state.notice = null
   state.boardPosts = Array.isArray(next.boardPosts)
     ? next.boardPosts.map(normalizeBoardPost).filter(Boolean)
     : []
   pruneCharacterSseResults()
+  pruneStudyAnalysisNotices()
+  detectEvolutionArrivals(previousEvolution)
+  resolveReportResultWaiters()
 }
 
 export function resetGameState() {
   mockMode = true
   disconnectCharacterEvents()
+  disconnectReportEvents()
   applyGameState(mockState())
+  state.evolution = null
+  state.evolutionQueue = []
+  announcedEvolutionIds.clear()
   clearAllCharacterSseResults()
+  clearAllStudyAnalysisNotices()
   setActiveGotchiPublishingEnabled(false)
   void clearActiveGotchi()
 }
@@ -339,16 +519,19 @@ export function resetGameState() {
 export async function loadGameState() {
   const response = await gameApi.state()
   mockMode = false
+  clearAllStudyAnalysisNotices()
   applyGameState(response.state)
   syncCharacterEventStreams()
+  syncReportEventStream()
   syncActiveGotchi()
   return state
 }
 
 async function mutate(request) {
   const response = await request
-  applyGameState(response.state)
+  applyGameState(response.state, { detectEvolution: true })
   syncCharacterEventStreams()
+  syncReportEventStream()
   syncActiveGotchi()
   return response.item
 }
@@ -359,10 +542,16 @@ export const hasCharacter = computed(() => state.characters.length > 0)
 export const todayReport = computed(() => state.reports.find(
   r => r.date === todayISO() && String(r.characterId) === String(activeCharacter.value?.id)
 ) || null)
-export const todayQuizzes = computed(() => state.quizzes.filter(q => q.date === todayISO()))
-export const activeQuizzes = computed(() => state.quizzes.filter(
-  q => q.date === todayISO() && String(q.characterId) === String(activeCharacter.value?.id)
-))
+export const todayQuizzes = computed(() => state.quizzes.filter(q => q.date === todayISO() && isRecommendedQuiz(q)))
+export function quizzesForCharacter(characterId) {
+  if (characterId == null) return []
+  return state.quizzes.filter(
+    q => q.date === todayISO()
+      && String(q.characterId) === String(characterId)
+      && isRecommendedQuiz(q)
+  )
+}
+export const activeQuizzes = computed(() => quizzesForCharacter(activeCharacter.value?.id))
 export const pendingReport = computed(() => state.reports
   .filter(r => r.status === 'analyzing')
   .sort((a, b) => a.date.localeCompare(b.date))[0] || null)
@@ -383,6 +572,17 @@ export function disconnectCharacterEvents() {
   characterEventReconnectTimers.clear()
   characterEventStreams.forEach(stream => stream.close())
   characterEventStreams.clear()
+}
+
+export function disconnectReportEvents() {
+  if (reportEventReconnectTimer != null) {
+    globalThis.clearTimeout(reportEventReconnectTimer)
+    reportEventReconnectTimer = null
+  }
+  if (reportEventStream) {
+    reportEventStream.close()
+    reportEventStream = null
+  }
 }
 
 function syncCharacterEventStreams() {
@@ -416,7 +616,11 @@ function openCharacterEventSubscription(characterId) {
       }
       if (eventName === 'character.updated') {
         const character = applyCharacterSnapshot(payload)
-        if (character) markCharacterSseResult(character.id)
+        if (character) markCharacterResultArrived(character.id)
+        return
+      }
+      if (eventName === 'quiz.graded') {
+        applyQuizSnapshot(payload, { highlightArrival: true })
       }
     },
     onClose() {
@@ -433,6 +637,176 @@ function openCharacterEventSubscription(characterId) {
   characterEventStreams.set(key, stream)
 }
 
+function syncReportEventStream() {
+  if (mockMode) {
+    disconnectReportEvents()
+    return
+  }
+  if (!reportEventStream) openReportEventSubscription()
+}
+
+function openReportEventSubscription() {
+  if (reportEventReconnectTimer != null) {
+    globalThis.clearTimeout(reportEventReconnectTimer)
+    reportEventReconnectTimer = null
+  }
+  reportEventStream = openReportEventStream({
+    onEvent(eventName, payload) {
+      applyReportSnapshot(payload, { highlightArrivals: eventName !== 'report.snapshot' })
+    },
+    onClose() {
+      reportEventStream = null
+      if (!mockMode) {
+        reportEventReconnectTimer = globalThis.setTimeout(() => {
+          reportEventReconnectTimer = null
+          if (!reportEventStream) openReportEventSubscription()
+        }, 3000)
+      }
+    },
+  })
+}
+
+function reportHasAnalysisResult(report) {
+  const status = String(report?.status || '')
+  return !!report && (report.scoreApplied || ['applied', 'reflected', 'ready', 'fallback', 'failed'].includes(status))
+}
+
+function dailyReportHasResult(dailyReport) {
+  return ['ready', 'fallback', 'failed'].includes(String(dailyReport?.status || ''))
+}
+
+function reportResultMatches(dailyReport, requestId) {
+  if (!requestId) return true
+  return String(dailyReport?.requestId || '') === String(requestId)
+}
+
+function currentReportResult(requestId) {
+  const dailyReport = state.dailyReport
+  if (dailyReportHasResult(dailyReport) && reportResultMatches(dailyReport, requestId)) {
+    return dailyReport
+  }
+  return null
+}
+
+function clearReportResultWaiter(waiter) {
+  if (waiter.timeoutId != null) globalThis.clearTimeout(waiter.timeoutId)
+  if (waiter.pollId != null) globalThis.clearInterval(waiter.pollId)
+  reportResultWaiters.delete(waiter)
+}
+
+function resolveReportResultWaiters() {
+  reportResultWaiters.forEach(waiter => {
+    const dailyReport = currentReportResult(waiter.requestId)
+    if (!dailyReport) return
+    clearReportResultWaiter(waiter)
+    waiter.resolve({ dailyReport, timedOut: false })
+  })
+}
+
+function waitForReportResult({ requestId, timeoutMs = REPORT_RESULT_TIMEOUT_MS } = {}) {
+  const ready = currentReportResult(requestId)
+  if (ready || mockMode) {
+    return Promise.resolve({ dailyReport: ready || state.dailyReport, timedOut: false })
+  }
+
+  return new Promise(resolve => {
+    const waiter = {
+      requestId,
+      resolve,
+      timeoutId: null,
+      pollId: null,
+    }
+    waiter.timeoutId = globalThis.setTimeout(() => {
+      clearReportResultWaiter(waiter)
+      state.notice = '답변 생성이 아직 진행 중이에요. 결과 화면에서 도착 상태를 확인할 수 있어요.'
+      resolve({ dailyReport: state.dailyReport, timedOut: true })
+    }, timeoutMs)
+    waiter.pollId = globalThis.setInterval(async () => {
+      try {
+        const response = await gameApi.state()
+        mockMode = false
+        applyGameState(response.state, { detectEvolution: true })
+        syncCharacterEventStreams()
+        syncReportEventStream()
+        syncActiveGotchi()
+      } catch {
+        // SSE reconnect and timeout still cover the user path.
+      }
+    }, REPORT_RESULT_POLL_INTERVAL_MS)
+    reportResultWaiters.add(waiter)
+    syncReportEventStream()
+    resolveReportResultWaiters()
+  })
+}
+
+function quizHasAnalysisResult(quiz) {
+  return !!quiz?.scored
+}
+
+function markReportAnalysisArrivals(previousReports, nextReports) {
+  const previousById = new Map(previousReports.map(report => [String(report.id), report]))
+  nextReports.forEach(report => {
+    if (!reportHasAnalysisResult(report)) return
+    const previous = previousById.get(String(report.id))
+    if (!previous || !reportHasAnalysisResult(previous)) {
+      markStudyAnalysisNotice('report', report.id, report.characterId)
+    }
+  })
+}
+
+function markQuizAnalysisArrivals(previousQuizzes, nextQuizzes) {
+  const previousById = new Map(previousQuizzes.map(quiz => [String(quiz.id), quiz]))
+  nextQuizzes.forEach(quiz => {
+    if (!quizHasAnalysisResult(quiz)) return
+    const previous = previousById.get(String(quiz.id))
+    if (!previous || !quizHasAnalysisResult(previous)) {
+      markStudyAnalysisNotice('quiz', quiz.id, quiz.characterId)
+    }
+  })
+}
+
+function applyReportSnapshot(payload, { highlightArrivals = false } = {}) {
+  if (!payload || typeof payload !== 'object') return
+  const previousEvolution = Array.isArray(payload.characters) ? snapshotEvolutionProgress() : null
+  if (Array.isArray(payload.characters)) {
+    state.characters = payload.characters.map(normalizeCharacter).filter(Boolean)
+  }
+  if (Array.isArray(payload.reports)) {
+    const reports = payload.reports.map(normalizeReport).filter(r => r.id != null)
+    if (highlightArrivals) markReportAnalysisArrivals(state.reports, reports)
+    state.reports = reports
+  }
+  if (Array.isArray(payload.quizzes)) {
+    const quizzes = payload.quizzes.map(normalizeQuiz).filter(q => q.id != null)
+    if (highlightArrivals) markQuizAnalysisArrivals(state.quizzes, quizzes)
+    state.quizzes = quizzes
+  }
+  if (payload.dailyReport && typeof payload.dailyReport === 'object') {
+    state.dailyReport = payload.dailyReport
+  }
+  pruneCharacterSseResults()
+  pruneStudyAnalysisNotices()
+  detectEvolutionArrivals(previousEvolution)
+  syncCharacterEventStreams()
+  syncActiveGotchi()
+  resolveReportResultWaiters()
+}
+
+function applyQuizSnapshot(payload, { highlightArrival = false } = {}) {
+  const quiz = normalizeQuiz(payload)
+  if (quiz.id == null) return null
+  const index = state.quizzes.findIndex(item => String(item.id) === String(quiz.id))
+  const previous = index >= 0 ? state.quizzes[index] : null
+  if (index >= 0) Object.assign(state.quizzes[index], quiz)
+  else state.quizzes.unshift(quiz)
+  const current = index >= 0 ? state.quizzes[index] : quiz
+  if (highlightArrival && quizHasAnalysisResult(current) && (!previous || !quizHasAnalysisResult(previous))) {
+    markStudyAnalysisNotice('quiz', current.id, current.characterId)
+  }
+  pruneStudyAnalysisNotices()
+  return current
+}
+
 function applyCharacterSnapshot(payload) {
   if (isDeletedCharacter(payload)) {
     const index = state.characters.findIndex(item => String(item.id) === String(payload.id))
@@ -440,11 +814,13 @@ function applyCharacterSnapshot(payload) {
     syncActiveGotchi()
     return null
   }
+  const previousEvolution = snapshotEvolutionProgress()
   const character = normalizeCharacter(payload)
   if (!character) return null
   const index = state.characters.findIndex(item => String(item.id) === String(character.id))
   if (index >= 0) Object.assign(state.characters[index], character)
   else state.characters.unshift(character)
+  detectEvolutionArrivals(previousEvolution)
   syncActiveGotchi()
   return character
 }
@@ -483,6 +859,21 @@ function localSetActive(id) {
     .forEach(q => { q.characterId = next.id })
   syncActiveGotchi()
   return true
+}
+
+function localBoostCharacterStat(id, stat, amount = 200) {
+  const character = state.characters.find(c => String(c.id) === String(id))
+  if (!character || !STAT_KEYS.includes(stat)) return null
+  const delta = Math.trunc(Number(amount))
+  if (!Number.isFinite(delta) || delta <= 0) return null
+  const previousEvolution = evolutionProgress(character)
+  if (!character.stats || typeof character.stats !== 'object') character.stats = newStats()
+  character.stats[stat] = (Number.isFinite(character.stats[stat]) ? character.stats[stat] : 0) + delta
+  character.emotion = 'joy'
+  character.message = `시연용 보너스로 ${STAT_LABELS[stat]} 스탯이 ${delta} 올랐어요.`
+  const evolvedNow = markCharacterEvolutionIfReady(character, previousEvolution)
+  if (character.active) syncActiveGotchi()
+  return { ...character, _evolvedNow: evolvedNow }
 }
 
 function localCreateCharacter({ name, keyword, personality }, { failImage = false } = {}) {
@@ -579,7 +970,15 @@ function localSubmitQuiz(quizId, userAnswer, { fail = false } = {}) {
   quiz.correct = Number(userAnswer) === Number(quiz.answer)
   quiz.scored = true
   const owner = state.characters.find(c => String(c.id) === String(quiz.characterId))
-  if (owner && quiz.correct) owner.stats[quiz.deltaStat] = (owner.stats[quiz.deltaStat] || 0) + quiz.deltaAmount
+  if (owner && quiz.correct) {
+    const previousEvolution = evolutionProgress(owner)
+    if (!owner.stats || typeof owner.stats !== 'object') owner.stats = newStats()
+    owner.stats[quiz.deltaStat] = (owner.stats[quiz.deltaStat] || 0) + quiz.deltaAmount
+    quiz._evolvedNow = markCharacterEvolutionIfReady(owner, previousEvolution)
+  } else {
+    quiz._evolvedNow = false
+  }
+  markStudyAnalysisNotice('quiz', quiz.id, quiz.characterId)
   return quiz
 }
 
@@ -593,12 +992,12 @@ function localDeliverDailyReport({ fail = false } = {}) {
       quizComment: null,
       nextRecommendation: null,
     }
-    state.notice = '일일 레포트 분석이 지연됐어요. 작성 기록은 그대로 보존됩니다.'
     return state.dailyReport
   }
 
   const report = state.reports.find(r => r.status === 'analyzing' && !r.scoreApplied)
   const character = state.characters.find(c => String(c.id) === String(report?.characterId))
+  const previousEvolution = character ? evolutionProgress(character) : null
   const deltas = {}
   if (report && character) {
     const tags = report.tags.length ? report.tags : ['algo']
@@ -609,7 +1008,8 @@ function localDeliverDailyReport({ fail = false } = {}) {
     report.status = 'applied'
     report.scoreApplied = true
     character.emotion = report.mood
-    if (nurtureScore(character) >= EVOLVE_THRESHOLD) character.isEvolved = true
+    markCharacterEvolutionIfReady(character, previousEvolution)
+    markStudyAnalysisNotice('report', report.id, report.characterId)
   }
   state.dailyReport = {
     status: 'ready',
@@ -619,6 +1019,65 @@ function localDeliverDailyReport({ fail = false } = {}) {
     deltas,
     quizComment: '오늘 퀴즈 흐름은 안정적이에요.',
     nextRecommendation: '내일은 약한 능력치 태그를 하나 골라 짧게 복습해 보세요.',
+  }
+  return state.dailyReport
+}
+
+function localCreateDemoRecommendedQuizzes(characterId = null) {
+  const character = characterId == null
+    ? requireActiveCharacter()
+    : state.characters.find(c => String(c.id) === String(characterId))
+  if (!character) return null
+
+  const date = todayISO()
+  const requestId = `demo-quiz-${character.id}-${date}`
+  const existing = state.quizzes.filter(q => q.sourceReportRequestId === requestId)
+  if (existing.length) return state.dailyReport
+
+  const demoQuizzes = [
+    normalizeQuiz({
+      id: `q${state.nextId++}`,
+      date,
+      sourceReportRequestId: requestId,
+      problemId: 1,
+      quizId: 1,
+      tag: 'algo',
+      question: 'DFS와 BFS의 차이점은 무엇인가요?',
+      modelAnswer: 'DFS는 깊이 우선 탐색으로 스택이나 재귀를 사용하고, BFS는 너비 우선 탐색으로 큐를 사용합니다. BFS는 가중치가 없는 그래프에서 최단 경로를 보장합니다.',
+      scoreAllocation: { db: 0, algorithm: 5, cs: 5, network: 0, framework: 0 },
+      answerKeywords: ['DFS', 'BFS', '큐', '스택'],
+      characterId: character.id,
+      deltaStat: 'algo',
+    }),
+    normalizeQuiz({
+      id: `q${state.nextId++}`,
+      date,
+      sourceReportRequestId: requestId,
+      problemId: 2,
+      quizId: 2,
+      tag: 'net',
+      question: 'RESTful API의 설계 원칙은 무엇인가요?',
+      modelAnswer: 'RESTful API는 리소스를 URI로 표현하고 HTTP 메서드로 행위를 나타내며, stateless, client-server, uniform interface, cacheable 원칙을 지킵니다.',
+      scoreAllocation: { db: 0, algorithm: 0, cs: 0, network: 5, framework: 0 },
+      answerKeywords: ['URI', 'HTTP', 'Stateless'],
+      characterId: character.id,
+      deltaStat: 'net',
+    }),
+  ]
+  state.quizzes.push(...demoQuizzes)
+  state.dailyReport = {
+    ...state.dailyReport,
+    status: 'ready',
+    date,
+    characterId: character.id,
+    requestId,
+    summary: '시연을 위해 추천 퀴즈 2개를 준비했어요.',
+    text: '시연을 위해 추천 퀴즈 2개를 준비했어요.',
+    feedback: '퀴즈 화면에서 바로 확인할 수 있어요.',
+    deltas: { algo: 0, cs: 0, db: 0, net: 0, fw: 0 },
+    quizComment: '추천 퀴즈로 어제 배운 내용을 한 번 더 확인해 보세요.',
+    nextRecommendation: { topics: ['algorithm', 'network'], rationale: '데모 추천 퀴즈' },
+    recommendedQuizIds: demoQuizzes.map(q => q.id),
   }
   return state.dailyReport
 }
@@ -807,6 +1266,12 @@ export function setActive(id) {
   return mutate(gameApi.setActiveCharacter(id)).then(item => item != null)
 }
 
+export function boostCharacterStat(id, stat, amount = 200) {
+  if (mockMode) return localBoostCharacterStat(id, stat, amount)
+  if (!STAT_KEYS.includes(stat)) throw new Error('알 수 없는 능력치예요.')
+  return mutate(gameApi.boostCharacterStat(id, { stat, amount }))
+}
+
 export function deleteCharacter(id) {
   if (mockMode) return localDeleteCharacter(id)
   return mutate(gameApi.deleteCharacter(id))
@@ -825,9 +1290,7 @@ export function updateCharacter(id, changes) {
 
 export function saveReport({ mood, title, content, tags }) {
   if (mockMode) {
-    const report = localSaveReport({ mood, title, content, tags })
-    if (report) state.notice = REPORT_SUBMITTED_NOTICE
-    return report
+    return localSaveReport({ mood, title, content, tags })
   }
   if (!activeCharacter.value) return null
   return mutate(gameApi.saveReport({
@@ -835,10 +1298,7 @@ export function saveReport({ mood, title, content, tags }) {
     title,
     content,
     tags: [...(tags || [])],
-  })).then(item => {
-    if (item) state.notice = REPORT_SUBMITTED_NOTICE
-    return item
-  })
+  }))
 }
 
 export function submitQuiz(quizId, userAnswer, { fail = false } = {}) {
@@ -846,11 +1306,29 @@ export function submitQuiz(quizId, userAnswer, { fail = false } = {}) {
   return mutate(gameApi.submitQuiz(quizId, { userAnswer, fail }))
 }
 
+export function createDemoQuizzes(characterId = null) {
+  if (mockMode) return localCreateDemoRecommendedQuizzes(characterId)
+  const body = characterId == null ? {} : { characterId }
+  return mutate(gameApi.createDemoQuizzes(body))
+}
+
 export function deliverDailyReport({ fail = false } = {}) {
   if (mockMode) return localDeliverDailyReport({ fail })
   return mutate(gameApi.deliverDailyReport({ fail }))
 }
 
+export async function runReportNow({ timeoutMs = REPORT_RESULT_TIMEOUT_MS } = {}) {
+  if (mockMode) {
+    const dailyReport = localDeliverDailyReport()
+    resolveReportResultWaiters()
+    return { dailyReport, timedOut: false }
+  }
+  const dailyReport = await mutate(gameApi.runReportNow())
+  const requestId = dailyReport?.requestId || state.dailyReport?.requestId || todayReport.value?.requestId
+  return waitForReportResult({ requestId, timeoutMs })
+}
+
+export function showReportSubmittedNotice() { state.notice = REPORT_SUBMITTED_NOTICE }
 export function clearNotice() { state.notice = null }
 
 export const gameState = state

@@ -114,6 +114,7 @@ class SpringCallbackClient:
         self,
         *,
         user_id: int,
+        character_id: int,
         quiz_id: int,
         grading_result: Mapping[str, Any],
         emotion: str | None = None,
@@ -123,6 +124,7 @@ class SpringCallbackClient:
         return self.post_quiz_grade_result(
             build_quiz_grade_result_callback_payload(
                 user_id=user_id,
+                character_id=character_id,
                 quiz_id=quiz_id,
                 grading_result=grading_result,
                 emotion=emotion,

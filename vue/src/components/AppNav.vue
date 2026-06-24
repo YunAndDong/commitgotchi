@@ -43,6 +43,13 @@ async function onLogout() {
 .brand__mark { font-size: 22px; }
 .brand__name { font-family: var(--font-display); font-size: 18px; letter-spacing: .5px; }
 .nav__actions { gap: var(--sp-3); margin-left: auto; }
+:global(html.is-ext-popup) .nav {
+  margin-top: 0;
+}
+:global(html.is-ext-popup) .nav__inner {
+  padding-top: 0;
+  padding-bottom: 8px;
+}
 @media (max-width: 480px) {
   .nav__inner { align-items: flex-start; flex-direction: column; }
   .nav__actions { margin-left: 0; width: 100%; justify-content: space-between; }
