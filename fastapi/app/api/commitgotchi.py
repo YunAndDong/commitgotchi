@@ -71,7 +71,11 @@ def create_commitgotchi_image(
     _: None = Depends(require_internal_auth),
     generator: SpriteGenerator = Depends(get_sprite_generator),
 ) -> dict[str, Any]:
-    result = generator(design_keyword=request.prompt, user_id=request.userId)
+    result = generator(
+        design_keyword=request.prompt,
+        user_id=request.userId,
+        s3_object_url=request.s3ObjectUrl,
+    )
     return _to_contract_response(
         result,
         user_id=request.userId,
