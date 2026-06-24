@@ -136,7 +136,7 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
         return jdbcTemplate.queryForMap(
                 """
                         SELECT stat_algorithm, battle_power, emotion, status_message
-                        FROM characters
+                        FROM user_character
                         WHERE id = ?
                         """,
                 characterId

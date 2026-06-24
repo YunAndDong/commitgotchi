@@ -37,7 +37,7 @@ class DatabaseMigrationIntegrationTest extends PostgresIntegrationTest {
                 SELECT count(*)
                 FROM information_schema.columns
                 WHERE (table_name = 'users' AND column_name = 'deleted_at')
-                   OR (table_name = 'characters' AND column_name = 'deleted_at')
+                   OR (table_name = 'user_character' AND column_name = 'deleted_at')
                 """, Integer.class)).isEqualTo(2);
 
         insertUser("soft-delete-email@example.com", "USER");
@@ -63,14 +63,15 @@ class DatabaseMigrationIntegrationTest extends PostgresIntegrationTest {
         insertUser("report-outbox@example.com", "USER");
         Long userId = jdbcTemplate.queryForObject(
                 "SELECT id FROM users WHERE email = 'report-outbox@example.com'", Long.class);
-        Long characterId = insertCharacter(userId);
+        Long userCharacterId = insertUserCharacter(userId);
 
         insertReportRequestOutbox(
                 "report-request-1",
                 userId,
-                characterId,
+                userCharacterId,
                 "2026-06-23",
                 "0100011",
+                "{\"algorithm\":3}",
                 "PENDING",
                 null
         );
@@ -78,45 +79,60 @@ class DatabaseMigrationIntegrationTest extends PostgresIntegrationTest {
         assertThatThrownBy(() -> insertReportRequestOutbox(
                 "report-request-1",
                 userId,
-                characterId,
+                userCharacterId,
                 "2026-06-24",
                 "0100011",
+                "{}",
                 "PENDING",
                 null
         )).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> insertReportRequestOutbox(
                 "report-request-2",
                 userId,
-                characterId,
+                userCharacterId,
                 "2026-06-23",
                 "0100011",
+                "{}",
                 "PENDING",
                 null
         )).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> insertReportRequestOutbox(
                 "report-request-3",
                 userId,
-                characterId,
+                userCharacterId,
                 "2026-06-25",
                 "0120011",
+                "{}",
                 "PENDING",
                 null
         )).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> insertReportRequestOutbox(
                 "report-request-4",
                 userId,
-                characterId,
+                userCharacterId,
                 "2026-06-25",
                 "0100011",
+                "{}",
                 "PROCESSING",
                 null
         )).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> insertReportRequestOutbox(
                 "report-request-5",
                 userId,
-                characterId,
+                userCharacterId,
                 "2026-06-25",
                 "0100011",
+                "[]",
+                "PENDING",
+                null
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertReportRequestOutbox(
+                "report-request-6",
+                userId,
+                userCharacterId,
+                "2026-06-25",
+                "0100011",
+                "{}",
                 "SENT",
                 null
         )).isInstanceOf(DataIntegrityViolationException.class);
@@ -192,10 +208,10 @@ class DatabaseMigrationIntegrationTest extends PostgresIntegrationTest {
         );
     }
 
-    private Long insertCharacter(Long userId) {
+    private Long insertUserCharacter(Long userId) {
         return jdbcTemplate.queryForObject("""
-                INSERT INTO characters (user_id, name, design_keyword, personality, status_message)
-                VALUES (?, 'Reportmon', 'report', 'Likes careful analysis', 'Ready to learn')
+                INSERT INTO user_character (user_id, character_id, name, status_message)
+                VALUES (?, 1, 'Reportmon', 'Ready to learn')
                 RETURNING id
                 """, Long.class, userId);
     }
@@ -203,9 +219,10 @@ class DatabaseMigrationIntegrationTest extends PostgresIntegrationTest {
     private void insertReportRequestOutbox(
             String requestId,
             Long userId,
-            Long characterId,
+            Long userCharacterId,
             String targetDate,
             String weeklyStudyStreak,
+            String scoreDeltaHint,
             String status,
             String sentAt
     ) {
@@ -213,24 +230,19 @@ class DatabaseMigrationIntegrationTest extends PostgresIntegrationTest {
                 INSERT INTO report_request_outbox (
                     request_id,
                     user_id,
-                    character_id,
+                    user_character_id,
                     target_date,
                     report_title,
                     report_content,
                     weekly_study_streak,
+                    score_delta_hint,
                     focus,
-                    character_name,
-                    character_personality,
-                    character_emotion,
-                    character_stat_algorithm,
-                    score_delta_hint_algorithm,
                     status,
                     sent_at
                 )
                 VALUES (?, ?, ?, ?::date, 'Daily study record', 'Reviewed SQS and outbox.',
-                        ?, 'Comment on algorithm learning progress',
-                        'Reportmon', 'Likes careful analysis', 'JOY', 7,
-                        3, ?, ?::timestamptz)
-                """, requestId, userId, characterId, targetDate, weeklyStudyStreak, status, sentAt);
+                        ?, ?::jsonb, 'Comment on algorithm learning progress',
+                        ?, ?::timestamptz)
+                """, requestId, userId, userCharacterId, targetDate, weeklyStudyStreak, scoreDeltaHint, status, sentAt);
     }
 }

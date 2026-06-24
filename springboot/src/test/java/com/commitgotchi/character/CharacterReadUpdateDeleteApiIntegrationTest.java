@@ -83,8 +83,8 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andExpect(jsonPath("$.item.battlePower").value(0))
                 .andExpect(jsonPath("$.item.emotion").value("joy"))
                 .andExpect(jsonPath("$.item.isEvolved").value(false))
-                .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value("/character-assets/default_image1.png"))
+                .andExpect(jsonPath("$.item.imageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("FALLBACK"))
                 .andExpect(jsonPath("$.item.spriteMeta.frameMap.joy[0]").value(0))
                 .andExpect(jsonPath("$.item.active").value(true))
                 .andExpect(jsonPath("$.item.message").value("Ready to learn"))
@@ -96,6 +96,8 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 detail.getResponse().getContentAsString(),
                 "$.state.characters"
         );
+        String itemSpriteSheetUrl = JsonPath.read(detail.getResponse().getContentAsString(), "$.item.spriteSheetUrl");
+        assertThat(itemSpriteSheetUrl).isEqualTo(babyPresetSpriteSheetUrl(firstCharacterId));
         assertThat(characters).hasSize(1);
         assertThat(characters).allSatisfy(character ->
                 assertThat(character.get("name")).isEqualTo("First"));
@@ -196,7 +198,12 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andExpect(content().string(not(containsString("Authorization"))));
 
         Map<String, Object> stored = jdbcTemplate.queryForMap(
-                "SELECT name, design_keyword, personality FROM characters WHERE id = ?",
+                """
+                        SELECT uc.name, catalog.design_keyword, catalog.personality
+                        FROM user_character uc
+                        JOIN characters catalog ON catalog.id = uc.character_id
+                        WHERE uc.id = ?
+                        """,
                 characterId.longValue()
         );
         assertThat(stored)
@@ -238,8 +245,8 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andExpect(jsonPath("$.item.stats.fw").value(0))
                 .andExpect(jsonPath("$.item.battlePower").value(12))
                 .andExpect(jsonPath("$.item.emotion").value("joy"))
-                .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value("/character-assets/default_image1.png"))
+                .andExpect(jsonPath("$.item.imageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("FALLBACK"))
                 .andExpect(jsonPath("$.item.spriteMeta.frameMap.joy[0]").value(0))
                 .andExpect(jsonPath("$.item.message").value("좋은 답변이야! 핵심을 잡았어."))
                 .andExpect(jsonPath("$.item.active").value(true))
@@ -685,10 +692,12 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
         return jdbcTemplate.queryForMap(
                 """
                         SELECT stat_algorithm, stat_cs, stat_db, stat_network, stat_framework,
-                               battle_power, is_evolved, emotion, status_message, image_status,
-                               sprite_meta, is_active, created_at
-                        FROM characters
-                        WHERE id = ?
+                               battle_power, is_evolved, emotion, status_message,
+                               catalog.image_status, catalog.sprite_meta::text AS sprite_meta,
+                               is_active, uc.created_at
+                        FROM user_character uc
+                        JOIN characters catalog ON catalog.id = uc.character_id
+                        WHERE uc.id = ?
                         """,
                 characterId.longValue()
         );
@@ -702,7 +711,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
 
     private long activeCharacterCount(long userId) {
         Long count = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM characters WHERE user_id = ? AND is_active = true",
+                "SELECT count(*) FROM user_character WHERE user_id = ? AND is_active = true AND deleted_at IS NULL",
                 Long.class,
                 userId
         );
@@ -711,7 +720,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
 
     private long activeCharacterId(long userId) {
         Long id = jdbcTemplate.queryForObject(
-                "SELECT id FROM characters WHERE user_id = ? AND is_active = true",
+                "SELECT id FROM user_character WHERE user_id = ? AND is_active = true AND deleted_at IS NULL",
                 Long.class,
                 userId
         );
@@ -720,10 +729,15 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
 
     private boolean isCharacterSoftDeleted(Number characterId) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-                "SELECT deleted_at IS NOT NULL FROM characters WHERE id = ?",
+                "SELECT deleted_at IS NOT NULL FROM user_character WHERE id = ?",
                 Boolean.class,
                 characterId.longValue()
         ));
+    }
+
+    private String babyPresetSpriteSheetUrl(Number characterId) {
+        long presetId = (characterId.longValue() % 3L) + 1L;
+        return "/character-assets/default_image" + presetId + ".png";
     }
 
     private String uniqueEmail() {

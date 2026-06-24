@@ -66,14 +66,19 @@ watch(pages, value => { page.value = Math.min(page.value, value) })
 
 <template>
   <div v-if="p" class="bd">
-    <RouterLink to="/board" class="back tiny">‹ 게시판으로</RouterLink>
+    <header class="cg-pagehead">
+      <div class="cg-pagehead__main">
+        <RouterLink to="/board" class="cg-btn cg-btn--sm cg-back" aria-label="게시판으로 돌아가기">←</RouterLink>
+        <h1 class="cg-page-title">공유 커밋고치</h1>
+      </div>
+    </header>
     <div class="cols">
       <!-- left: character -->
       <section class="cg-screen col center cchar">
         <CgEmo :emotion="p.emotion" />
         <CgSprite :size="180" :emotion="p.emotion" :evolved="p.isEvolved"
                   :sprite-sheet-url="p.spriteSheetUrl" :sprite-meta="p.spriteMeta" />
-        <h1 class="cg-section-title big">{{ p.name }}</h1>
+        <h2 class="cg-section-title big">{{ p.name }}</h2>
         <span class="tiny faint">@{{ p.owner }}</span>
         <span class="cg-tag">육아점수 {{ p.score.toLocaleString() }}</span>
         <textarea v-if="editingPost" v-model="postDraft" class="cg-textarea"></textarea>
@@ -148,8 +153,7 @@ watch(pages, value => { page.value = Math.min(page.value, value) })
 </template>
 
 <style scoped>
-.bd { display: flex; flex-direction: column; gap: var(--sp-3); }
-.back { color: var(--primary-d); font-family: var(--font-head); }
+.bd { display: flex; flex-direction: column; gap: var(--sp-4); max-width: 1100px; margin: 0 auto; }
 .cols { display: grid; grid-template-columns: 340px 1fr; gap: var(--sp-4); align-items: start; }
 .cchar { padding: var(--sp-5); gap: var(--sp-2); position: sticky; top: 90px; }
 .desc { text-align: center; color: var(--ink-soft); line-height: 1.7; }

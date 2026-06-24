@@ -253,27 +253,19 @@ class ReportMidnightEnqueueServiceIntegrationTest extends PostgresIntegrationTes
                         INSERT INTO report_request_outbox (
                             request_id,
                             user_id,
-                            character_id,
+                            user_character_id,
                             target_date,
                             report_title,
                             report_content,
                             weekly_study_streak,
+                            score_delta_hint,
                             focus,
-                            character_name,
-                            character_personality,
-                            character_emotion,
-                            character_stat_db,
-                            character_stat_algorithm,
-                            character_stat_cs,
-                            character_stat_network,
-                            character_stat_framework,
                             status,
                             attempt_count,
                             available_at,
                             sent_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, '0000001', '이미 전송된 요청',
-                                'Sent Reporter', 'steady', 'JOY', 0, 0, 0, 0, 0,
+                        VALUES (?, ?, ?, ?, ?, ?, '0000001', '{}'::jsonb, '이미 전송된 요청',
                                 'SENT', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                         """,
                 expectedRequestId(userId, characterId, targetDate),
@@ -288,10 +280,10 @@ class ReportMidnightEnqueueServiceIntegrationTest extends PostgresIntegrationTes
     private List<OutboxRow> outboxRows(long userId, long characterId, LocalDate targetDate) {
         return jdbcTemplate.query(
                 """
-                        SELECT character_id, target_date, report_title, report_content, status
+                        SELECT user_character_id AS character_id, target_date, report_title, report_content, status
                         FROM report_request_outbox
                         WHERE user_id = ?
-                          AND character_id = ?
+                          AND user_character_id = ?
                           AND target_date = ?
                         ORDER BY id
                         """,

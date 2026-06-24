@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, watch } from 'vue'
+import { computed, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { authState } from './stores/auth.js'
 import { gameState, clearNotice } from './stores/game.js'
@@ -7,6 +7,8 @@ import AppNav from './components/AppNav.vue'
 
 const route = useRoute()
 let noticeTimer = null
+const showAppNav = computed(() => route.name === 'login' || (!route.meta.public && authState.user))
+const showAppNavLogout = computed(() => route.name !== 'login')
 
 watch(() => gameState.notice, notice => {
   if (noticeTimer) window.clearTimeout(noticeTimer)
@@ -23,9 +25,9 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="cg-app">
-    <AppNav v-if="!route.meta.public && authState.user" />
+    <AppNav v-if="showAppNav" :show-logout="showAppNavLogout" />
 
-    <main class="cg-main">
+    <main class="cg-main" :class="{ 'cg-main--auth': route.name === 'login' }">
       <RouterView v-slot="{ Component }">
         <Transition name="fade">
           <component :is="Component" :key="route.fullPath" />
@@ -48,5 +50,9 @@ onBeforeUnmount(() => {
   z-index: 60; max-width: 560px; gap: var(--sp-4);
   background: var(--popup-bg); border-color: var(--popup-edge);
   box-shadow: 4px 4px 0 var(--shadow-hard); cursor: pointer;
+}
+:global(html.is-ext-popup) .cg-main--auth {
+  padding-top: var(--sp-2);
+  padding-bottom: 0;
 }
 </style>

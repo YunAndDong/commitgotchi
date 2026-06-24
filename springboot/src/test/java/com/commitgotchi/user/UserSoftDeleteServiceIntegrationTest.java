@@ -73,7 +73,7 @@ class UserSoftDeleteServiceIntegrationTest extends PostgresIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                 """
                         SELECT count(*)
-                        FROM characters
+                        FROM user_character
                         WHERE user_id = ?
                           AND deleted_at IS NOT NULL
                           AND is_active = false

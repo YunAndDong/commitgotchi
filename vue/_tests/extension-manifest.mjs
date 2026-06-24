@@ -10,6 +10,14 @@ assert.ok(
   manifest.host_permissions?.includes('https://app.example.com/*'),
   'manifest host_permissions must include the production API origin',
 )
+assert.ok(
+  manifest.web_accessible_resources?.some(entry => (
+    entry.resources?.includes('character-assets/*')
+      && entry.matches?.includes('http://*/*')
+      && entry.matches?.includes('https://*/*')
+  )),
+  'content script sprite assets must be web-accessible on HTTP(S) pages',
+)
 
 const publicKey = Buffer.from(manifest.key, 'base64')
 const digest = createHash('sha256').update(publicKey).digest().subarray(0, 16)

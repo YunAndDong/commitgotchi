@@ -19,25 +19,58 @@ public interface ReportRequestOutboxMapper {
             id,
             request_id,
             user_id,
-            character_id,
+            user_character_id AS character_id,
             target_date,
             report_title,
             report_content,
             weekly_study_streak,
             focus,
-            character_name,
-            character_personality,
-            character_emotion,
-            character_stat_db,
-            character_stat_algorithm,
-            character_stat_cs,
-            character_stat_network,
-            character_stat_framework,
-            score_delta_hint_db,
-            score_delta_hint_algorithm,
-            score_delta_hint_cs,
-            score_delta_hint_network,
-            score_delta_hint_framework,
+            COALESCE((
+                SELECT user_character.name
+                FROM user_character
+                WHERE user_character.id = report_request_outbox.user_character_id
+            ), '') AS character_name,
+            COALESCE((
+                SELECT characters.personality
+                FROM user_character
+                JOIN characters ON characters.id = user_character.character_id
+                WHERE user_character.id = report_request_outbox.user_character_id
+            ), 'Unknown') AS character_personality,
+            COALESCE((
+                SELECT user_character.emotion
+                FROM user_character
+                WHERE user_character.id = report_request_outbox.user_character_id
+            ), 'JOY') AS character_emotion,
+            COALESCE((
+                SELECT user_character.stat_db
+                FROM user_character
+                WHERE user_character.id = report_request_outbox.user_character_id
+            ), 0) AS character_stat_db,
+            COALESCE((
+                SELECT user_character.stat_algorithm
+                FROM user_character
+                WHERE user_character.id = report_request_outbox.user_character_id
+            ), 0) AS character_stat_algorithm,
+            COALESCE((
+                SELECT user_character.stat_cs
+                FROM user_character
+                WHERE user_character.id = report_request_outbox.user_character_id
+            ), 0) AS character_stat_cs,
+            COALESCE((
+                SELECT user_character.stat_network
+                FROM user_character
+                WHERE user_character.id = report_request_outbox.user_character_id
+            ), 0) AS character_stat_network,
+            COALESCE((
+                SELECT user_character.stat_framework
+                FROM user_character
+                WHERE user_character.id = report_request_outbox.user_character_id
+            ), 0) AS character_stat_framework,
+            COALESCE((score_delta_hint ->> 'db')::integer, 0) AS score_delta_hint_db,
+            COALESCE((score_delta_hint ->> 'algorithm')::integer, 0) AS score_delta_hint_algorithm,
+            COALESCE((score_delta_hint ->> 'cs')::integer, 0) AS score_delta_hint_cs,
+            COALESCE((score_delta_hint ->> 'network')::integer, 0) AS score_delta_hint_network,
+            COALESCE((score_delta_hint ->> 'framework')::integer, 0) AS score_delta_hint_framework,
             status,
             attempt_count,
             available_at,
@@ -91,7 +124,7 @@ public interface ReportRequestOutboxMapper {
             """ + OUTBOX_COLUMNS + """
             FROM report_request_outbox
             WHERE user_id = #{userId}
-              AND character_id = #{characterId}
+              AND user_character_id = #{characterId}
               AND target_date = #{targetDate}
             """)
     @org.apache.ibatis.annotations.ResultMap("ReportRequestOutboxResult")
@@ -124,9 +157,9 @@ public interface ReportRequestOutboxMapper {
               )
               AND EXISTS (
                   SELECT 1
-                  FROM characters
-                  WHERE characters.id = report_request_outbox.character_id
-                    AND characters.deleted_at IS NULL
+                  FROM user_character
+                  WHERE user_character.id = report_request_outbox.user_character_id
+                    AND user_character.deleted_at IS NULL
               )
             ORDER BY available_at ASC, id ASC
             LIMIT #{limit}
@@ -139,25 +172,13 @@ public interface ReportRequestOutboxMapper {
             INSERT INTO report_request_outbox (
                 request_id,
                 user_id,
-                character_id,
+                user_character_id,
                 target_date,
                 report_title,
                 report_content,
                 weekly_study_streak,
+                score_delta_hint,
                 focus,
-                character_name,
-                character_personality,
-                character_emotion,
-                character_stat_db,
-                character_stat_algorithm,
-                character_stat_cs,
-                character_stat_network,
-                character_stat_framework,
-                score_delta_hint_db,
-                score_delta_hint_algorithm,
-                score_delta_hint_cs,
-                score_delta_hint_network,
-                score_delta_hint_framework,
                 status,
                 attempt_count,
                 available_at
@@ -170,42 +191,24 @@ public interface ReportRequestOutboxMapper {
                 #{reportTitle},
                 #{reportContent},
                 #{weeklyStudyStreak},
+                jsonb_build_object(
+                    'db', #{scoreDeltaHintDb},
+                    'algorithm', #{scoreDeltaHintAlgorithm},
+                    'cs', #{scoreDeltaHintCs},
+                    'network', #{scoreDeltaHintNetwork},
+                    'framework', #{scoreDeltaHintFramework}
+                ),
                 #{focus},
-                #{characterName},
-                #{characterPersonality},
-                #{characterEmotion},
-                #{characterStatDb},
-                #{characterStatAlgorithm},
-                #{characterStatCs},
-                #{characterStatNetwork},
-                #{characterStatFramework},
-                #{scoreDeltaHintDb},
-                #{scoreDeltaHintAlgorithm},
-                #{scoreDeltaHintCs},
-                #{scoreDeltaHintNetwork},
-                #{scoreDeltaHintFramework},
                 #{status},
                 #{attemptCount},
                 #{availableAt}
             )
-            ON CONFLICT (user_id, character_id, target_date) DO UPDATE
+            ON CONFLICT (user_id, user_character_id, target_date) DO UPDATE
             SET report_title = EXCLUDED.report_title,
                 report_content = EXCLUDED.report_content,
                 weekly_study_streak = EXCLUDED.weekly_study_streak,
+                score_delta_hint = EXCLUDED.score_delta_hint,
                 focus = EXCLUDED.focus,
-                character_name = EXCLUDED.character_name,
-                character_personality = EXCLUDED.character_personality,
-                character_emotion = EXCLUDED.character_emotion,
-                character_stat_db = EXCLUDED.character_stat_db,
-                character_stat_algorithm = EXCLUDED.character_stat_algorithm,
-                character_stat_cs = EXCLUDED.character_stat_cs,
-                character_stat_network = EXCLUDED.character_stat_network,
-                character_stat_framework = EXCLUDED.character_stat_framework,
-                score_delta_hint_db = EXCLUDED.score_delta_hint_db,
-                score_delta_hint_algorithm = EXCLUDED.score_delta_hint_algorithm,
-                score_delta_hint_cs = EXCLUDED.score_delta_hint_cs,
-                score_delta_hint_network = EXCLUDED.score_delta_hint_network,
-                score_delta_hint_framework = EXCLUDED.score_delta_hint_framework,
                 available_at = EXCLUDED.available_at,
                 updated_at = CURRENT_TIMESTAMP
             WHERE report_request_outbox.status = 'PENDING'

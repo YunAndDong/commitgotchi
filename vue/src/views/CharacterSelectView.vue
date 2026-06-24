@@ -38,19 +38,24 @@ async function choose(character) {
   clearCharacterSseResult(character.id)
   router.push(safeRedirectTarget())
 }
+
+function proceedWithSelected() {
+  if (!selectedCharacter.value) return
+  router.push(safeRedirectTarget())
+}
 </script>
 
 <template>
   <div class="select col">
-    <section class="select__head">
-      <div class="col">
-        <h1 class="title">오늘 함께할 커밋고치를 골라주세요</h1>
+    <header class="cg-pagehead select__head">
+      <div class="cg-pagehead__main">
+        <h1 class="cg-page-title">오늘 함께할 커밋고치를 골라주세요</h1>
       </div>
-      <div class="select__actions row">
+      <div class="cg-pagehead__actions">
         <RouterLink to="/codex" class="cg-btn cg-btn--ghost cg-btn--sm">도감 둘러보기</RouterLink>
         <RouterLink v-if="slotsLeft" to="/create" class="cg-btn cg-btn--primary cg-btn--sm">+ 새 커밋고치 생성</RouterLink>
       </div>
-    </section>
+    </header>
 
     <section v-if="characters.length" class="select__body">
       <article v-if="selectedCharacter" class="gotchi gotchi--current cg-card col" aria-label="현재 선택된 커밋고치">
@@ -120,6 +125,13 @@ async function choose(character) {
             <RouterLink v-if="slotsLeft" to="/create" class="cg-btn cg-btn--primary cg-btn--sm">생성하기</RouterLink>
           </template>
         </article>
+
+        <button v-if="selectedCharacter"
+                class="select-list__continue cg-btn cg-btn--accent cg-btn--block"
+                type="button"
+                @click="proceedWithSelected">
+          진행하기
+        </button>
       </section>
     </section>
 
@@ -133,16 +145,8 @@ async function choose(character) {
 </template>
 
 <style scoped>
-.select { gap: var(--sp-4); max-width: 980px; margin: 0 auto; }
-.select__head {
-  display: flex; align-items: end; justify-content: space-between;
-  gap: var(--sp-4); padding: 0 var(--sp-1);
-}
-.title { font-size: 24px; }
-.select__actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
+.select { gap: var(--sp-4); max-width: 960px; margin: 0 auto; }
+.select__head { padding: 0 var(--sp-1); }
 .select__body {
   display: grid;
   grid-template-columns: minmax(250px, .9fr) minmax(360px, 1.1fr);
@@ -165,14 +169,14 @@ async function choose(character) {
   background: var(--surface-2); border: 2px solid var(--surface-edge); border-radius: var(--r);
   padding: 9px 12px; font-family: var(--font-head); font-size: 13px; text-align: center;
 }
-.select-list { gap: var(--sp-3); }
+.select-list { gap: var(--sp-2); }
 .select-list__card {
   display: grid;
   grid-template-columns: 82px minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--sp-3);
-  min-height: 104px;
-  padding: var(--sp-3);
+  gap: var(--sp-2);
+  min-height: 96px;
+  padding: var(--sp-2);
 }
 .select-list__avatar {
   display: flex;
@@ -211,9 +215,9 @@ async function choose(character) {
   min-height: 22px;
   padding: 3px 8px;
   border-radius: 999px;
-  background: #e11937;
+  background: var(--notify);
   color: #fff;
-  box-shadow: 0 0 0 2px rgba(225, 25, 55, .16);
+  box-shadow: 0 0 0 2px var(--notify-ring);
   font-family: var(--font-head);
   font-size: 11px;
   font-weight: 700;
@@ -240,13 +244,17 @@ async function choose(character) {
   font-size: 26px;
   color: var(--ink-faint);
 }
-.empty { min-height: 430px; text-align: center; }
+.select-list__continue {
+  margin-top: var(--sp-1);
+}
+.empty {
+  min-height: clamp(300px, calc(100vh - 155px), 430px);
+  text-align: center;
+}
 @media (max-width: 760px) {
   .select__body { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .select__head { align-items: stretch; flex-direction: column; }
-  .select__actions { justify-content: flex-start; }
   .select-list__card {
     grid-template-columns: 72px minmax(0, 1fr);
   }

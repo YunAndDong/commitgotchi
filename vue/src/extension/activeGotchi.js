@@ -20,14 +20,46 @@ export function setActiveGotchiPublishingEnabled(enabled) {
   publishingEnabled = !!enabled
 }
 
+function normalizeSpriteMeta(raw) {
+  if (!raw) return null
+  if (typeof raw === 'string') {
+    try { return normalizeSpriteMeta(JSON.parse(raw)) } catch { return null }
+  }
+  return typeof raw === 'object' ? raw : null
+}
+
+function selectedSpriteSheetUrl(character) {
+  return character.isEvolved
+    ? (character.evolvedSpriteSheetUrl || character.spriteSheetUrl)
+    : (character.babySpriteSheetUrl || character.spriteSheetUrl)
+}
+
+function selectedSpriteMeta(character) {
+  return character.isEvolved
+    ? (character.evolvedSpriteMeta || character.spriteMeta)
+    : (character.babySpriteMeta || character.spriteMeta)
+}
+
 export function activeGotchiSnapshot(character) {
   if (!character || (typeof character.id !== 'string' && typeof character.id !== 'number')) return null
-  return {
+  const snapshot = {
     id: character.id,
     name: String(character.name || '커밋고치'),
     emotion: ['joy', 'sad', 'angry'].includes(character.emotion) ? character.emotion : 'joy',
     isEvolved: !!character.isEvolved,
   }
+  const spriteSheetUrl = typeof selectedSpriteSheetUrl(character) === 'string'
+    ? selectedSpriteSheetUrl(character).trim()
+    : ''
+  const spriteMeta = normalizeSpriteMeta(selectedSpriteMeta(character))
+  if (spriteSheetUrl && spriteMeta) {
+    snapshot.spriteSheetUrl = spriteSheetUrl
+    snapshot.spriteMeta = spriteMeta
+  }
+  if (['PENDING', 'READY', 'FALLBACK', 'FAILED'].includes(character.imageStatus)) {
+    snapshot.imageStatus = character.imageStatus
+  }
+  return snapshot
 }
 
 export function publishActiveGotchi(character) {

@@ -116,7 +116,7 @@ class DailyReportProjectionIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.state.dailyReport.deltas.db").value(0));
 
         Integer battlePower = jdbcTemplate.queryForObject(
-                "SELECT battle_power FROM characters WHERE id = ?",
+                "SELECT battle_power FROM user_character WHERE id = ?",
                 Integer.class,
                 character.getId()
         );

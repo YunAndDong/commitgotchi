@@ -85,8 +85,8 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.item.stats.fw").value(0))
                 .andExpect(jsonPath("$.item.emotion").value("joy"))
                 .andExpect(jsonPath("$.item.isEvolved").value(false))
-                .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value("/character-assets/default_image1.png"))
+                .andExpect(jsonPath("$.item.imageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("FALLBACK"))
                 .andExpect(jsonPath("$.item.spriteMeta.frameMap.joy[0]").value(0))
                 .andExpect(jsonPath("$.item.active").value(true))
                 .andExpect(jsonPath("$.item.message").value("Ready to learn"))
@@ -102,16 +102,21 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
                 "$.state.dailyReport.characterId"
         );
         assertThat(dailyReportCharacterId.longValue()).isEqualTo(characterId.longValue());
+        String itemSpriteSheetUrl = JsonPath.read(created.getResponse().getContentAsString(), "$.item.spriteSheetUrl");
+        assertThat(itemSpriteSheetUrl).isEqualTo(babyPresetSpriteSheetUrl(characterId));
         assertThat(characterRepository.countByUserId(user.id())).isEqualTo(1);
         assertThat(activeCharacterCount(user.id())).isEqualTo(1);
 
-        mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
+        MvcResult state = mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.characters[0].id").value(characterId))
-                .andExpect(jsonPath("$.state.characters[0].imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.state.characters[0].spriteSheetUrl").value("/character-assets/default_image1.png"))
+                .andExpect(jsonPath("$.state.characters[0].imageStatus").value("READY"))
+                .andExpect(jsonPath("$.state.characters[0].evolvedImageStatus").value("FALLBACK"))
                 .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.angry[1]").value(2))
-                .andExpect(jsonPath("$.state.characters[0].active").value(true));
+                .andExpect(jsonPath("$.state.characters[0].active").value(true))
+                .andReturn();
+        String stateSpriteSheetUrl = JsonPath.read(state.getResponse().getContentAsString(), "$.state.characters[0].spriteSheetUrl");
+        assertThat(stateSpriteSheetUrl).isEqualTo(babyPresetSpriteSheetUrl(characterId));
     }
 
     @Test
@@ -400,11 +405,16 @@ class CharacterCreationApiIntegrationTest extends PostgresIntegrationTest {
 
     private long activeCharacterCount(long userId) {
         Long count = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM characters WHERE user_id = ? AND is_active = true",
+                "SELECT count(*) FROM user_character WHERE user_id = ? AND is_active = true AND deleted_at IS NULL",
                 Long.class,
                 userId
         );
         return count == null ? 0 : count;
+    }
+
+    private String babyPresetSpriteSheetUrl(Number characterId) {
+        long presetId = (characterId.longValue() % 3L) + 1L;
+        return "/character-assets/default_image" + presetId + ".png";
     }
 
     private String uniqueEmail() {

@@ -6,6 +6,8 @@
   const STORAGE_KEY = 'commitgotchi.activeGotchi'
   const VISIBILITY_STORAGE_KEY = 'commitgotchi.gotchiVisible'
   const WALK_CYCLE_MS = 24_000
+  const WALKER_WIDTH = 88
+  const EDGE_PADDING = 12
   let host = null
   let shadow = null
   let hostObserver = null
@@ -22,6 +24,64 @@
       && typeof value.name === 'string' && value.name.trim()
       && ['joy', 'sad', 'angry'].includes(value.emotion)
       && typeof value.isEvolved === 'boolean'
+  }
+
+  function normalizeSpriteMeta(raw) {
+    if (!raw) return null
+    if (typeof raw === 'string') {
+      try { return normalizeSpriteMeta(JSON.parse(raw)) } catch { return null }
+    }
+    return typeof raw === 'object' ? raw : null
+  }
+
+  function bundledCharacterAssetUrl(value) {
+    const assetMarker = '/character-assets/'
+    const markerIndex = value.indexOf(assetMarker)
+    const path = markerIndex >= 0
+      ? value.slice(markerIndex + 1)
+      : value.replace(/^\.?\//, '')
+    if (!path.startsWith('character-assets/')) return ''
+    return chrome.runtime?.getURL ? chrome.runtime.getURL(path) : ''
+  }
+
+  function resolveSpriteUrl(raw) {
+    if (typeof raw !== 'string') return ''
+    const value = raw.trim()
+    if (!value) return ''
+    const bundledUrl = bundledCharacterAssetUrl(value)
+    if (bundledUrl) return bundledUrl
+    if (/^[a-z][a-z\d+\-.]*:/i.test(value) || value.startsWith('//')) return value
+    if (chrome.runtime?.getURL) {
+      return chrome.runtime.getURL(value.replace(/^\.?\//, ''))
+    }
+    return value
+  }
+
+  function frameStyle(gotchi) {
+    if (gotchi.imageStatus === 'PENDING') return null
+    const spriteMeta = normalizeSpriteMeta(gotchi.spriteMeta)
+    const spriteSheetUrl = resolveSpriteUrl(gotchi.spriteSheetUrl)
+    if (!spriteMeta || !spriteSheetUrl) return null
+
+    const columns = Math.max(1, Number(spriteMeta.columns) || 3)
+    const rows = Math.max(1, Number(spriteMeta.rows) || 1)
+    const map = spriteMeta.frameMap || {}
+    let coords = Array.isArray(map[gotchi.emotion]) ? map[gotchi.emotion] : null
+    if (!coords && gotchi.emotion === 'joy' && Array.isArray(map.happy)) coords = map.happy
+    if (!coords) {
+      const stage = gotchi.isEvolved ? 'mature' : 'baby'
+      const stageMap = map[stage] || {}
+      const key = gotchi.emotion === 'joy' && stageMap.happy && !stageMap.joy ? 'happy' : gotchi.emotion
+      coords = Array.isArray(stageMap[key]) ? stageMap[key] : [0, 0]
+    }
+
+    const row = Math.min(rows - 1, Math.max(0, Number(coords[0]) || 0))
+    const column = Math.min(columns - 1, Math.max(0, Number(coords[1]) || 0))
+    return {
+      spriteSheetUrl,
+      backgroundSize: `${columns * 100}% ${rows * 100}%`,
+      backgroundPosition: `${columns <= 1 ? 0 : (column / (columns - 1)) * 100}% ${rows <= 1 ? 0 : (row / (rows - 1)) * 100}%`,
+    }
   }
 
   function removeHost() {
@@ -113,12 +173,110 @@
     `
   }
 
-  function sharedMotion(now) {
-    const phase = (now % WALK_CYCLE_MS) / WALK_CYCLE_MS
-    if (phase < 0.49) return { progress: phase / 0.49, direction: 1 }
-    if (phase < 0.5) return { progress: 1, direction: 1 }
-    if (phase < 0.99) return { progress: 1 - ((phase - 0.5) / 0.49), direction: -1 }
-    return { progress: 0, direction: -1 }
+  function fallbackSpriteContent(gotchi) {
+    const fallback = document.createElement('div')
+    fallback.className = 'sprite-fallback'
+    fallback.innerHTML = spriteMarkup(gotchi)
+    return fallback
+  }
+
+  function replaceWithFallback(frame, gotchi) {
+    if (frame.__commitGotchiBroken) return
+    frame.__commitGotchiBroken = true
+    const fallback = fallbackSpriteContent(gotchi)
+    if (typeof frame.replaceWith === 'function') {
+      frame.replaceWith(fallback)
+      return
+    }
+    frame.className = fallback.className
+    frame.innerHTML = fallback.innerHTML
+  }
+
+  function spriteContent(gotchi) {
+    const style = frameStyle(gotchi)
+    if (!style) return fallbackSpriteContent(gotchi)
+
+    const frame = document.createElement('div')
+    frame.className = 'sprite-frame'
+    frame.style.setProperty('background-image', `url("${style.spriteSheetUrl.replace(/"/g, '\\"')}")`)
+    frame.style.setProperty('background-size', style.backgroundSize)
+    frame.style.setProperty('background-position', style.backgroundPosition)
+    const probe = document.createElement('img')
+    probe.className = 'sprite-probe'
+    probe.alt = ''
+    probe.setAttribute('aria-hidden', 'true')
+    probe.addEventListener?.('error', () => { replaceWithFallback(frame, gotchi) }, { once: true })
+    probe.src = style.spriteSheetUrl
+    frame.append(probe)
+    return frame
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value))
+  }
+
+  function smoothstep(value) {
+    return value * value * (3 - (2 * value))
+  }
+
+  function hashGotchi(gotchi) {
+    const source = `${gotchi?.id ?? ''}|${gotchi?.name ?? ''}`
+    let hash = 2166136261
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index)
+      hash = Math.imul(hash, 16777619)
+    }
+    return hash >>> 0
+  }
+
+  function seededUnit(seed, salt) {
+    let value = (seed + Math.imul(salt, 374761393)) >>> 0
+    value = Math.imul(value ^ (value >>> 15), 2246822519)
+    value = Math.imul(value ^ (value >>> 13), 3266489917)
+    return ((value ^ (value >>> 16)) >>> 0) / 4294967295
+  }
+
+  function motionProfile(gotchi) {
+    const seed = hashGotchi(gotchi)
+    return {
+      seed,
+      cycleMs: 18_000 + (seededUnit(seed, 1) * 9_000),
+      phaseOffset: seededUnit(seed, 2),
+      pauseRatio: 0.06 + (seededUnit(seed, 3) * 0.07),
+      wobbleRatio: 0.012 + (seededUnit(seed, 4) * 0.018),
+      bobPixels: 1.5 + (seededUnit(seed, 5) * 2.5),
+      stepMs: 360 + (seededUnit(seed, 6) * 180),
+    }
+  }
+
+  function travelBounds() {
+    const viewportWidth = Math.max(0, Number(globalThis.innerWidth) || 0)
+    const walkerWidth = Math.min(WALKER_WIDTH, Math.max(0, viewportWidth - (EDGE_PADDING * 2)))
+    const minX = viewportWidth <= walkerWidth ? 0 : Math.min(EDGE_PADDING, viewportWidth - walkerWidth)
+    const maxX = Math.max(minX, viewportWidth - walkerWidth - minX)
+    return { minX, maxX }
+  }
+
+  function sharedMotion(now, gotchi) {
+    const profile = motionProfile(gotchi)
+    const phase = ((now / profile.cycleMs) + profile.phaseOffset) % 1
+    const local = phase < 0.5 ? phase / 0.5 : (phase - 0.5) / 0.5
+    const pause = profile.pauseRatio
+    const walking = local > pause && local < (1 - pause)
+    const stride = walking ? clamp((local - pause) / (1 - (pause * 2)), 0, 1) : (local <= pause ? 0 : 1)
+    const eased = smoothstep(stride)
+    const routeProgress = phase < 0.5 ? eased : 1 - eased
+    const edgeFade = Math.sin(Math.PI * eased)
+    const wobble = Math.sin((now / 2300) + profile.seed) * profile.wobbleRatio * edgeFade
+    const progress = clamp(routeProgress + wobble, 0, 1)
+    const { minX, maxX } = travelBounds()
+    const x = minX + ((maxX - minX) * progress)
+    const step = walking ? Math.sin((now / profile.stepMs) * Math.PI * 2) : 0
+    return {
+      x: clamp(x, minX, maxX),
+      y: -Math.max(0, step) * profile.bobPixels,
+      squash: walking ? 1 - (Math.abs(step) * 0.025) : 1,
+    }
   }
 
   function syncSharedPosition() {
@@ -128,13 +286,13 @@
     }
 
     if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      walker.style.transform = 'translateX(0px)'
-      sprite.style.transform = 'scaleX(1)'
+      const { minX } = travelBounds()
+      walker.style.transform = `translateX(${minX}px)`
+      sprite.style.transform = 'translateY(0px)'
     } else {
-      const { progress, direction } = sharedMotion(Date.now())
-      const travelDistance = Math.max(0, globalThis.innerWidth - 24)
-      walker.style.transform = `translateX(${-88 + (travelDistance * progress)}px)`
-      sprite.style.transform = `scaleX(${direction})`
+      const { x, y, squash } = sharedMotion(Date.now(), currentGotchi)
+      walker.style.transform = `translateX(${x}px)`
+      sprite.style.transform = `translateY(${y}px) scaleY(${squash})`
     }
 
     positionFrame = globalThis.requestAnimationFrame?.(syncSharedPosition) ?? null
@@ -175,9 +333,9 @@
       *, *::before, *::after { box-sizing: border-box; pointer-events: none !important; }
       .walker {
         position: absolute;
-        left: 12px;
+        left: 0;
         bottom: max(8px, env(safe-area-inset-bottom));
-        width: 88px;
+        width: min(88px, max(0px, calc(100vw - 24px)));
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -189,7 +347,28 @@
         transform-origin: center bottom;
         will-change: transform;
       }
-      svg { display: block; width: 72px; height: 72px; filter: drop-shadow(0 2px 1px rgba(24, 32, 24, .25)); }
+      .sprite-frame,
+      .sprite-fallback,
+      svg {
+        display: block;
+        width: 72px;
+        height: 72px;
+        filter: drop-shadow(0 2px 1px rgba(24, 32, 24, .25));
+      }
+      .sprite-frame {
+        position: relative;
+        overflow: hidden;
+        background-repeat: no-repeat;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+      .sprite-probe {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
       .ground { width: 48px; height: 7px; margin-top: -4px; border-radius: 50%; background: rgba(24, 32, 24, .35); filter: blur(1px); }
       .name {
         max-width: 88px;
@@ -211,7 +390,7 @@
     walker.className = 'walker'
     sprite = document.createElement('div')
     sprite.className = 'sprite'
-    sprite.innerHTML = spriteMarkup(gotchi)
+    sprite.append(spriteContent(gotchi))
     const ground = document.createElement('div')
     ground.className = 'ground'
     const name = document.createElement('div')

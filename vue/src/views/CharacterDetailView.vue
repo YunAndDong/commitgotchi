@@ -137,10 +137,12 @@ async function activate() {
 
 <template>
   <div v-if="c" class="detail">
-    <div class="detail-toolbar">
-      <RouterLink to="/select" class="detail-back cg-btn cg-btn--sm" aria-label="캐릭터 선택 화면으로 돌아가기">←</RouterLink>
-      <span class="detail-title">캐릭터 상세 화면</span>
-    </div>
+    <header class="cg-pagehead">
+      <div class="cg-pagehead__main">
+        <RouterLink to="/select" class="cg-btn cg-btn--sm cg-back" aria-label="캐릭터 선택 화면으로 돌아가기">←</RouterLink>
+        <h1 class="cg-page-title">캐릭터 상세</h1>
+      </div>
+    </header>
 
     <section class="detail-grid">
       <div class="left-col col">
@@ -250,26 +252,7 @@ async function activate() {
 </template>
 
 <style scoped>
-.detail { width: 100%; }
-.detail-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-height: 36px;
-  margin-top: calc(var(--sp-4) * -1);
-  margin-bottom: var(--sp-2);
-}
-.detail-title {
-  font-family: var(--font-head);
-  font-size: 16px;
-  color: var(--ink);
-}
-.detail-back {
-  width: 36px;
-  min-width: 36px;
-  padding: 0;
-  font-size: 18px;
-}
+.detail { width: 100%; max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--sp-4); }
 .detail-grid {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
@@ -389,7 +372,7 @@ async function activate() {
   display: grid;
   place-items: center;
   padding: var(--sp-4);
-  background: rgba(20, 20, 20, .42);
+  background: var(--overlay);
 }
 .delete-dialog {
   width: min(100%, 360px);

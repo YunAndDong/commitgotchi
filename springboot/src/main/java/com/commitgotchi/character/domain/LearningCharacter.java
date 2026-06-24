@@ -12,6 +12,8 @@ public class LearningCharacter {
 
     private Long id;
 
+    private Long catalogCharacterId;
+
     private User user;
 
     private String name;
@@ -44,6 +46,18 @@ public class LearningCharacter {
 
     private String spriteMeta;
 
+    private CharacterImageStatus babyImageStatus;
+
+    private String babySpriteSheetUrl;
+
+    private String babySpriteMeta;
+
+    private CharacterImageStatus evolvedImageStatus;
+
+    private String evolvedSpriteSheetUrl;
+
+    private String evolvedSpriteMeta;
+
     private boolean active;
 
     private long version;
@@ -65,6 +79,7 @@ public class LearningCharacter {
         this.statusMessage = DEFAULT_STATUS_MESSAGE;
         this.emotion = CharacterEmotion.JOY;
         this.imageStatus = CharacterImageStatus.PENDING;
+        this.evolvedImageStatus = CharacterImageStatus.PENDING;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -107,30 +122,34 @@ public class LearningCharacter {
     }
 
     public void markReady(String spriteSheetUrl, String spriteMeta) {
-        this.spriteSheetUrl = requireText(spriteSheetUrl, "spriteSheetUrl");
-        this.spriteMeta = spriteMeta;
-        this.imageStatus = CharacterImageStatus.READY;
+        this.evolvedSpriteSheetUrl = requireText(spriteSheetUrl, "spriteSheetUrl");
+        this.evolvedSpriteMeta = spriteMeta;
+        this.evolvedImageStatus = CharacterImageStatus.READY;
+        syncSelectedImageFromEvolvedWhenVisible();
         touch();
     }
 
     public void markFallback(String spriteSheetUrl, String spriteMeta) {
-        this.spriteSheetUrl = requireText(spriteSheetUrl, "spriteSheetUrl");
-        this.spriteMeta = spriteMeta;
-        this.imageStatus = CharacterImageStatus.FALLBACK;
+        this.evolvedSpriteSheetUrl = requireText(spriteSheetUrl, "spriteSheetUrl");
+        this.evolvedSpriteMeta = spriteMeta;
+        this.evolvedImageStatus = CharacterImageStatus.FALLBACK;
+        syncSelectedImageFromEvolvedWhenVisible();
         touch();
     }
 
     public void markFailed() {
-        this.spriteSheetUrl = null;
-        this.spriteMeta = null;
-        this.imageStatus = CharacterImageStatus.FAILED;
+        this.evolvedSpriteSheetUrl = null;
+        this.evolvedSpriteMeta = null;
+        this.evolvedImageStatus = CharacterImageStatus.FAILED;
+        syncSelectedImageFromEvolvedWhenVisible();
         touch();
     }
 
     public void markPending() {
-        this.spriteSheetUrl = null;
-        this.spriteMeta = null;
-        this.imageStatus = CharacterImageStatus.PENDING;
+        this.evolvedSpriteSheetUrl = null;
+        this.evolvedSpriteMeta = null;
+        this.evolvedImageStatus = CharacterImageStatus.PENDING;
+        syncSelectedImageFromEvolvedWhenVisible();
         touch();
     }
 
@@ -172,7 +191,20 @@ public class LearningCharacter {
     private void evolveIfEligible() {
         if (!evolved && battlePower >= EVOLUTION_BATTLE_POWER_THRESHOLD) {
             this.evolved = true;
+            syncSelectedImageFromEvolved();
         }
+    }
+
+    private void syncSelectedImageFromEvolvedWhenVisible() {
+        if (evolved || babySpriteSheetUrl == null) {
+            syncSelectedImageFromEvolved();
+        }
+    }
+
+    private void syncSelectedImageFromEvolved() {
+        this.imageStatus = evolvedImageStatus;
+        this.spriteSheetUrl = evolvedSpriteSheetUrl;
+        this.spriteMeta = evolvedSpriteMeta;
     }
 
     private void touch() {
@@ -196,6 +228,10 @@ public class LearningCharacter {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getCatalogCharacterId() {
+        return catalogCharacterId;
     }
 
     public User getUser() {
@@ -260,6 +296,30 @@ public class LearningCharacter {
 
     public String getSpriteMeta() {
         return spriteMeta;
+    }
+
+    public CharacterImageStatus getBabyImageStatus() {
+        return babyImageStatus;
+    }
+
+    public String getBabySpriteSheetUrl() {
+        return babySpriteSheetUrl;
+    }
+
+    public String getBabySpriteMeta() {
+        return babySpriteMeta;
+    }
+
+    public CharacterImageStatus getEvolvedImageStatus() {
+        return evolvedImageStatus;
+    }
+
+    public String getEvolvedSpriteSheetUrl() {
+        return evolvedSpriteSheetUrl;
+    }
+
+    public String getEvolvedSpriteMeta() {
+        return evolvedSpriteMeta;
     }
 
     public boolean isActive() {

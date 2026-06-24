@@ -327,8 +327,9 @@ class CharacterActivationApiIntegrationTest extends PostgresIntegrationTest {
                         SELECT name, design_keyword, personality,
                                stat_algorithm, stat_cs, stat_db, stat_network, stat_framework,
                                battle_power, is_evolved, emotion, image_status, status_message, is_active
-                        FROM characters
-                        WHERE id = ?
+                        FROM user_character uc
+                        JOIN characters catalog ON catalog.id = uc.character_id
+                        WHERE uc.id = ?
                         """,
                 characterId.longValue()
         );
@@ -336,7 +337,7 @@ class CharacterActivationApiIntegrationTest extends PostgresIntegrationTest {
 
     private long activeCharacterCount(long userId) {
         Long count = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM characters WHERE user_id = ? AND is_active = true",
+                "SELECT count(*) FROM user_character WHERE user_id = ? AND is_active = true AND deleted_at IS NULL",
                 Long.class,
                 userId
         );
@@ -345,7 +346,7 @@ class CharacterActivationApiIntegrationTest extends PostgresIntegrationTest {
 
     private long activeCharacterId(long userId) {
         Long id = jdbcTemplate.queryForObject(
-                "SELECT id FROM characters WHERE user_id = ? AND is_active = true",
+                "SELECT id FROM user_character WHERE user_id = ? AND is_active = true AND deleted_at IS NULL",
                 Long.class,
                 userId
         );
@@ -354,7 +355,7 @@ class CharacterActivationApiIntegrationTest extends PostgresIntegrationTest {
 
     private boolean isActive(Number characterId) {
         Boolean active = jdbcTemplate.queryForObject(
-                "SELECT is_active FROM characters WHERE id = ?",
+                "SELECT is_active FROM user_character WHERE id = ?",
                 Boolean.class,
                 characterId.longValue()
         );

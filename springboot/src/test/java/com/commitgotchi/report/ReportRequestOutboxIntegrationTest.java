@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -77,7 +78,7 @@ class ReportRequestOutboxIntegrationTest extends PostgresIntegrationTest {
                 ["spring","springboot","vue","fw","framework","framework"]
                 """)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.state.notice").value("리포트 저장됨 - 자정에 분석돼요. 내일 오전 9시 도착."))
+                .andExpect(jsonPath("$.state.notice").value(nullValue()))
                 .andExpect(jsonPath("$.item.requestId").value(expectedRequestId(user.id(), character.getId(), targetDate)));
 
         List<OutboxRow> rows = outboxRows(user.id(), character.getId(), targetDate);
@@ -120,7 +121,7 @@ class ReportRequestOutboxIntegrationTest extends PostgresIntegrationTest {
                             sent_at = CURRENT_TIMESTAMP,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE user_id = ?
-                          AND character_id = ?
+                          AND user_character_id = ?
                           AND target_date = ?
                         """,
                 user.id(),
@@ -174,23 +175,23 @@ class ReportRequestOutboxIntegrationTest extends PostgresIntegrationTest {
                 """
                         SELECT request_id,
                                user_id,
-                               character_id,
+                               user_character_id AS character_id,
                                target_date,
                                report_title,
                                report_content,
                                weekly_study_streak,
                                focus,
-                               score_delta_hint_db,
-                               score_delta_hint_algorithm,
-                               score_delta_hint_cs,
-                               score_delta_hint_network,
-                               score_delta_hint_framework,
+                               COALESCE((score_delta_hint ->> 'db')::integer, 0) AS score_delta_hint_db,
+                               COALESCE((score_delta_hint ->> 'algorithm')::integer, 0) AS score_delta_hint_algorithm,
+                               COALESCE((score_delta_hint ->> 'cs')::integer, 0) AS score_delta_hint_cs,
+                               COALESCE((score_delta_hint ->> 'network')::integer, 0) AS score_delta_hint_network,
+                               COALESCE((score_delta_hint ->> 'framework')::integer, 0) AS score_delta_hint_framework,
                                status,
                                attempt_count,
                                available_at
                         FROM report_request_outbox
                         WHERE user_id = ?
-                          AND character_id = ?
+                          AND user_character_id = ?
                           AND target_date = ?
                         ORDER BY id
                         """,
