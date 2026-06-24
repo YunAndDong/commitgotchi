@@ -290,6 +290,28 @@ export const users = {
 export const codex = {
   listCharacters: ({ afterId, limit } = {}) => authed('GET', withQuery('/api/codex/characters', { afterId, limit })),
   spriteUrls: (ids) => authed('POST', '/api/codex/characters/sprite-urls', { body: { ids } }),
+  reviews: (characterId, { page, size } = {}) => authed(
+    'GET',
+    withQuery(`/api/codex/characters/${encodeURIComponent(String(characterId))}/reviews`, { page, size }),
+  ),
+  addReview: (characterId, body) => authed(
+    'POST',
+    `/api/codex/characters/${encodeURIComponent(String(characterId))}/reviews`,
+    { body },
+  ),
+  updateReview: (characterId, reviewId, body) => authed(
+    'PATCH',
+    `/api/codex/characters/${encodeURIComponent(String(characterId))}/reviews/${encodeURIComponent(String(reviewId))}`,
+    { body },
+  ),
+  deleteReview: (characterId, reviewId) => authed(
+    'DELETE',
+    `/api/codex/characters/${encodeURIComponent(String(characterId))}/reviews/${encodeURIComponent(String(reviewId))}`,
+  ),
+  raiseCharacter: (characterId) => authed(
+    'POST',
+    `/api/codex/characters/${encodeURIComponent(String(characterId))}/raise`,
+  ),
 }
 
 export const game = {

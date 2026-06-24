@@ -61,6 +61,9 @@ public class GlobalExceptionHandler {
         if (DatabaseConstraint.isViolation(exception, "uq_one_active_character_per_user")) {
             return response(ErrorCode.VALIDATION_FAILED);
         }
+        if (DatabaseConstraint.isViolation(exception, "uq_codex_character_review_user_character")) {
+            return response(ErrorCode.VALIDATION_FAILED);
+        }
         return response(ErrorCode.INTERNAL_SERVER_ERROR);
     }
 

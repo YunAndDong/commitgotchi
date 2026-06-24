@@ -91,6 +91,10 @@ class DailyReportProjectionIntegrationTest extends PostgresIntegrationTest {
         JsonNode persisted = persistedState(user.id());
         assertThat(persisted.path("characters")).isEmpty();
         assertThat(persisted.path("dailyReport").path("status").asText()).isEqualTo("ready");
+        JsonNode quiz = persisted.path("quizzes").get(0);
+        assertThat(quiz.path("problemId").asLong()).isEqualTo(77L);
+        assertThat(quiz.path("quizId").asLong()).isEqualTo(numericStateId(quiz.path("id").asText()));
+        assertThat(quiz.path("quizId").asLong()).isNotEqualTo(quiz.path("problemId").asLong());
     }
 
     @Test
@@ -105,11 +109,11 @@ class DailyReportProjectionIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.state.dailyReport.recommendedQuizIds.length()").value(2))
                 .andExpect(jsonPath("$.state.quizzes.length()").value(2))
                 .andExpect(jsonPath("$.state.quizzes[0].problemId").value(1))
-                .andExpect(jsonPath("$.state.quizzes[0].quizId", notNullValue()))
+                .andExpect(jsonPath("$.state.quizzes[0].quizId").value(102))
                 .andExpect(jsonPath("$.state.quizzes[0].characterId").value(character.getId().toString()))
                 .andExpect(jsonPath("$.state.quizzes[0].sourceReportRequestId", containsString("demo-quiz-")))
                 .andExpect(jsonPath("$.state.quizzes[1].problemId").value(2))
-                .andExpect(jsonPath("$.state.quizzes[1].quizId", notNullValue()))
+                .andExpect(jsonPath("$.state.quizzes[1].quizId").value(103))
                 .andExpect(jsonPath("$.state.quizzes[1].characterId").value(character.getId().toString()));
 
         mockMvc.perform(post("/api/game/quizzes/demo")
@@ -244,6 +248,12 @@ class DailyReportProjectionIntegrationTest extends PostgresIntegrationTest {
                 userId
         );
         return objectMapper.readTree(json);
+    }
+
+    private long numericStateId(String stateId) {
+        String digits = stateId.replaceAll("\\D+", "");
+        assertThat(digits).isNotBlank();
+        return Long.parseLong(digits);
     }
 
     private String uniqueEmail() {

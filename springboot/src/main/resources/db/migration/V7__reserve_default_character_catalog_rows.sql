@@ -52,7 +52,7 @@ VALUES
         1,
         NULL,
         NULL,
-        regexp_replace('${characterImageS3ObjectPrefix}', '/+$', '') || '/1/sprite-sheet.png',
+        regexp_replace('${characterImageS3ObjectPrefix}', '/+$', '') || '/characters/1/sprite-sheet.png',
         '{"columns":3,"rows":1,"frameMap":{"joy":[0,0],"sad":[0,1],"angry":[0,2]},"transparent":true}'::jsonb,
         'READY'
     ),
@@ -60,7 +60,7 @@ VALUES
         2,
         NULL,
         NULL,
-        regexp_replace('${characterImageS3ObjectPrefix}', '/+$', '') || '/2/sprite-sheet.png',
+        regexp_replace('${characterImageS3ObjectPrefix}', '/+$', '') || '/characters/2/sprite-sheet.png',
         '{"columns":3,"rows":1,"frameMap":{"joy":[0,0],"sad":[0,1],"angry":[0,2]},"transparent":true}'::jsonb,
         'READY'
     ),
@@ -68,7 +68,7 @@ VALUES
         3,
         NULL,
         NULL,
-        regexp_replace('${characterImageS3ObjectPrefix}', '/+$', '') || '/3/sprite-sheet.png',
+        regexp_replace('${characterImageS3ObjectPrefix}', '/+$', '') || '/characters/3/sprite-sheet.png',
         '{"columns":3,"rows":1,"frameMap":{"joy":[0,0],"sad":[0,1],"angry":[0,2]},"transparent":true}'::jsonb,
         'READY'
     )

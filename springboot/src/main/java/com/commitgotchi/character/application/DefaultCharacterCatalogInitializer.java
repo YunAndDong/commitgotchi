@@ -132,7 +132,7 @@ public class DefaultCharacterCatalogInitializer implements ApplicationRunner, Or
     }
 
     private String defaultSpriteUrl(int presetId) {
-        return "%s/%d/sprite-sheet.png".formatted(
+        return "%s/characters/%d/sprite-sheet.png".formatted(
                 imageProperties.normalizedS3ObjectPrefix(),
                 presetId
         );

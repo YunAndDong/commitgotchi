@@ -235,6 +235,7 @@ function normalizeQuiz(raw) {
     correct: raw?.correct ?? null,
     scored: !!raw?.scored,
     gradeFailed: !!raw?.gradeFailed,
+    grading: !!raw?.grading,
     feedback: raw?.feedback ?? null,
     deltaStat: raw?.deltaStat || 'algo',
     deltaAmount: Number(raw?.deltaAmount) || 0,

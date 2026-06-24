@@ -173,16 +173,52 @@ public class QuizGradeResultService {
         if (request.characterId() == null) {
             return null;
         }
+        ObjectNode bySubmission = findQuizBySubmissionIdAndCharacter(state, request);
+        if (bySubmission != null) {
+            return bySubmission;
+        }
+        return findQuizByQuizIdAndCharacter(state, request);
+    }
+
+    private ObjectNode findQuizBySubmissionIdAndCharacter(ObjectNode state, QuizGradeResultRequest request) {
+        String submissionId = normalizedSubmissionId(request.submissionId());
+        if (submissionId.isBlank()) {
+            return null;
+        }
         for (JsonNode node : array(state, "quizzes")) {
             if (!(node instanceof ObjectNode quiz)) {
                 continue;
             }
-            if (quiz.path("quizId").asLong(0L) == request.quizId()
-                    && request.characterId().equals(parseCharacterId(quiz.path("characterId")))) {
+            if (sameCharacter(quiz, request.characterId())
+                    && submissionId.equals(normalizedSubmissionId(quiz.path("submissionId").asText("")))) {
                 return quiz;
             }
         }
         return null;
+    }
+
+    private ObjectNode findQuizByQuizIdAndCharacter(ObjectNode state, QuizGradeResultRequest request) {
+        for (JsonNode node : array(state, "quizzes")) {
+            if (!(node instanceof ObjectNode quiz)) {
+                continue;
+            }
+            if (!sameCharacter(quiz, request.characterId()) || quiz.path("quizId").asLong(0L) != request.quizId()) {
+                continue;
+            }
+            String storedSubmissionId = normalizedSubmissionId(quiz.path("submissionId").asText(""));
+            if (storedSubmissionId.isBlank() || storedSubmissionId.equals(normalizedSubmissionId(request.submissionId()))) {
+                return quiz;
+            }
+        }
+        return null;
+    }
+
+    private boolean sameCharacter(ObjectNode quiz, Long characterId) {
+        return characterId != null && characterId.equals(parseCharacterId(quiz.path("characterId")));
+    }
+
+    private String normalizedSubmissionId(String submissionId) {
+        return submissionId == null ? "" : submissionId.trim();
     }
 
     private ArrayNode array(ObjectNode object, String field) {

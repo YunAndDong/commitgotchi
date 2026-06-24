@@ -39,6 +39,10 @@ function answerFor(q) {
   return String(answers.value[q.id] || '').trim()
 }
 
+function isGrading(q) {
+  return Boolean(q.grading || grading.value[q.id])
+}
+
 function isQuizInScope(q) {
   return c.value && String(q.characterId) === String(c.value.id)
 }
@@ -54,7 +58,7 @@ function goBack() {
 async function submit(q) {
   submitError.value = ''
   const answer = answerFor(q)
-  if (!answer || grading.value[q.id]) return
+  if (!answer || isGrading(q)) return
   if (!isQuizInScope(q)) {
     submitError.value = '현재 캐릭터의 퀴즈만 제출할 수 있어요.'
     return
@@ -125,7 +129,7 @@ async function createQuizzes() {
         <span v-if="q.scored" class="cg-badge" :class="q.correct ? 'cg-badge--ok' : 'cg-badge--fire'">
           {{ q.correct ? '충분' : '보완' }} · {{ STAT_LABELS[q.deltaStat] }} +{{ q.deltaAmount }}
         </span>
-        <span v-else-if="grading[q.id]" class="cg-badge cg-badge--warn">{{ LOADING.quiz }}</span>
+        <span v-else-if="isGrading(q)" class="cg-badge cg-badge--warn">{{ LOADING.quiz }}</span>
         <span v-else-if="q.gradeFailed" class="cg-badge cg-badge--warn">재시도 필요</span>
         <span v-else class="cg-badge cg-badge--warn">미제출</span>
       </div>
@@ -140,7 +144,7 @@ async function createQuizzes() {
           class="cg-textarea answer"
           maxlength="800"
           placeholder="핵심 개념과 이유를 문장으로 적어 주세요."
-          :disabled="q.submitted || grading[q.id]"
+          :disabled="q.submitted || isGrading(q)"
         />
       </div>
 
@@ -152,18 +156,18 @@ async function createQuizzes() {
 
       <!-- 상태 패턴: 답변 생성 중(로딩) / 실패(Fallback) / 미제출(제출 버튼) / 채점완료 -->
       <button
-        v-if="(!q.submitted && !q.gradeFailed) || grading[q.id]"
+        v-if="(!q.submitted && !q.gradeFailed) || isGrading(q)"
         type="button"
         class="cg-btn cg-btn--primary quiz-submit"
-        :disabled="grading[q.id] || !answerFor(q) || !isQuizInScope(q)"
-        :aria-busy="grading[q.id] ? 'true' : 'false'"
+        :disabled="isGrading(q) || !answerFor(q) || !isQuizInScope(q)"
+        :aria-busy="isGrading(q) ? 'true' : 'false'"
         @click="submit(q)"
       >
-        <span v-if="grading[q.id]" class="quiz-submit__spinner" aria-hidden="true" />
-        <span>{{ grading[q.id] ? LOADING.quiz : '답안 제출' }}</span>
+        <span v-if="isGrading(q)" class="quiz-submit__spinner" aria-hidden="true" />
+        <span>{{ isGrading(q) ? LOADING.quiz : '답안 제출' }}</span>
       </button>
 
-      <CgState v-if="grading[q.id]" tone="loading" inline :message="LOADING.quiz" />
+      <CgState v-if="isGrading(q)" tone="loading" inline :message="LOADING.quiz" />
 
       <CgState v-else-if="q.gradeFailed" tone="fallback" inline :message="FALLBACK.quiz">
         <button type="button" class="cg-btn cg-btn--sm cg-btn--primary"

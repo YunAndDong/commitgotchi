@@ -215,6 +215,62 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void gradeResultMatchesRequestedCharacterWhenSameQuizIdExistsFirstOnDifferentCharacter() throws Exception {
+        AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        long targetCharacterId = characterCreationService.create(
+                user.id(),
+                new CharacterCreateRequest("Quiz Collision A", "mint quiz pet", "careful")
+        ).getId();
+        long otherCharacterId = characterCreationService.create(
+                user.id(),
+                new CharacterCreateRequest("Quiz Collision B", "blue quiz pet", "careful")
+        ).getId();
+        upsertGameState(user.id(), quizCollisionState(otherCharacterId, targetCharacterId));
+
+        mockMvc.perform(post("/api/internal/quizzes/grade-result")
+                        .header("Authorization", "Internal test-internal-secret")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "submissionId":"submission-target",
+                                  "userId":%d,
+                                  "characterId":%d,
+                                  "quizId":1,
+                                  "status":"GRADED",
+                                  "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
+                                  "scoreDelta":{"db":0,"algorithm":6,"cs":0,"network":0,"framework":0},
+                                  "feedback":"target character only",
+                                  "emotion":"JOY",
+                                  "statusMessage":"FastAPI hint"
+                                }
+                                """.formatted(user.id(), targetCharacterId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(true))
+                .andExpect(jsonPath("$.duplicate").value(false));
+
+        mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.quizzes[0].id").value("q102"))
+                .andExpect(jsonPath("$.state.quizzes[0].characterId").value(Long.toString(otherCharacterId)))
+                .andExpect(jsonPath("$.state.quizzes[0].quizId").value(1))
+                .andExpect(jsonPath("$.state.quizzes[0].scored").value(false))
+                .andExpect(jsonPath("$.state.quizzes[0].grading").value(true))
+                .andExpect(jsonPath("$.state.quizzes[1].id").value("q105"))
+                .andExpect(jsonPath("$.state.quizzes[1].characterId").value(Long.toString(targetCharacterId)))
+                .andExpect(jsonPath("$.state.quizzes[1].quizId").value(1))
+                .andExpect(jsonPath("$.state.quizzes[1].scored").value(true))
+                .andExpect(jsonPath("$.state.quizzes[1].grading").value(false))
+                .andExpect(jsonPath("$.state.quizzes[1].feedback").value("target character only"));
+
+        assertThat(characterColumns(otherCharacterId))
+                .containsEntry("stat_algorithm", 0)
+                .containsEntry("battle_power", 0);
+        assertThat(characterColumns(targetCharacterId))
+                .containsEntry("stat_algorithm", 6)
+                .containsEntry("battle_power", 6);
+    }
+
+    @Test
     void gradeResultDoesNotApplyBySubmissionIdWhenQuizAndCharacterDoNotMatch() throws Exception {
         AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
         long firstCharacterId = characterCreationService.create(
@@ -279,6 +335,60 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
                 .containsEntry("battle_power", 0);
     }
 
+    @Test
+    void gradeResultDoesNotApplySharedSubmissionIdToDifferentCharacter() throws Exception {
+        AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        long targetCharacterId = characterCreationService.create(
+                user.id(),
+                new CharacterCreateRequest("Quiz Shared Submission A", "mint quiz pet", "careful")
+        ).getId();
+        long otherCharacterId = characterCreationService.create(
+                user.id(),
+                new CharacterCreateRequest("Quiz Shared Submission B", "blue quiz pet", "careful")
+        ).getId();
+        upsertGameState(user.id(), sharedSubmissionState(otherCharacterId, targetCharacterId));
+
+        mockMvc.perform(post("/api/internal/quizzes/grade-result")
+                        .header("Authorization", "Internal test-internal-secret")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "submissionId":"shared-submission",
+                                  "userId":%d,
+                                  "characterId":%d,
+                                  "quizId":2,
+                                  "status":"GRADED",
+                                  "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
+                                  "scoreDelta":{"db":0,"algorithm":7,"cs":0,"network":0,"framework":0},
+                                  "feedback":"shared submission target only",
+                                  "emotion":"JOY",
+                                  "statusMessage":"FastAPI hint"
+                                }
+                                """.formatted(user.id(), targetCharacterId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(true))
+                .andExpect(jsonPath("$.duplicate").value(false));
+
+        mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.quizzes[0].id").value("q102"))
+                .andExpect(jsonPath("$.state.quizzes[0].characterId").value(Long.toString(otherCharacterId)))
+                .andExpect(jsonPath("$.state.quizzes[0].scored").value(false))
+                .andExpect(jsonPath("$.state.quizzes[0].grading").value(true))
+                .andExpect(jsonPath("$.state.quizzes[1].id").value("q105"))
+                .andExpect(jsonPath("$.state.quizzes[1].characterId").value(Long.toString(targetCharacterId)))
+                .andExpect(jsonPath("$.state.quizzes[1].scored").value(true))
+                .andExpect(jsonPath("$.state.quizzes[1].grading").value(false))
+                .andExpect(jsonPath("$.state.quizzes[1].feedback").value("shared submission target only"));
+
+        assertThat(characterColumns(otherCharacterId))
+                .containsEntry("stat_algorithm", 0)
+                .containsEntry("battle_power", 0);
+        assertThat(characterColumns(targetCharacterId))
+                .containsEntry("stat_algorithm", 7)
+                .containsEntry("battle_power", 7);
+    }
+
     private String uniqueEmail() {
         return "quiz-" + java.util.UUID.randomUUID() + "@example.com";
     }
@@ -298,5 +408,123 @@ class QuizGradeResultContractIntegrationTest extends PostgresIntegrationTest {
                         """,
                 characterId
         );
+    }
+
+    private void upsertGameState(long userId, String stateJson) {
+        jdbcTemplate.update(
+                """
+                        INSERT INTO game_states (user_id, state_json, created_at, updated_at)
+                        VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        ON CONFLICT (user_id) DO UPDATE
+                        SET state_json = EXCLUDED.state_json,
+                            updated_at = CURRENT_TIMESTAMP
+                        """,
+                userId,
+                stateJson
+        );
+    }
+
+    private String quizCollisionState(long firstCharacterId, long secondCharacterId) {
+        return """
+                {
+                  "nextId":105,
+                  "reports":[],
+                  "quizzes":[
+                    {
+                      "id":"q102",
+                      "date":"2026-06-20",
+                      "characterId":"%d",
+                      "quizId":1,
+                      "submissionId":"submission-other",
+                      "question":"Other quiz",
+                      "modelAnswer":"Other answer",
+                      "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
+                      "submitted":true,
+                      "scored":false,
+                      "gradeFailed":false,
+                      "grading":true,
+                      "deltaAmount":0,
+                      "deltaStat":"algo",
+                      "userAnswer":"other answer",
+                      "correct":null,
+                      "feedback":null
+                    },
+                    {
+                      "id":"q105",
+                      "date":"2026-06-20",
+                      "characterId":"%d",
+                      "quizId":1,
+                      "submissionId":"submission-target",
+                      "question":"Target quiz",
+                      "modelAnswer":"Target answer",
+                      "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
+                      "submitted":true,
+                      "scored":false,
+                      "gradeFailed":false,
+                      "grading":true,
+                      "deltaAmount":0,
+                      "deltaStat":"algo",
+                      "userAnswer":"target answer",
+                      "correct":null,
+                      "feedback":null
+                    }
+                  ],
+                  "dailyReport":null,
+                  "notice":null,
+                  "characters":[]
+                }
+                """.formatted(firstCharacterId, secondCharacterId);
+    }
+
+    private String sharedSubmissionState(long firstCharacterId, long secondCharacterId) {
+        return """
+                {
+                  "nextId":105,
+                  "reports":[],
+                  "quizzes":[
+                    {
+                      "id":"q102",
+                      "date":"2026-06-20",
+                      "characterId":"%d",
+                      "quizId":1,
+                      "submissionId":"shared-submission",
+                      "question":"Other quiz",
+                      "modelAnswer":"Other answer",
+                      "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
+                      "submitted":true,
+                      "scored":false,
+                      "gradeFailed":false,
+                      "grading":true,
+                      "deltaAmount":0,
+                      "deltaStat":"algo",
+                      "userAnswer":"other answer",
+                      "correct":null,
+                      "feedback":null
+                    },
+                    {
+                      "id":"q105",
+                      "date":"2026-06-20",
+                      "characterId":"%d",
+                      "quizId":2,
+                      "submissionId":"shared-submission",
+                      "question":"Target quiz",
+                      "modelAnswer":"Target answer",
+                      "scoreAllocation":{"db":0,"algorithm":10,"cs":0,"network":0,"framework":0},
+                      "submitted":true,
+                      "scored":false,
+                      "gradeFailed":false,
+                      "grading":true,
+                      "deltaAmount":0,
+                      "deltaStat":"algo",
+                      "userAnswer":"target answer",
+                      "correct":null,
+                      "feedback":null
+                    }
+                  ],
+                  "dailyReport":null,
+                  "notice":null,
+                  "characters":[]
+                }
+                """.formatted(firstCharacterId, secondCharacterId);
     }
 }
