@@ -45,7 +45,7 @@ class LearningCharacterRepositoryIntegrationTest extends PostgresIntegrationTest
         characterRepository.save(LearningCharacter.create(otherUser, "other", "other-design", "other-personality"));
         characterRepository.flush();
         jdbcTemplate.update(
-                "UPDATE characters SET created_at = TIMESTAMPTZ '2026-01-01 00:00:00+00' WHERE id IN (?, ?)",
+                "UPDATE user_character SET created_at = TIMESTAMPTZ '2026-01-01 00:00:00+00' WHERE id IN (?, ?)",
                 first.getId(),
                 second.getId()
         );
@@ -76,7 +76,7 @@ class LearningCharacterRepositoryIntegrationTest extends PostgresIntegrationTest
                 .extracting(LearningCharacter::getId)
                 .containsExactly(visible.getId());
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT deleted_at IS NOT NULL FROM characters WHERE id = ?",
+                "SELECT deleted_at IS NOT NULL FROM user_character WHERE id = ?",
                 Boolean.class,
                 deleted.getId()
         )).isTrue();

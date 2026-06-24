@@ -74,7 +74,8 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
         Number firstId = itemId(createCharacter(user.bearer(), "One", "one keyword", "one personality")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.active").value(true))
-                .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
+                .andExpect(jsonPath("$.item.imageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("FALLBACK"))
                 .andReturn());
         Number secondId = itemId(createCharacter(user.bearer(), "Two", "two keyword", "two personality")
                 .andExpect(status().isOk())
@@ -109,7 +110,8 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
         retryImage(user.bearer(), firstId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.id").value(firstId))
-                .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
+                .andExpect(jsonPath("$.item.imageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("FALLBACK"))
                 .andExpect(jsonPath("$.item.spriteSheetUrl").isNotEmpty());
 
         assertThat(activeCharacterCount(user.id())).isEqualTo(1);
@@ -373,7 +375,11 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
                 """
                         SELECT image_status, sprite_sheet_url, sprite_meta
                         FROM characters
-                        WHERE id = ?
+                        WHERE id = (
+                            SELECT character_id
+                            FROM user_character
+                            WHERE id = ?
+                        )
                         """,
                 characterId.longValue()
         );
@@ -381,7 +387,7 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
 
     private long activeCharacterCount(long userId) {
         Long count = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM characters WHERE user_id = ? AND is_active = true",
+                "SELECT count(*) FROM user_character WHERE user_id = ? AND is_active = true AND deleted_at IS NULL",
                 Long.class,
                 userId
         );
@@ -390,7 +396,7 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
 
     private long activeCharacterId(long userId) {
         Long id = jdbcTemplate.queryForObject(
-                "SELECT id FROM characters WHERE user_id = ? AND is_active = true",
+                "SELECT id FROM user_character WHERE user_id = ? AND is_active = true AND deleted_at IS NULL",
                 Long.class,
                 userId
         );

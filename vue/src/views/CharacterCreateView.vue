@@ -7,10 +7,12 @@ import { reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { createCharacter, gameState, MAX_CHARACTERS } from '../stores/game.js'
 import CgSprite from '../components/CgSprite.vue'
+import CgCreationSpinner from '../components/CgCreationSpinner.vue'
 
 const router = useRouter()
 const form = reactive({ name: '', keyword: '', personality: '' })
 const error = ref('')
+const creating = ref(false)
 const previewEmotion = ref('joy')
 const full = computed(() => gameState.characters.length >= MAX_CHARACTERS)
 const KEYWORD_MAX_LENGTH = 100
@@ -25,6 +27,7 @@ async function submit() {
   error.value = ''
   if (!form.name.trim()) { error.value = '이름을 입력해 주세요.'; return }
   if (!form.keyword.trim()) { error.value = '디자인 키워드를 입력해 주세요.'; return }
+  creating.value = true
   try {
     const c = await createCharacter({
       name: form.name.trim(),
@@ -33,19 +36,26 @@ async function submit() {
     })
     router.push(`/complete/${c.id}`)
   } catch (e) {
+    creating.value = false
     error.value = e.message
   }
 }
 </script>
 
 <template>
-  <div class="create">
-    <header class="create-heading">
-      <h1 class="cg-section-title big">새 커밋고치 생성하기</h1>
+  <div v-if="creating" class="create-pending center">
+    <CgCreationSpinner :name="form.name" :keyword="form.keyword" />
+  </div>
+
+  <div v-else class="create">
+    <header class="cg-pagehead create-heading">
+      <div class="cg-pagehead__main">
+        <RouterLink to="/select" class="cg-btn cg-btn--sm cg-back" aria-label="캐릭터 선택 화면으로 돌아가기">←</RouterLink>
+        <h1 class="cg-page-title">새 커밋고치 생성하기</h1>
+      </div>
     </header>
 
     <aside class="cg-screen col center preview">
-      <RouterLink to="/select" class="preview-back cg-btn cg-btn--sm" aria-label="캐릭터 선택 화면으로 돌아가기">←</RouterLink>
       <span class="tiny muted">미리보기</span>
       <CgSprite :size="160" :emotion="previewEmotion" />
       <strong class="mono">{{ form.name || '이름 없음' }}</strong>
@@ -92,26 +102,17 @@ async function submit() {
         </div>
 
         <p v-if="error" class="err" role="alert">{{ error }}</p>
-        <button class="cg-btn cg-btn--primary cg-btn--block" :disabled="full">✨ 분신 생성하기</button>
+        <button class="cg-btn cg-btn--primary cg-btn--block" :disabled="full || creating">✨ 분신 생성하기</button>
       </form>
     </section>
   </div>
 </template>
 
 <style scoped>
-.create { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--sp-4); align-items: start; max-width: 900px; margin: 0 auto; }
-.create-heading { grid-column: 1 / -1; justify-self: start; }
+.create-pending { min-height: 70vh; }
+.create { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--sp-4); align-items: start; max-width: 960px; margin: 0 auto; }
+.create-heading { grid-column: 1 / -1; }
 .preview { padding: var(--sp-5); gap: var(--sp-3); position: sticky; top: 90px; }
-.preview-back {
-  position: absolute;
-  top: var(--sp-2);
-  left: var(--sp-2);
-  z-index: 1;
-  width: 36px;
-  min-width: 36px;
-  padding: 0;
-  font-size: 18px;
-}
 .preview-note { display: flex; flex-direction: column; text-align: center; }
 .field-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .keyword-textarea { min-height: 84px; height: 84px; }

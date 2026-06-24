@@ -142,7 +142,7 @@ class ReportCallbackContractIntegrationTest extends PostgresIntegrationTest {
                 """
                         SELECT stat_db, stat_algorithm, stat_cs, stat_network, stat_framework,
                                battle_power, emotion, status_message
-                        FROM characters
+                        FROM user_character
                         WHERE id = ?
                         """,
                 characterId

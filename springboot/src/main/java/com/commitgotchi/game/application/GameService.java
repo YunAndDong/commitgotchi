@@ -202,7 +202,7 @@ public class GameService {
         ObjectNode dailyReport = dailyReport(today, characterId, "pending");
         state.set("dailyReport", dailyReport);
         applyCharacterProjection(userId, state);
-        state.put("notice", "리포트 저장됨 - 자정에 분석돼요. 내일 오전 9시 도착.");
+        state.set("notice", NullNode.instance);
         save(userId, state);
         reportRequestOutboxService.createOrRefreshSnapshot(userId, character.getId(), targetDate, report, state);
         return response(state, report);

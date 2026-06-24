@@ -40,6 +40,8 @@ html, body, #app { height: 100%; }
 
 body {
   background: var(--bg-page);
+  background-image: var(--bg-grad);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 15px;
@@ -57,7 +59,19 @@ h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 400; line-height: 1
 
 /* ---------- layout helpers ---------- */
 .cg-app { min-height: 100%; display: flex; flex-direction: column; }
-.cg-main { flex: 1; width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--sp-5) var(--sp-4) 96px; }
+.cg-main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: var(--sp-5) var(--sp-4) 96px; }
+
+/* ---------- page scaffold (shared across views) ---------- */
+/* Width tiers — every page picks one for a consistent reading column. */
+.cg-page--narrow { width: 100%; max-width: 760px;  margin-inline: auto; }
+.cg-page--mid    { width: 100%; max-width: 960px;  margin-inline: auto; }
+.cg-page--wide   { width: 100%; max-width: 1100px; margin-inline: auto; }
+
+/* Page header — back button + title (+ optional right-aligned actions). */
+.cg-pagehead { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; min-width: 0; }
+.cg-pagehead__main { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.cg-pagehead__actions { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.cg-page-title { font-family: var(--font-head); font-size: 20px; color: var(--ink); line-height: 1.25; min-width: 0; overflow-wrap: anywhere; }
 .row { display: flex; gap: var(--sp-3); align-items: center; }
 .col { display: flex; flex-direction: column; gap: var(--sp-3); }
 .wrap { flex-wrap: wrap; }
@@ -76,7 +90,7 @@ h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 400; line-height: 1
   border: 2px solid var(--surface-edge);
   border-radius: var(--r);
   padding: var(--sp-4);
-  box-shadow: var(--glow);
+  box-shadow: var(--shadow-card);
 }
 .cg-section-title { font-family: var(--font-head); font-size: 17px; color: var(--ink); }
 .cg-section-sub { font-size: 13px; color: var(--ink-soft); }
@@ -84,6 +98,7 @@ h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 400; line-height: 1
   background: var(--screen);
   border: 2px solid var(--surface-edge);
   border-radius: var(--r);
+  box-shadow: var(--shadow-card);
 }
 
 /* ---------- buttons ---------- */
@@ -107,6 +122,7 @@ h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 400; line-height: 1
 .cg-btn--ghost { background: transparent; }
 .cg-btn--sm { padding: 6px 12px; min-height: 36px; font-size: 13px; }
 .cg-btn--block { width: 100%; }
+.cg-back { width: 40px; min-width: 40px; padding: 0; font-size: 18px; }
 
 /* ---------- inputs ---------- */
 .cg-field { display: flex; flex-direction: column; gap: 6px; }

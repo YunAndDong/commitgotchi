@@ -17,10 +17,12 @@ public class LearningCharacterRepository {
 
     public LearningCharacter save(LearningCharacter character) {
         if (character.getId() == null) {
-            mapper.insert(character);
-            return character;
+            mapper.insertCatalog(character);
+            mapper.insertUserCharacter(character);
+            return mapper.findById(character.getId());
         }
-        mapper.update(character);
+        mapper.updateCatalog(character);
+        mapper.updateUserCharacter(character);
         return mapper.findById(character.getId());
     }
 
@@ -34,7 +36,7 @@ public class LearningCharacterRepository {
 
     public void delete(LearningCharacter character) {
         if (character.getId() != null) {
-            mapper.update(character);
+            mapper.updateUserCharacter(character);
         }
     }
 

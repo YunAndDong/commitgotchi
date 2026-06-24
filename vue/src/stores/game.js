@@ -17,6 +17,7 @@ export const STAT_LABELS = { algo: '알고리즘', cs: 'CS', db: 'DB', net: '네
 export const EVOLVE_THRESHOLD = 1000
 export const MAX_CHARACTERS = 3
 export const CURRENT_OWNER = '나'
+export const REPORT_SUBMITTED_NOTICE = '리포트 저장됨 - 자정에 분석돼요. 내일 오전 9시 도착.'
 
 const todayISO = () => new Intl.DateTimeFormat('en-CA').format(new Date())
 const MOCK_SPRITE_META = Object.freeze({
@@ -157,6 +158,20 @@ function normalizeSpriteSheetUrl(raw) {
   return value.startsWith('/character-assets/') ? apiAssetUrl(value) : value
 }
 
+function selectedSpriteSheetUrl(raw) {
+  if (!raw) return null
+  return raw.isEvolved
+    ? (raw.evolvedSpriteSheetUrl || raw.spriteSheetUrl)
+    : (raw.babySpriteSheetUrl || raw.spriteSheetUrl)
+}
+
+function selectedSpriteMeta(raw) {
+  if (!raw) return null
+  return raw.isEvolved
+    ? (raw.evolvedSpriteMeta || raw.spriteMeta)
+    : (raw.babySpriteMeta || raw.spriteMeta)
+}
+
 function isDeletedCharacter(raw) {
   return !!(raw?.deletedAt || raw?.deleted_at)
 }
@@ -177,8 +192,12 @@ function normalizeCharacter(raw) {
     imageStatus: raw.imageStatus === 'FAILED'
       ? 'FALLBACK'
       : (['PENDING', 'READY', 'FALLBACK'].includes(raw.imageStatus) ? raw.imageStatus : 'READY'),
-    spriteSheetUrl: normalizeSpriteSheetUrl(raw.spriteSheetUrl),
-    spriteMeta: normalizeSpriteMeta(raw.spriteMeta),
+    spriteSheetUrl: normalizeSpriteSheetUrl(selectedSpriteSheetUrl(raw)),
+    spriteMeta: normalizeSpriteMeta(selectedSpriteMeta(raw)),
+    babySpriteSheetUrl: normalizeSpriteSheetUrl(raw.babySpriteSheetUrl),
+    babySpriteMeta: normalizeSpriteMeta(raw.babySpriteMeta),
+    evolvedSpriteSheetUrl: normalizeSpriteSheetUrl(raw.evolvedSpriteSheetUrl),
+    evolvedSpriteMeta: normalizeSpriteMeta(raw.evolvedSpriteMeta),
     active: !!raw.active,
     message: String(raw.message || '잘 부탁해! 오늘부터 함께 공부하자.'),
     createdAt: raw.createdAt || new Date().toISOString(),
@@ -251,6 +270,11 @@ function normalizeReport(raw) {
   }
 }
 
+function normalizeNotice(raw) {
+  const notice = raw ?? null
+  return notice === REPORT_SUBMITTED_NOTICE ? null : notice
+}
+
 let mockMode = true
 const state = reactive(mockState())
 const characterEventStreams = new Map()
@@ -296,7 +320,7 @@ function applyGameState(next = {}) {
   state.reports = Array.isArray(next.reports) ? next.reports.map(normalizeReport).filter(r => r.id != null) : []
   state.quizzes = Array.isArray(next.quizzes) ? next.quizzes.map(normalizeQuiz).filter(q => q.id != null) : []
   state.dailyReport = next.dailyReport || fallback.dailyReport
-  state.notice = next.notice ?? null
+  state.notice = normalizeNotice(next.notice)
   state.boardPosts = Array.isArray(next.boardPosts)
     ? next.boardPosts.map(normalizeBoardPost).filter(Boolean)
     : []
@@ -707,7 +731,7 @@ export function ranking() {
 
 /* ---- codex (도감) ---- */
 export function codex() {
-  const owned = state.characters.map(c => ({
+  return state.characters.map(c => ({
     id: c.id,
     name: c.name,
     personality: c.personality,
@@ -717,13 +741,6 @@ export function codex() {
     spriteMeta: c.spriteMeta,
     owned: true,
   }))
-  const locked = [
-    { id: 'lk1', name: '???', emotion: 'joy', isEvolved: false, owned: false },
-    { id: 'lk2', name: '???', emotion: 'sad', isEvolved: true, owned: false },
-    { id: 'lk3', name: '???', emotion: 'angry', isEvolved: false, owned: false },
-    { id: 'lk4', name: '???', emotion: 'joy', isEvolved: true, owned: false },
-  ]
-  return [...owned, ...locked]
 }
 
 /* ---- share board ---- */
@@ -807,14 +824,21 @@ export function updateCharacter(id, changes) {
 }
 
 export function saveReport({ mood, title, content, tags }) {
-  if (mockMode) return localSaveReport({ mood, title, content, tags })
+  if (mockMode) {
+    const report = localSaveReport({ mood, title, content, tags })
+    if (report) state.notice = REPORT_SUBMITTED_NOTICE
+    return report
+  }
   if (!activeCharacter.value) return null
   return mutate(gameApi.saveReport({
     mood,
     title,
     content,
     tags: [...(tags || [])],
-  }))
+  })).then(item => {
+    if (item) state.notice = REPORT_SUBMITTED_NOTICE
+    return item
+  })
 }
 
 export function submitQuiz(quizId, userAnswer, { fail = false } = {}) {

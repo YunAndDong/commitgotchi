@@ -53,12 +53,14 @@ async function submit(q) {
 <template>
   <div class="quiz">
     <CgConfetti v-if="evolved" :count="80" />
-    <header class="quiz-head row between wrap">
-      <div class="quiz-title row">
-        <button type="button" class="quiz-back cg-btn cg-btn--sm" aria-label="이전 화면으로 돌아가기" @click="goBack">←</button>
-        <h1 class="cg-section-title big">오늘의 추천 퀴즈</h1>
+    <header class="cg-pagehead">
+      <div class="cg-pagehead__main">
+        <button type="button" class="cg-btn cg-btn--sm cg-back" aria-label="이전 화면으로 돌아가기" @click="goBack">←</button>
+        <h1 class="cg-page-title">오늘의 추천 퀴즈</h1>
       </div>
-      <span class="quiz-subcopy tiny muted">제출 즉시 채점돼요 · 채점 완료 후 결과가 고정돼요</span>
+      <div class="cg-pagehead__actions">
+        <span class="tiny muted">제출 즉시 채점돼요 · 채점 완료 후 결과가 고정돼요</span>
+      </div>
     </header>
 
     <label class="demo tiny muted">
@@ -125,18 +127,6 @@ async function submit(q) {
 
 <style scoped>
 .quiz { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--sp-4); }
-.quiz-head { align-items: center; }
-.quiz-title { min-width: 0; gap: var(--sp-2); }
-.quiz-back {
-  width: 36px;
-  min-width: 36px;
-  padding: 0;
-  font-size: 18px;
-}
-.quiz-subcopy {
-  margin-left: auto;
-  text-align: right;
-}
 .demo { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; align-self: flex-start; }
 .empty-quiz {
   min-height: 300px;
@@ -157,12 +147,4 @@ async function submit(q) {
 .submitted { color: var(--muted); }
 .feedback--ok { background: var(--badge-ok-bg); border-color: var(--badge-ok-edge); color: var(--badge-ok-fg); }
 .feedback--no { background: var(--surface-2); }
-@media (max-width: 560px) {
-  .quiz-head { align-items: flex-start; }
-  .quiz-subcopy {
-    width: 100%;
-    margin-left: 44px;
-    text-align: left;
-  }
-}
 </style>

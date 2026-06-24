@@ -32,12 +32,14 @@ const submittedAnswer = computed(() => {
 
 <template>
   <div v-if="quiz" class="detail col">
-    <header class="row between wrap">
-      <div class="col title-block">
-        <RouterLink :to="backTarget" class="cg-btn cg-btn--sm back" aria-label="캐릭터 상세로 돌아가기">←</RouterLink>
-        <h1 class="cg-section-title big">퀴즈 상세</h1>
+    <header class="cg-pagehead">
+      <div class="cg-pagehead__main">
+        <RouterLink :to="backTarget" class="cg-btn cg-btn--sm cg-back" aria-label="캐릭터 상세로 돌아가기">←</RouterLink>
+        <h1 class="cg-page-title">퀴즈 상세</h1>
       </div>
-      <span class="cg-badge" :class="status.className">{{ status.label }}</span>
+      <div class="cg-pagehead__actions">
+        <span class="cg-badge" :class="status.className">{{ status.label }}</span>
+      </div>
     </header>
 
     <section class="cg-card col">
@@ -84,18 +86,9 @@ const submittedAnswer = computed(() => {
 
 <style scoped>
 .detail {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   gap: var(--sp-4);
-}
-.title-block {
-  gap: var(--sp-2);
-}
-.back {
-  width: 36px;
-  min-width: 36px;
-  padding: 0;
-  font-size: 18px;
 }
 .question {
   font-size: 19px;

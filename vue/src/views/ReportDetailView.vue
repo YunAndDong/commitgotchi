@@ -26,10 +26,10 @@ const status = computed(() => {
 
 <template>
   <div v-if="report" class="detail col">
-    <header class="row wrap">
-      <div class="report-nav row">
-        <RouterLink :to="backTarget" class="cg-btn cg-btn--sm back" aria-label="캐릭터 상세로 돌아가기">←</RouterLink>
-        <h1 class="cg-section-title big">리포트 상세</h1>
+    <header class="cg-pagehead">
+      <div class="cg-pagehead__main">
+        <RouterLink :to="backTarget" class="cg-btn cg-btn--sm cg-back" aria-label="캐릭터 상세로 돌아가기">←</RouterLink>
+        <h1 class="cg-page-title">리포트 상세</h1>
       </div>
     </header>
 
@@ -67,18 +67,9 @@ const status = computed(() => {
 
 <style scoped>
 .detail {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   gap: var(--sp-4);
-}
-.report-nav {
-  gap: var(--sp-2);
-}
-.back {
-  width: 36px;
-  min-width: 36px;
-  padding: 0;
-  font-size: 18px;
 }
 .report-title {
   font-size: 19px;

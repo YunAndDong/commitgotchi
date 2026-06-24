@@ -24,7 +24,12 @@ const score = computed(() => character.value ? nurtureScore(character.value) : 0
 
 <template>
   <div class="result col">
-    <h1 class="cg-section-title big">어제의 일일 레포트</h1>
+    <header class="cg-pagehead">
+      <div class="cg-pagehead__main">
+        <RouterLink to="/" class="cg-btn cg-btn--sm cg-back" aria-label="대시보드로 돌아가기">←</RouterLink>
+        <h1 class="cg-page-title">어제의 일일 레포트</h1>
+      </div>
+    </header>
 
     <!-- 상태 패턴: 대기(자정 배치) / Fallback(실패) — 빈 화면 금지 -->
     <CgState v-if="rep.status === 'pending'" tone="waiting" :message="WAITING.reportResult">
@@ -78,7 +83,7 @@ const score = computed(() => character.value ? nurtureScore(character.value) : 0
 </template>
 
 <style scoped>
-.result { max-width: 720px; margin: 0 auto; gap: var(--sp-4); }
+.result { max-width: 760px; margin: 0 auto; gap: var(--sp-4); }
 .pad { padding: var(--sp-6); gap: var(--sp-3); }
 .body { line-height: 1.85; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; }

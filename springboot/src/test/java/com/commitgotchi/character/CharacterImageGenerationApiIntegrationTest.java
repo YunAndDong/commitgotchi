@@ -78,15 +78,18 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
         MvcResult created = createCharacter(user.bearer(), "Commit Buddy", "green study slime", "Kind but precise")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.imageStatus").value("READY"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value(READY_URL))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedSpriteSheetUrl").value(READY_URL))
                 .andExpect(jsonPath("$.item.spriteMeta.frameMap.joy[0]").value(0))
                 .andExpect(jsonPath("$.item.spriteMeta.frameMap.angry[1]").value(2))
                 .andExpect(jsonPath("$.state.characters[0].imageStatus").value("READY"))
-                .andExpect(jsonPath("$.state.characters[0].spriteSheetUrl").value(READY_URL))
+                .andExpect(jsonPath("$.state.characters[0].evolvedSpriteSheetUrl").value(READY_URL))
                 .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.sad[1]").value(1))
                 .andReturn();
 
         Number characterId = JsonPath.read(created.getResponse().getContentAsString(), "$.item.id");
+        String itemSpriteSheetUrl = JsonPath.read(created.getResponse().getContentAsString(), "$.item.spriteSheetUrl");
+        assertThat(itemSpriteSheetUrl).isEqualTo(babyPresetSpriteSheetUrl(characterId));
         CharacterImageGenerationRequest request = imageClient.lastRequest();
         assertThat(request.userId()).isEqualTo(user.id());
         assertThat(request.characterId()).isEqualTo(characterId.longValue());
@@ -103,9 +106,28 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
                 .containsEntry("image_status", "READY")
                 .containsEntry("sprite_sheet_url", READY_URL);
 
-        mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
+        MvcResult state = mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.characters[0].imageStatus").value("READY"))
+                .andExpect(jsonPath("$.state.characters[0].evolvedSpriteSheetUrl").value(READY_URL))
+                .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.joy[0]").value(0))
+                .andReturn();
+        String stateSpriteSheetUrl = JsonPath.read(state.getResponse().getContentAsString(), "$.state.characters[0].spriteSheetUrl");
+        assertThat(stateSpriteSheetUrl).isEqualTo(babyPresetSpriteSheetUrl(characterId));
+
+        jdbcTemplate.update(
+                """
+                        UPDATE user_character
+                        SET stat_algorithm = 1000,
+                            battle_power = 1000,
+                            is_evolved = true
+                        WHERE id = ?
+                        """,
+                characterId.longValue()
+        );
+        mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.characters[0].isEvolved").value(true))
                 .andExpect(jsonPath("$.state.characters[0].spriteSheetUrl").value(READY_URL))
                 .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.joy[0]").value(0));
     }
@@ -117,11 +139,13 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
 
         MvcResult created = createCharacter(user.bearer(), "Fallback Buddy", "blue data turtle", "Steady learner")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/test-fallback.png"))
+                .andExpect(jsonPath("$.item.imageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("FALLBACK"))
+                .andExpect(jsonPath("$.item.evolvedSpriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/test-fallback.png"))
                 .andExpect(jsonPath("$.item.spriteMeta.frameMap.joy[0]").value(0))
                 .andExpect(jsonPath("$.state.characters[0].active").value(true))
-                .andExpect(jsonPath("$.state.characters[0].imageStatus").value("FALLBACK"))
+                .andExpect(jsonPath("$.state.characters[0].imageStatus").value("READY"))
+                .andExpect(jsonPath("$.state.characters[0].evolvedImageStatus").value("FALLBACK"))
                 .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.sad[1]").value(1))
                 .andReturn();
 
@@ -139,8 +163,9 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
 
         MvcResult created = createCharacter(user.bearer(), "Exception Buddy", "timeout keyword", "Calm under pressure")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/test-fallback.png"))
+                .andExpect(jsonPath("$.item.imageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("FALLBACK"))
+                .andExpect(jsonPath("$.item.evolvedSpriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/test-fallback.png"))
                 .andExpect(content().string(not(containsString("Authorization"))))
                 .andExpect(content().string(not(containsString("Bearer"))))
                 .andExpect(content().string(not(containsString("simulated"))))
@@ -158,8 +183,9 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
 
         createCharacter(user.bearer(), "Timeout Buddy", "slow image keyword", "Patient learner")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/test-fallback.png"))
+                .andExpect(jsonPath("$.item.imageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("FALLBACK"))
+                .andExpect(jsonPath("$.item.evolvedSpriteSheetUrl").value("https://cdn.commitgotchi.local/sprites/test-fallback.png"))
                 .andExpect(jsonPath("$.item.spriteMeta.frameMap.angry[1]").value(2));
 
         assertThat(activeCharacterCount(user.id())).isEqualTo(1);
@@ -177,7 +203,8 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
         retryImage(user.bearer(), characterId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.imageStatus").value("READY"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value(READY_URL))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedSpriteSheetUrl").value(READY_URL))
                 .andExpect(jsonPath("$.state.characters[0].imageStatus").value("READY"));
 
         assertThat(imageClient.callCount()).isZero();
@@ -190,7 +217,8 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
         imageClient.fail("FIRST_FAIL");
         Number characterId = itemId(createCharacter(user.bearer(), "Retry", "retry keyword", "retry personality")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.item.imageStatus").value("FALLBACK"))
+                .andExpect(jsonPath("$.item.imageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("FALLBACK"))
                 .andReturn());
 
         imageClient.resetCalls();
@@ -198,7 +226,8 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
         retryImage(user.bearer(), characterId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.imageStatus").value("READY"))
-                .andExpect(jsonPath("$.item.spriteSheetUrl").value(READY_URL))
+                .andExpect(jsonPath("$.item.evolvedImageStatus").value("READY"))
+                .andExpect(jsonPath("$.item.evolvedSpriteSheetUrl").value(READY_URL))
                 .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.joy[0]").value(0));
 
         assertThat(imageClient.callCount()).isEqualTo(1);
@@ -257,7 +286,11 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
                 """
                         SELECT image_status, sprite_sheet_url, sprite_meta
                         FROM characters
-                        WHERE id = ?
+                        WHERE id = (
+                            SELECT character_id
+                            FROM user_character
+                            WHERE id = ?
+                        )
                         """,
                 characterId.longValue()
         );
@@ -265,11 +298,16 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
 
     private long activeCharacterCount(long userId) {
         Long count = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM characters WHERE user_id = ? AND is_active = true",
+                "SELECT count(*) FROM user_character WHERE user_id = ? AND is_active = true AND deleted_at IS NULL",
                 Long.class,
                 userId
         );
         return count == null ? 0 : count;
+    }
+
+    private String babyPresetSpriteSheetUrl(Number characterId) {
+        long presetId = (characterId.longValue() % 3L) + 1L;
+        return "/character-assets/default_image" + presetId + ".png";
     }
 
     private String uniqueEmail() {

@@ -4,6 +4,10 @@ import { RouterLink, useRouter } from 'vue-router'
 import { authState, logout } from '../stores/auth.js'
 import GotchiVisibilityToggle from './GotchiVisibilityToggle.vue'
 
+defineProps({
+  showLogout: { type: Boolean, default: true },
+})
+
 const router = useRouter()
 const isExtensionPopup = document.documentElement.classList.contains('is-ext-popup')
 async function onLogout() {
@@ -22,7 +26,7 @@ async function onLogout() {
 
       <div class="nav__actions row">
         <GotchiVisibilityToggle v-if="isExtensionPopup" />
-        <button v-if="authState.user" class="cg-btn cg-btn--sm cg-btn--ghost" @click="onLogout">로그아웃</button>
+        <button v-if="showLogout && authState.user" class="cg-btn cg-btn--sm cg-btn--ghost" @click="onLogout">로그아웃</button>
       </div>
     </div>
   </header>
@@ -34,7 +38,7 @@ async function onLogout() {
   background: var(--popup-bg);
   border-bottom: 2px solid var(--popup-edge);
 }
-.nav__inner { max-width: 1180px; margin: 0 auto; padding: 10px var(--sp-4); gap: var(--sp-4); }
+.nav__inner { max-width: 1100px; margin: 0 auto; padding: 10px var(--sp-4); gap: var(--sp-4); }
 .brand { gap: 8px; }
 .brand__mark { font-size: 22px; }
 .brand__name { font-family: var(--font-display); font-size: 18px; letter-spacing: .5px; }

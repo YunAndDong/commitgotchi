@@ -18,6 +18,18 @@ const character = {
   keyword: '저장하면 안 되는 필드',
   emotion: 'sad',
   isEvolved: true,
+  imageStatus: 'READY',
+  spriteSheetUrl: '/character-assets/default_image1.png',
+  spriteMeta: {
+    columns: 3,
+    rows: 1,
+    frameMap: {
+      joy: [0, 0],
+      sad: [0, 1],
+      angry: [0, 2],
+    },
+    transparent: true,
+  },
   stats: { algo: 999 },
 }
 
@@ -44,7 +56,10 @@ assert.deepEqual(activeGotchiSnapshot(character), {
   name: '새싹이',
   emotion: 'sad',
   isEvolved: true,
-}, '방문 페이지 렌더링에 필요한 최소 정보만 직렬화')
+  imageStatus: 'READY',
+  spriteSheetUrl: '/character-assets/default_image1.png',
+  spriteMeta: character.spriteMeta,
+}, '방문 페이지 렌더링에 필요한 이미지 정보만 함께 직렬화')
 assert.equal(await publishActiveGotchi(character), true, '활성 커밋고치 저장 성공')
 assert.equal(await clearActiveGotchi(), true, '활성 커밋고치 제거 성공')
 assert.equal(await readGotchiVisibility(), true, '표시 설정이 없으면 기본 표시')
@@ -99,7 +114,9 @@ const contentScript = await readFile(new URL('../public/content-script.js', impo
 for (const contract of ['attachShadow', 'position: fixed', 'pointer-events: none', 'prefers-reduced-motion', 'storage.onChanged', 'Date.now()', 'requestAnimationFrame']) {
   assert.ok(contentScript.includes(contract), `content script 계약 포함: ${contract}`)
 }
+assert.ok(contentScript.includes('sprite-frame'), 'content script가 저장된 sprite sheet frame을 렌더링')
 assert.ok(contentScript.includes("mode: 'closed'"), '방문 페이지에서 Shadow DOM 내부를 직접 변경할 수 없음')
+assert.ok(!contentScript.includes('scaleX('), '하단 커밋고치 이미지를 좌우 반전하지 않음')
 assert.ok(!contentScript.includes('animation: commitgotchi-stroll'), '탭마다 독립적으로 시작하는 CSS 이동 애니메이션을 사용하지 않음')
 assert.ok(!contentScript.includes('getElementById'), '방문 페이지 소유 ID 요소를 조회하거나 제거하지 않음')
 
@@ -108,7 +125,7 @@ class FakeElement {
     this.tag = tag
     this.children = []
     this.isConnected = false
-    this.style = { setProperty: () => {} }
+    this.style = { setProperty: (property, value) => { this.style[property] = value } }
   }
   setAttribute() {}
   attachShadow() {
@@ -134,6 +151,7 @@ const fakeDocument = {
   getElementById: () => { throw new Error('content script must not query page-owned IDs') },
 }
 const fakeChrome = {
+  runtime: { getURL: path => `chrome-extension://unit/${path}` },
   storage: {
     local: { get: () => new Promise(resolve => { initialResolve = resolve }) },
     onChanged: { addListener: listener => { storageListener = listener } },
@@ -151,6 +169,11 @@ class FixedDate extends Date {
   static now() { return 6_000 }
 }
 
+function translateX(element) {
+  const match = /translateX\(([-\d.]+)px\)/.exec(element.style.transform || '')
+  return match ? Number(match[1]) : Number.NaN
+}
+
 vm.runInNewContext(contentScript, {
   chrome: fakeChrome,
   document: fakeDocument,
@@ -165,12 +188,28 @@ vm.runInNewContext(contentScript, {
   },
   cancelAnimationFrame: () => {},
 })
-const latest = { id: 2, name: '최신이', emotion: 'joy', isEvolved: false }
+const latest = {
+  id: 2,
+  name: '최신이',
+  emotion: 'sad',
+  isEvolved: false,
+  imageStatus: 'READY',
+  spriteSheetUrl: '/character-assets/default_image3.png',
+  spriteMeta: character.spriteMeta,
+}
 storageListener({ [ACTIVE_GOTCHI_STORAGE_KEY]: { newValue: latest } }, 'local')
 const renderedHost = documentElement.children.at(-1)
 assert.equal(renderedHost.testShadow.children[1].children.at(-1).textContent, '최신이', '저장소 변경 이벤트를 즉시 렌더링')
+const renderedFrame = renderedHost.testShadow.children[1].children[0].children[0]
+assert.equal(renderedFrame.className, 'sprite-frame', '저장된 sprite sheet 이미지로 하단 커밋고치를 렌더링')
+assert.equal(renderedFrame.style['background-position'], '50% 0%', '감정에 맞는 sprite frame을 선택')
+assert.equal(renderedFrame.style['background-image'], 'url("chrome-extension://unit/character-assets/default_image3.png")', '확장 번들 상대 이미지 경로를 절대 URL로 변환')
+assert.equal(renderedFrame.children[0]?.className, 'sprite-probe', '하단 sprite sheet 로딩 실패를 감지할 probe 이미지 포함')
 const firstWalker = renderedHost.testShadow.children[1]
 const firstPosition = firstWalker.style.transform
+assert.ok(!firstWalker.children[0].style.transform.includes('scaleX'), '움직이는 이미지에 좌우 반전을 적용하지 않음')
+const firstX = translateX(firstWalker)
+assert.ok(firstX >= 0 && firstX + 88 <= 1000, '하단 커밋고치가 viewport width 밖으로 나가지 않음')
 animationCallback()
 assert.equal(firstWalker.style.transform, firstPosition, '같은 공통 시각에는 탭의 이동 위치가 유지됨')
 storageListener({ [GOTCHI_VISIBILITY_STORAGE_KEY]: { newValue: false } }, 'local')
@@ -178,6 +217,16 @@ assert.equal(renderedHost.isConnected, false, '표시 토글을 끄면 활성 �
 storageListener({ [GOTCHI_VISIBILITY_STORAGE_KEY]: { newValue: true } }, 'local')
 const restoredHost = documentElement.children.at(-1)
 assert.equal(restoredHost.testShadow.children[1].children.at(-1).textContent, '최신이', '표시 토글을 켜면 활성 스냅샷을 즉시 복원')
+storageListener({
+  [ACTIVE_GOTCHI_STORAGE_KEY]: {
+    newValue: {
+      ...latest,
+      spriteSheetUrl: 'http://localhost:8080/character-assets/default_image2.png',
+    },
+  },
+}, 'local')
+const apiAssetFrame = documentElement.children.at(-1).testShadow.children[1].children[0].children[0]
+assert.equal(apiAssetFrame.style['background-image'], 'url("chrome-extension://unit/character-assets/default_image2.png")', 'API origin으로 정규화된 기본 이미지도 확장 번들 URL로 통일')
 
 const secondTabDocumentElement = new FakeElement('html')
 vm.runInNewContext(contentScript, {

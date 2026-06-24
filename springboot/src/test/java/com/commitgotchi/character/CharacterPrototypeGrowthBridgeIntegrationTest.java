@@ -482,7 +482,7 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
         return jdbcTemplate.queryForMap(
                 """
                         SELECT stat_algorithm, stat_network, battle_power, emotion, status_message
-                        FROM characters
+                        FROM user_character
                         WHERE id = ?
                         """,
                 characterId.longValue()
@@ -491,7 +491,7 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
 
     private long characterCount(long userId) {
         Long count = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM characters WHERE user_id = ?",
+                "SELECT count(*) FROM user_character WHERE user_id = ? AND deleted_at IS NULL",
                 Long.class,
                 userId
         );
@@ -499,7 +499,7 @@ class CharacterPrototypeGrowthBridgeIntegrationTest extends PostgresIntegrationT
     }
 
     private void deleteCharacterRow(Number characterId) {
-        jdbcTemplate.update("DELETE FROM characters WHERE id = ?", characterId.longValue());
+        jdbcTemplate.update("DELETE FROM user_character WHERE id = ?", characterId.longValue());
     }
 
     private void assertStoredCharactersEmpty(long userId) throws Exception {

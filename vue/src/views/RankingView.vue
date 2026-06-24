@@ -4,6 +4,7 @@
  * 포디움 TOP3 + 리스트, 내 캐릭터 하이라이트, 육아점수 기준.
  */
 import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import { ranking } from '../stores/game.js'
 import CgSprite from '../components/CgSprite.vue'
 import CgEmo from '../components/CgEmo.vue'
@@ -19,7 +20,12 @@ const podiumOrder = computed(() => {
 
 <template>
   <div class="ranking col">
-    <h1 class="cg-section-title big">랭킹 · 육아점수</h1>
+    <header class="cg-pagehead">
+      <div class="cg-pagehead__main">
+        <RouterLink to="/" class="cg-btn cg-btn--sm cg-back" aria-label="대시보드로 돌아가기">←</RouterLink>
+        <h1 class="cg-page-title">랭킹 · 육아점수</h1>
+      </div>
+    </header>
 
     <section class="podium">
       <div v-for="r in podiumOrder" :key="r.id"

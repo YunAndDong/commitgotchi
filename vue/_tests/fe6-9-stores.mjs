@@ -1,7 +1,7 @@
 import {
   activeCharacter, addReview, board, createBoardPost, createCharacter, deleteBoardPost,
-  deleteReview, deliverDailyReport, gameState, nurtureScore, resetGameState, saveReport,
-  setActive, submitQuiz, updateBoardPost, updateReview,
+  deleteReview, deliverDailyReport, gameState, nurtureScore, REPORT_SUBMITTED_NOTICE,
+  resetGameState, saveReport, setActive, submitQuiz, updateBoardPost, updateReview,
 } from '../src/stores/game.js'
 
 let pass = 0, fail = 0
@@ -20,6 +20,7 @@ gameState.reports.splice(0)
   const report = saveReport({ mood: 'joy', title: '오늘 학습', content: '내용', tags })
   tags.push('db')
   ok(report.tags.length === 1, '저장된 태그는 입력 배열과 참조를 공유하지 않음')
+  ok(gameState.notice === REPORT_SUBMITTED_NOTICE, '리포트 저장 액션 직후에만 제출 토스트 표시')
 
   createCharacter({ name: '다른 캐릭터', keyword: '', personality: '' })
   const authorBefore = nurtureScore(author)

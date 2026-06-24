@@ -52,7 +52,7 @@ public class CharacterImageService {
     public LearningCharacter generateOrFallback(long userId, long characterId) {
         LearningCharacter character = characterRepository.findByIdAndUserId(characterId, userId)
                 .orElseThrow(CharacterNotFoundException::new);
-        if (character.getImageStatus() == CharacterImageStatus.READY) {
+        if (character.getEvolvedImageStatus() == CharacterImageStatus.READY) {
             return character;
         }
 
@@ -94,7 +94,7 @@ public class CharacterImageService {
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
             LearningCharacter character = characterRepository.findByIdAndUserIdForUpdate(characterId, userId)
                     .orElseThrow(CharacterNotFoundException::new);
-            if (character.getImageStatus() == CharacterImageStatus.READY) {
+            if (character.getEvolvedImageStatus() == CharacterImageStatus.READY) {
                 return character;
             }
 

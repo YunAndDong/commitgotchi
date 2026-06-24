@@ -17,40 +17,42 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @ActiveProfiles("test")
 class CharacterDatabaseMigrationIntegrationTest extends PostgresIntegrationTest {
 
+    private static final String SPRITE_META = """
+            {"columns":3,"rows":1,"frameMap":{"joy":[0,0],"sad":[0,1],"angry":[0,2]},"transparent":true}
+            """;
+
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void createsCharactersTableColumnsAndIndexes() {
+    void createsCharacterCatalogTableFromArchitectureContract() {
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT count(*)
                 FROM information_schema.columns
                 WHERE table_name = 'characters'
                   AND column_name IN (
                     'id',
-                    'user_id',
-                    'name',
-                    'design_keyword',
                     'personality',
-                    'stat_db',
-                    'stat_algorithm',
-                    'stat_cs',
-                    'stat_network',
-                    'stat_framework',
-                    'battle_power',
-                    'emotion',
-                    'status_message',
-                    'is_evolved',
-                    'image_status',
+                    'design_keyword',
                     'sprite_sheet_url',
                     'sprite_meta',
+                    'image_status',
+                    'created_at'
+                  )
+                """, Integer.class)).isEqualTo(7);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_name = 'characters'
+                  AND column_name IN (
+                    'user_id',
+                    'name',
+                    'status_message',
                     'is_active',
-                    'created_at',
-                    'updated_at',
-                    'version',
+                    'is_evolved',
                     'deleted_at'
                   )
-                """, Integer.class)).isEqualTo(22);
+                """, Integer.class)).isZero();
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT data_type
                 FROM information_schema.columns
@@ -61,55 +63,120 @@ class CharacterDatabaseMigrationIntegrationTest extends PostgresIntegrationTest 
                 SELECT count(*)
                 FROM pg_indexes
                 WHERE tablename = 'characters'
-                  AND indexname IN (
-                    'uq_one_active_character_per_user',
-                    'idx_characters_user_created_at',
-                    'idx_characters_user_active'
-                  )
-                """, Integer.class)).isEqualTo(3);
+                  AND indexname = 'idx_characters_created_at'
+                """, Integer.class)).isEqualTo(1);
     }
 
     @Test
-    void activeCharacterPartialUniqueIndexAllowsOnlyOneActiveCharacterPerUser() {
+    void seedsDefaultBabyCharacterCatalogRows() {
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                FROM characters
+                WHERE id IN (1, 2, 3)
+                  AND personality IS NULL
+                  AND design_keyword IS NULL
+                  AND image_status = 'READY'
+                  AND sprite_meta = ?::jsonb
+                """, Integer.class, SPRITE_META)).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT sprite_sheet_url
+                FROM characters
+                WHERE id = 1
+                """, String.class))
+                .isEqualTo("/character-assets/default_image1.png");
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT sprite_sheet_url
+                FROM characters
+                WHERE id = 2
+                """, String.class))
+                .isEqualTo("/character-assets/default_image2.png");
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT sprite_sheet_url
+                FROM characters
+                WHERE id = 3
+                """, String.class))
+                .isEqualTo("/character-assets/default_image3.png");
+    }
+
+    @Test
+    void createsUserCharacterTableColumnsAndIndexes() {
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_name = 'user_character'
+                  AND column_name IN (
+                    'id',
+                    'user_id',
+                    'character_id',
+                    'name',
+                    'stat_db',
+                    'stat_algorithm',
+                    'stat_cs',
+                    'stat_network',
+                    'stat_framework',
+                    'battle_power',
+                    'emotion',
+                    'status_message',
+                    'is_evolved',
+                    'is_active',
+                    'created_at',
+                    'deleted_at'
+                  )
+                """, Integer.class)).isEqualTo(16);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                FROM pg_indexes
+                WHERE tablename = 'user_character'
+                  AND indexname IN (
+                    'uq_one_active_character_per_user',
+                    'idx_user_character_user_created_at',
+                    'idx_user_character_user_active',
+                    'idx_user_character_character'
+                  )
+                """, Integer.class)).isEqualTo(4);
+    }
+
+    @Test
+    void activeUserCharacterPartialUniqueIndexAllowsOnlyOneActiveCharacterPerUser() {
         long userId = insertUser();
 
-        insertCharacter(userId, "active-one", true);
-        insertCharacter(userId, "inactive-one", false);
-        insertCharacter(userId, "inactive-two", false);
+        insertUserCharacter(userId, "active-one", true);
+        insertUserCharacter(userId, "inactive-one", false);
+        insertUserCharacter(userId, "inactive-two", false);
 
-        assertThatThrownBy(() -> insertCharacter(userId, "active-two", true))
+        assertThatThrownBy(() -> insertUserCharacter(userId, "active-two", true))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
-    void activeCharacterPartialUniqueIndexAllowsOneActiveCharacterForEachUser() {
+    void activeUserCharacterPartialUniqueIndexAllowsOneActiveCharacterForEachUser() {
         long firstUserId = insertUser();
         long secondUserId = insertUser();
 
-        insertCharacter(firstUserId, "first-active", true);
-        insertCharacter(secondUserId, "second-active", true);
+        insertUserCharacter(firstUserId, "first-active", true);
+        insertUserCharacter(secondUserId, "second-active", true);
 
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM characters WHERE is_active = true",
+                "SELECT count(*) FROM user_character WHERE is_active = true",
                 Integer.class
         )).isGreaterThanOrEqualTo(2);
     }
 
     @Test
-    void activeCharacterPartialUniqueIndexIgnoresSoftDeletedRows() {
+    void activeUserCharacterPartialUniqueIndexIgnoresSoftDeletedRows() {
         long userId = insertUser();
-        long deletedActiveId = insertCharacter(userId, "deleted-active", true);
+        long deletedActiveId = insertUserCharacter(userId, "deleted-active", true);
         jdbcTemplate.update(
-                "UPDATE characters SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+                "UPDATE user_character SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
                 deletedActiveId
         );
 
-        long replacementId = insertCharacter(userId, "replacement-active", true);
+        long replacementId = insertUserCharacter(userId, "replacement-active", true);
 
         assertThat(jdbcTemplate.queryForObject(
                 """
                         SELECT count(*)
-                        FROM characters
+                        FROM user_character
                         WHERE user_id = ?
                           AND is_active = true
                           AND deleted_at IS NULL
@@ -118,64 +185,78 @@ class CharacterDatabaseMigrationIntegrationTest extends PostgresIntegrationTest 
                 userId
         )).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT deleted_at IS NULL FROM characters WHERE id = ?",
+                "SELECT deleted_at IS NULL FROM user_character WHERE id = ?",
                 Boolean.class,
                 replacementId
         )).isTrue();
     }
 
     @Test
-    void characterConstraintsRejectInvalidRows() {
-        long userId = insertUser();
-
-        assertThatThrownBy(() -> insertCharacterWithOverrides(userId, "stat_db", "-1"))
+    void characterCatalogConstraintsRejectInvalidRows() {
+        assertThatThrownBy(() -> insertCharacterCatalogWithOverrides("design_keyword", "''"))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertCharacterWithOverrides(userId, "emotion", "'BORED'"))
+        assertThatThrownBy(() -> insertCharacterCatalogWithOverrides("personality", "'   '"))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertCharacterWithOverrides(userId, "image_status", "'DONE'"))
+        assertThatThrownBy(() -> insertCharacterCatalogWithOverrides("image_status", "'DONE'"))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertCharacterWithOverrides(userId, "name", "E'\\t\\n'"))
+        assertThatThrownBy(() -> insertCharacterCatalogWithOverrides("image_status", "'READY'"))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertCharacterWithOverrides(userId, "design_keyword", "''"))
-                .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertCharacterWithOverrides(userId, "personality", "'   '"))
-                .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertCharacterWithOverrides(userId, "status_message", "E'\\t'"))
-                .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertCharacterWithOverrides(userId, "image_status", "'READY'"))
-                .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertCharacterWithOverrides(userId, "image_status", "'FALLBACK'"))
-                .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertCharacterWithImageStatusAndSprite(userId, "READY", "\t\n"))
-                .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertCharacter(Long.MAX_VALUE, "missing-user", false))
+        assertThatThrownBy(() -> insertCharacterCatalogWithImageStatusAndSprite("FALLBACK", "\t\n"))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
-    void userDeleteCascadesCharacters() {
+    void userCharacterConstraintsRejectInvalidRows() {
         long userId = insertUser();
-        insertCharacter(userId, "cascade-target", false);
+
+        assertThatThrownBy(() -> insertUserCharacterWithOverrides(userId, "stat_db", "-1"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertUserCharacterWithOverrides(userId, "emotion", "'BORED'"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertUserCharacterWithOverrides(userId, "name", "E'\\t\\n'"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertUserCharacterWithOverrides(userId, "status_message", "E'\\t'"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertUserCharacter(Long.MAX_VALUE, "missing-user", false))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO user_character (
+                    user_id,
+                    character_id,
+                    name,
+                    status_message
+                )
+                VALUES (?, ?, 'missing-character', 'Ready')
+                """, userId, Long.MAX_VALUE)).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void userDeleteCascadesUserCharacterButKeepsSharedCharacterCatalog() {
+        long userId = insertUser();
+        insertUserCharacter(userId, "cascade-target", false);
 
         jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
 
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM characters WHERE user_id = ?",
+                "SELECT count(*) FROM user_character WHERE user_id = ?",
                 Integer.class,
                 userId
         )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM characters WHERE id IN (1, 2, 3)",
+                Integer.class
+        )).isEqualTo(3);
     }
 
     @Test
-    void battlePowerMustMatchStatTotalOnInsertAndUpdate() {
+    void battlePowerMustMatchUserCharacterStatTotalOnInsertAndUpdate() {
         long userId = insertUser();
 
         assertThatThrownBy(() -> jdbcTemplate.update("""
-                INSERT INTO characters (
+                INSERT INTO user_character (
                     user_id,
+                    character_id,
                     name,
-                    design_keyword,
-                    personality,
                     status_message,
                     stat_db,
                     stat_algorithm,
@@ -184,13 +265,13 @@ class CharacterDatabaseMigrationIntegrationTest extends PostgresIntegrationTest 
                     stat_framework,
                     battle_power
                 )
-                VALUES (?, 'mismatch', 'mismatch-design', 'mismatch-personality', 'Ready', 1, 2, 3, 4, 5, 10)
+                VALUES (?, 1, 'mismatch', 'Ready', 1, 2, 3, 4, 5, 10)
                 """, userId)).isInstanceOf(DataIntegrityViolationException.class);
 
-        long characterId = insertCharacter(userId, "consistent", false);
+        long userCharacterId = insertUserCharacter(userId, "consistent", false);
         assertThatThrownBy(() -> jdbcTemplate.update(
-                "UPDATE characters SET stat_db = 7 WHERE id = ?",
-                characterId
+                "UPDATE user_character SET stat_db = 7 WHERE id = ?",
+                userCharacterId
         )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -208,79 +289,83 @@ class CharacterDatabaseMigrationIntegrationTest extends PostgresIntegrationTest 
         );
     }
 
-    private long insertCharacter(long userId, String name, boolean active) {
+    private long insertUserCharacter(long userId, String name, boolean active) {
         jdbcTemplate.update("""
-                INSERT INTO characters (
+                INSERT INTO user_character (
                     user_id,
+                    character_id,
                     name,
-                    design_keyword,
-                    personality,
                     status_message,
                     is_active
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """, userId, name, name + "-design", name + "-personality", "Ready", active);
+                VALUES (?, 1, ?, ?, ?)
+                """, userId, name, "Ready", active);
         return jdbcTemplate.queryForObject(
-                "SELECT id FROM characters WHERE user_id = ? AND name = ?",
+                "SELECT id FROM user_character WHERE user_id = ? AND name = ?",
                 Long.class,
                 userId,
                 name
         );
     }
 
-    private void insertCharacterWithOverrides(long userId, String columnName, String sqlValue) {
-        String name = valueFor(columnName, "name", "'valid-name'", sqlValue);
+    private void insertCharacterCatalogWithOverrides(String columnName, String sqlValue) {
         String designKeyword = valueFor(columnName, "design_keyword", "'valid-design'", sqlValue);
         String personality = valueFor(columnName, "personality", "'valid-personality'", sqlValue);
-        String statusMessage = valueFor(columnName, "status_message", "'Ready'", sqlValue);
-        String statDb = valueFor(columnName, "stat_db", "0", sqlValue);
-        String emotion = valueFor(columnName, "emotion", "'JOY'", sqlValue);
         String imageStatus = valueFor(columnName, "image_status", "'PENDING'", sqlValue);
 
         jdbcTemplate.update("""
                 INSERT INTO characters (
-                    user_id,
-                    name,
                     design_keyword,
                     personality,
-                    status_message,
-                    stat_db,
-                    emotion,
                     image_status
                 )
-                VALUES (?, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s)
                 """.formatted(
-                name,
                 designKeyword,
                 personality,
-                statusMessage,
-                statDb,
-                emotion,
                 imageStatus
-        ), userId);
+        ));
     }
 
-    private void insertCharacterWithImageStatusAndSprite(long userId, String imageStatus, String spriteSheetUrl) {
+    private void insertCharacterCatalogWithImageStatusAndSprite(String imageStatus, String spriteSheetUrl) {
         jdbcTemplate.update("""
                 INSERT INTO characters (
-                    user_id,
-                    name,
                     design_keyword,
                     personality,
-                    status_message,
                     image_status,
                     sprite_sheet_url
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?)
                 """,
-                userId,
-                "sprite-status",
                 "sprite-design",
                 "sprite-personality",
-                "Ready",
                 imageStatus,
                 spriteSheetUrl
         );
+    }
+
+    private void insertUserCharacterWithOverrides(long userId, String columnName, String sqlValue) {
+        String name = valueFor(columnName, "name", "'valid-name'", sqlValue);
+        String statusMessage = valueFor(columnName, "status_message", "'Ready'", sqlValue);
+        String statDb = valueFor(columnName, "stat_db", "0", sqlValue);
+        String emotion = valueFor(columnName, "emotion", "'JOY'", sqlValue);
+
+        jdbcTemplate.update("""
+                INSERT INTO user_character (
+                    user_id,
+                    character_id,
+                    name,
+                    status_message,
+                    stat_db,
+                    emotion
+                )
+                VALUES (?, 1, %s, %s, %s, %s)
+                """.formatted(
+                name,
+                statusMessage,
+                statDb,
+                emotion
+        ), userId);
     }
 
     private String valueFor(String actualColumn, String targetColumn, String defaultValue, String overrideValue) {

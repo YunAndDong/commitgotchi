@@ -62,10 +62,12 @@ function closeSavedDialog() {
 
 <template>
   <div class="board col">
-    <div class="board-head row">
-      <button type="button" class="back-btn cg-btn cg-btn--sm" aria-label="이전 화면으로 돌아가기" @click="goBack">←</button>
-      <h1 class="cg-section-title big">커밋고치 리뷰</h1>
-    </div>
+    <header class="cg-pagehead">
+      <div class="cg-pagehead__main">
+        <button type="button" class="cg-btn cg-btn--sm cg-back" aria-label="이전 화면으로 돌아가기" @click="goBack">←</button>
+        <h1 class="cg-page-title">커밋고치 리뷰</h1>
+      </div>
+    </header>
 
     <div class="review-layout">
       <section class="gotchi-card cg-card col">
@@ -133,18 +135,9 @@ function closeSavedDialog() {
 <style scoped>
 .board {
   width: 100%;
-  max-width: 920px;
+  max-width: 960px;
+  margin: 0 auto;
   gap: var(--sp-4);
-}
-.board-head {
-  min-width: 0;
-  gap: var(--sp-2);
-}
-.back-btn {
-  width: 36px;
-  min-width: 36px;
-  padding: 0;
-  font-size: 18px;
 }
 .review-layout {
   display: grid;
@@ -234,7 +227,7 @@ function closeSavedDialog() {
   display: grid;
   place-items: center;
   padding: var(--sp-4);
-  background: rgba(20, 20, 20, .42);
+  background: var(--overlay);
 }
 .save-dialog {
   width: min(100%, 360px);

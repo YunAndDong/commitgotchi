@@ -4,6 +4,7 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     role          VARCHAR(20) NOT NULL DEFAULT 'USER',
     created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at    TIMESTAMPTZ NULL,
     CONSTRAINT uq_users_email UNIQUE (email),
     CONSTRAINT ck_users_email_normalized
         CHECK (email = lower(btrim(email)) AND length(email) > 0),

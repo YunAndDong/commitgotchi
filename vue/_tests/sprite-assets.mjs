@@ -16,6 +16,7 @@ assert.equal(gameState.characters[0].spriteMeta.columns, 3)
 assert.equal(gameState.characters[0].spriteMeta.rows, 1)
 assert.deepEqual(gameState.characters[0].spriteMeta.frameMap.joy, [0, 0])
 assert.deepEqual(gameState.characters[1].spriteMeta.frameMap.sad, [0, 1])
+assert.equal(codex().length, gameState.characters.length, 'codex only lists owned characters')
 assert.equal(codex()[0].spriteSheetUrl, defaultSpriteUrl)
 assert.equal(board()[0].spriteSheetUrl, defaultSpriteUrl)
 
