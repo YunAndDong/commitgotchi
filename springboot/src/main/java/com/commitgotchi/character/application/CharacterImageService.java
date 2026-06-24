@@ -99,7 +99,13 @@ public class CharacterImageService {
             }
 
             if (imageResult.success()) {
-                character.markReady(imageResult.spriteSheetUrl(), imageResult.spriteMeta());
+                // When presigned-GET delivery is on, persist the stable s3:// key
+                // (not the FastAPI-returned URL). Read-time presigning derives the
+                // browser URL from this key (CharacterImagePresignService).
+                String spriteSheetUrl = imageProperties.isS3PresignedGetEnabled()
+                        ? storageUrlFactory.objectLocation(userId, characterId)
+                        : imageResult.spriteSheetUrl();
+                character.markReady(spriteSheetUrl, imageResult.spriteMeta());
             } else {
                 markFallbackOrFailed(character);
             }

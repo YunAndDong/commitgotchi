@@ -2,6 +2,7 @@ package com.commitgotchi.character.application;
 
 import com.commitgotchi.character.domain.LearningCharacter;
 import com.commitgotchi.character.domain.LearningCharacterRepository;
+import com.commitgotchi.character.image.CharacterImagePresignService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,13 +19,16 @@ public class CharacterGameProjectionService {
 
     private final LearningCharacterRepository characterRepository;
     private final ObjectMapper objectMapper;
+    private final CharacterImagePresignService presignService;
 
     public CharacterGameProjectionService(
             LearningCharacterRepository characterRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            CharacterImagePresignService presignService
     ) {
         this.characterRepository = characterRepository;
         this.objectMapper = objectMapper;
+        this.presignService = presignService;
     }
 
     @Transactional(readOnly = true)
@@ -49,7 +53,9 @@ public class CharacterGameProjectionService {
         if (character.getSpriteSheetUrl() == null) {
             node.set("spriteSheetUrl", NullNode.instance);
         } else {
-            node.put("spriteSheetUrl", character.getSpriteSheetUrl());
+            // Stored value may be an s3:// key; mint a fresh presigned GET URL at
+            // read time. Non-S3 values (bundled fallback sprite) pass through.
+            node.put("spriteSheetUrl", presignService.toDisplayUrl(character.getSpriteSheetUrl()));
         }
         node.set("spriteMeta", spriteMeta(character));
         node.put("active", character.isActive());

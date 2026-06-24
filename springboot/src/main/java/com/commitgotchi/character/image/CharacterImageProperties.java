@@ -15,6 +15,7 @@ public class CharacterImageProperties {
     private String fallbackSpriteSheetUrl = "/character-assets/default_image1.png";
     private String s3ObjectPrefix = "s3://commitgotchi-character-images/sprites";
     private boolean s3PresignedUrlEnabled = false;
+    private boolean s3PresignedGetEnabled = false;
     private String s3Region = "ap-northeast-2";
     private String s3AccessKeyId = "";
     private String s3SecretAccessKey = "";
@@ -62,6 +63,14 @@ public class CharacterImageProperties {
 
     public void setS3PresignedUrlEnabled(boolean s3PresignedUrlEnabled) {
         this.s3PresignedUrlEnabled = s3PresignedUrlEnabled;
+    }
+
+    public boolean isS3PresignedGetEnabled() {
+        return s3PresignedGetEnabled;
+    }
+
+    public void setS3PresignedGetEnabled(boolean s3PresignedGetEnabled) {
+        this.s3PresignedGetEnabled = s3PresignedGetEnabled;
     }
 
     public String getS3Region() {
