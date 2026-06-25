@@ -12,6 +12,10 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+# RAG problem-bank catalog (and embeddings). Required at runtime by the quiz
+# recommender: load_problem_bank_store() reads data/rag/catalog/problems.jsonl.
+# Without this the bank is empty in the container and recommendedQuizzes is always [].
+COPY data ./data
 
 # Run as non-root
 RUN useradd -r -u 1001 appuser

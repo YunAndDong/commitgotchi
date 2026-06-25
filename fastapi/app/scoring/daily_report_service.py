@@ -3,6 +3,7 @@ from __future__ import annotations
 # Story 4의 리포트 분석 결과와 기존 quiz recommender 결과를 조립한다.
 # 이 모듈은 API/SQS/callback wrapper를 만들지 않는 내부 서비스 계층이다.
 
+import logging
 from typing import Any, Mapping
 
 from app.rag.quiz_recommender import build_recommended_quizzes
@@ -17,6 +18,8 @@ from .schemas import (
     RecommendedQuizSnapshot,
     ReportAnalysis,
 )
+
+logger = logging.getLogger(__name__)
 
 
 FORBIDDEN_OUTPUT_FIELDS = frozenset(
@@ -185,11 +188,24 @@ def _build_recommended_quiz_snapshots(
         analysis_payload=analysis_payload,
         analysis_result=analysis_result,
     )
+    logger.info(
+        "recommending quizzes: keywords=%s fields=%s reportText_len=%d",
+        recommendation_input.get("detectedKeywords"),
+        recommendation_input.get("detectedFields"),
+        len(recommendation_input.get("reportText", "")),
+    )
     try:
         raw_quizzes = _run_quiz_recommender(quiz_recommender, recommendation_input)
     except Exception:
+        logger.exception("quiz recommender raised; returning no recommended quizzes")
         return []
-    return _recommended_quiz_snapshots(raw_quizzes)
+    snapshots = _recommended_quiz_snapshots(raw_quizzes)
+    logger.info(
+        "quiz recommender produced raw=%d snapshots=%d",
+        len(raw_quizzes) if hasattr(raw_quizzes, "__len__") else -1,
+        len(snapshots),
+    )
+    return snapshots
 
 
 def _recommendation_input(
