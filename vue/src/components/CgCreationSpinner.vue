@@ -6,7 +6,6 @@ const props = defineProps({
   keyword: { type: String, default: '' },
 })
 
-const displayName = computed(() => props.name?.trim() || '새 커밋고치')
 const keywordText = computed(() => props.keyword?.trim() || '기본 설계')
 </script>
 
@@ -40,7 +39,7 @@ const keywordText = computed(() => props.keyword?.trim() || '기본 설계')
 
       <div class="cg-forge__copy">
         <span class="tiny muted">커밋고치 공방 가동 중</span>
-        <h2>{{ displayName }} 만드는 중</h2>
+        <h2>커밋 고치 만드는 중...</h2>
         <p>디자인 키워드를 픽셀로 다듬고 있어요. 이미지가 도착하면 자동으로 완성 화면이 열려요.</p>
         <span class="cg-forge__keyword mono">{{ keywordText }}</span>
       </div>
@@ -54,11 +53,11 @@ const keywordText = computed(() => props.keyword?.trim() || '기본 설계')
 
 <style scoped>
 .cg-forge {
-  width: min(100%, 520px);
-  min-height: 420px;
+  width: min(100%, 440px);
+  min-height: 360px;
   display: grid;
   place-items: center;
-  padding: var(--sp-5);
+  padding: var(--sp-4);
   background: var(--screen);
   border: 2px solid var(--surface-edge);
   border-radius: var(--r);
@@ -69,12 +68,12 @@ const keywordText = computed(() => props.keyword?.trim() || '기본 설계')
   width: 100%;
   display: grid;
   justify-items: center;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
 }
 
 .cg-forge__viewport {
   position: relative;
-  width: min(250px, 72vw);
+  width: min(198px, 64vw);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -113,8 +112,10 @@ const keywordText = computed(() => props.keyword?.trim() || '기본 설계')
 .cg-forge__core {
   position: relative;
   z-index: 1;
+  --forge-core-scale: .82;
   width: 118px;
   height: 142px;
+  transform-origin: center;
   animation: forge-breathe 1.4s ease-in-out infinite;
 }
 
@@ -229,15 +230,15 @@ const keywordText = computed(() => props.keyword?.trim() || '기본 설계')
 .cg-forge__copy h2 {
   max-width: 100%;
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 22px;
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
 .cg-forge__copy p {
-  max-width: 370px;
+  max-width: 330px;
   color: var(--ink-soft);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .cg-forge__keyword {
@@ -252,7 +253,7 @@ const keywordText = computed(() => props.keyword?.trim() || '기본 설계')
 }
 
 .cg-forge__meter {
-  width: min(100%, 320px);
+  width: min(100%, 280px);
   height: 12px;
   border: 2px solid var(--surface-edge);
   border-radius: var(--r-gauge);
@@ -273,8 +274,8 @@ const keywordText = computed(() => props.keyword?.trim() || '기본 설계')
 }
 
 @keyframes forge-breathe {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-7px); }
+  0%, 100% { transform: translateY(0) scale(var(--forge-core-scale)); }
+  50% { transform: translateY(-7px) scale(var(--forge-core-scale)); }
 }
 
 @keyframes forge-blink {
@@ -294,12 +295,58 @@ const keywordText = computed(() => props.keyword?.trim() || '기본 설계')
 
 @media (max-width: 560px) {
   .cg-forge {
-    min-height: 390px;
-    padding: var(--sp-4);
+    min-height: 340px;
+    padding: var(--sp-3);
   }
 
   .cg-forge__copy h2 {
-    font-size: 22px;
+    font-size: 20px;
   }
+}
+
+:global(html.is-ext-popup) .cg-forge {
+  width: min(100%, 380px);
+  min-height: 310px;
+  padding: var(--sp-3);
+}
+
+:global(html.is-ext-popup) .cg-forge__machine {
+  gap: var(--sp-2);
+}
+
+:global(html.is-ext-popup) .cg-forge__viewport {
+  width: 154px;
+  background-size: 20px 20px, 20px 20px, 100% 100%;
+}
+
+:global(html.is-ext-popup) .cg-forge__core {
+  --forge-core-scale: .66;
+}
+
+:global(html.is-ext-popup) .cg-forge__orbit {
+  inset: 20px;
+  border-width: 2px;
+}
+
+:global(html.is-ext-popup) .cg-forge__copy {
+  gap: var(--sp-1);
+}
+
+:global(html.is-ext-popup) .cg-forge__copy h2 {
+  font-size: 20px;
+}
+
+:global(html.is-ext-popup) .cg-forge__copy p {
+  max-width: 300px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+:global(html.is-ext-popup) .cg-forge__keyword {
+  max-width: min(100%, 300px);
+}
+
+:global(html.is-ext-popup) .cg-forge__meter {
+  width: min(100%, 240px);
 }
 </style>

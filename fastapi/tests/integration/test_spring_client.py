@@ -195,11 +195,13 @@ class SpringCallbackClientTest(unittest.TestCase):
         )
         client.send_quiz_grade_result(
             user_id=1,
+            character_id=10,
             quiz_id=55,
             grading_result=_grading_result(),
         )
 
         self.assertEqual(transport.calls[0]["payload"]["requestId"], "req-1")
+        self.assertEqual(transport.calls[1]["payload"]["characterId"], 10)
         self.assertEqual(transport.calls[1]["payload"]["quizId"], 55)
 
     def test_response_classification(self) -> None:

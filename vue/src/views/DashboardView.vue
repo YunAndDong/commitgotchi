@@ -58,7 +58,7 @@ const recentActivity = computed(() => [
 
       <div class="row wrap center" style="gap: var(--sp-2)">
         <RouterLink to="/report" class="cg-btn cg-btn--primary">📓 오늘의 학습 기록하기</RouterLink>
-        <RouterLink to="/quiz" class="cg-btn cg-btn--accent">🧩 추천 퀴즈 풀기</RouterLink>
+        <RouterLink :to="{ name: 'quiz', query: { characterId: c.id } }" class="cg-btn cg-btn--accent">🧩 추천 퀴즈 풀기</RouterLink>
         <RouterLink :to="`/character/${c.id}`" class="cg-btn">캐릭터 상세</RouterLink>
       </div>
     </section>
@@ -119,8 +119,7 @@ const recentActivity = computed(() => [
         <template v-if="reportStatus === 'pending'">
           <p class="tiny muted">{{ WAITING.report }}</p>
           <div class="row wrap" style="gap:6px">
-            <button class="cg-btn cg-btn--sm" :disabled="!pendingReport" @click="deliverDailyReport()">⏩ (데모) 내일 아침으로</button>
-            <button class="cg-btn cg-btn--sm cg-btn--ghost" :disabled="!pendingReport" @click="deliverDailyReport({ fail: true })">(데모) 분석 실패</button>
+            <button class="cg-btn cg-btn--sm" :disabled="!pendingReport" @click="deliverDailyReport()">분석 요청 보내기</button>
           </div>
         </template>
 

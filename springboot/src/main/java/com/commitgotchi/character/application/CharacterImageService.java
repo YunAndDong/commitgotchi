@@ -68,11 +68,12 @@ public class CharacterImageService {
             return CharacterImageGenerationResult.failure("BASE_URL_MISSING");
         }
         try {
+            long catalogCharacterId = requireCatalogCharacterId(character);
             return imageClient.generate(new CharacterImageGenerationRequest(
                     userId,
-                    character.getId(),
+                    catalogCharacterId,
                     character.getDesignKeyword(),
-                    storageUrlFactory.createStorageUrl(userId, character.getId()),
+                    storageUrlFactory.createStorageUrl(userId, catalogCharacterId),
                     character.getDesignKeyword()
             ));
         } catch (RuntimeException exception) {
@@ -102,8 +103,9 @@ public class CharacterImageService {
                 // When presigned-GET delivery is on, persist the stable s3:// key
                 // (not the FastAPI-returned URL). Read-time presigning derives the
                 // browser URL from this key (CharacterImagePresignService).
+                long catalogCharacterId = requireCatalogCharacterId(character);
                 String spriteSheetUrl = imageProperties.isS3PresignedGetEnabled()
-                        ? storageUrlFactory.objectLocation(userId, characterId)
+                        ? storageUrlFactory.objectLocation(userId, catalogCharacterId)
                         : imageResult.spriteSheetUrl();
                 character.markReady(spriteSheetUrl, imageResult.spriteMeta());
             } else {
@@ -121,5 +123,13 @@ public class CharacterImageService {
             return;
         }
         character.markFallback(fallbackSpriteSheetUrl, fallbackSpriteMeta);
+    }
+
+    private long requireCatalogCharacterId(LearningCharacter character) {
+        Long catalogCharacterId = character.getCatalogCharacterId();
+        if (catalogCharacterId == null) {
+            throw new IllegalStateException("catalogCharacterId must be available before image generation");
+        }
+        return catalogCharacterId;
     }
 }

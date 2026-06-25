@@ -75,4 +75,37 @@ public class LearningCharacterRepository {
     public Optional<LearningCharacter> findActiveByUserIdForUpdate(long userId) {
         return Optional.ofNullable(mapper.findActiveByUserIdForUpdate(userId));
     }
+
+    public List<CodexCharacterProjection> findCodexCharactersAfterId(Long afterId, int limit) {
+        return mapper.findCodexCharactersAfterId(afterId, limit);
+    }
+
+    public List<CodexCharacterProjection> findCodexCharactersByIds(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return mapper.findCodexCharactersByIds(ids);
+    }
+
+    public Optional<CodexCharacterProjection> findCodexCharacterById(long id) {
+        return Optional.ofNullable(mapper.findCodexCharacterById(id));
+    }
+
+    public boolean existsUserCharacterByUserIdAndCatalogCharacterId(long userId, long characterId) {
+        return mapper.existsUserCharacterByUserIdAndCatalogCharacterId(userId, characterId);
+    }
+
+    public Optional<Long> findUserCharacterIdByUserIdAndCatalogCharacterId(long userId, long characterId) {
+        return Optional.ofNullable(mapper.findUserCharacterIdByUserIdAndCatalogCharacterId(userId, characterId));
+    }
+
+    public Long insertUserCharacterForCatalog(
+            long userId,
+            long characterId,
+            String name,
+            boolean active,
+            Instant createdAt
+    ) {
+        return mapper.insertUserCharacterForCatalog(userId, characterId, name, active, createdAt);
+    }
 }

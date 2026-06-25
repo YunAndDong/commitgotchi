@@ -20,7 +20,10 @@ import com.commitgotchi.quiz.application.QuizGradeRequestMessage;
 import com.commitgotchi.quiz.application.QuizGradeRequestResult;
 import com.commitgotchi.quiz.application.QuizGradingProperties;
 import com.commitgotchi.report.application.DailyReportProjectionService;
+import com.commitgotchi.report.application.ReportCallbackService;
+import com.commitgotchi.report.application.ReportOutboxDispatcher;
 import com.commitgotchi.report.application.ReportRequestOutboxService;
+import com.commitgotchi.report.sqs.ReportQueueProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -41,6 +45,7 @@ import java.util.UUID;
 public class GameService {
 
     private static final int EVOLVE_THRESHOLD = 1000;
+    private static final int DEMO_STAT_BOOST_AMOUNT = 200;
     private static final String CURRENT_OWNER = "나";
     private static final ZoneId APP_ZONE = ZoneId.of("Asia/Seoul");
     private static final List<String> STAT_KEYS = List.of("algo", "cs", "db", "net", "fw");
@@ -53,7 +58,10 @@ public class GameService {
     private final CharacterImageService characterImageService;
     private final CharacterEventService characterEventService;
     private final DailyReportProjectionService dailyReportProjectionService;
+    private final ReportCallbackService reportCallbackService;
     private final ReportRequestOutboxService reportRequestOutboxService;
+    private final ReportOutboxDispatcher reportOutboxDispatcher;
+    private final ReportQueueProperties reportQueueProperties;
     private final QuizGradeRequestClient quizGradeRequestClient;
     private final QuizGradingProperties quizGradingProperties;
 
@@ -66,7 +74,10 @@ public class GameService {
             CharacterImageService characterImageService,
             CharacterEventService characterEventService,
             DailyReportProjectionService dailyReportProjectionService,
+            ReportCallbackService reportCallbackService,
             ReportRequestOutboxService reportRequestOutboxService,
+            ReportOutboxDispatcher reportOutboxDispatcher,
+            ReportQueueProperties reportQueueProperties,
             QuizGradeRequestClient quizGradeRequestClient,
             QuizGradingProperties quizGradingProperties
     ) {
@@ -78,7 +89,10 @@ public class GameService {
         this.characterImageService = characterImageService;
         this.characterEventService = characterEventService;
         this.dailyReportProjectionService = dailyReportProjectionService;
+        this.reportCallbackService = reportCallbackService;
         this.reportRequestOutboxService = reportRequestOutboxService;
+        this.reportOutboxDispatcher = reportOutboxDispatcher;
+        this.reportQueueProperties = reportQueueProperties;
         this.quizGradeRequestClient = quizGradeRequestClient;
         this.quizGradingProperties = quizGradingProperties;
     }
@@ -94,8 +108,6 @@ public class GameService {
         ObjectNode state = loadOrCreate(userId);
         ObjectNode item = characterProjectionService.project(character);
         applyCharacterProjection(userId, state);
-        String characterId = character.getId().toString();
-        ensureStarterQuizzes(state, characterId);
         syncDailyReportCharacter(state, character.getId());
         save(userId, state);
         return response(state, item);
@@ -149,6 +161,34 @@ public class GameService {
     }
 
     @Transactional
+    public GameMutationResponse boostCharacterStat(long userId, String id, JsonNode request) {
+        long characterId = parseCharacterIdOrThrow(id);
+        String stat = defaultText(request, "stat", "");
+        if (!STAT_KEYS.contains(stat)) {
+            throw new IllegalArgumentException("stat must be one of " + STAT_KEYS);
+        }
+
+        ObjectNode state = loadWithCharacterProjectionForUpdate(userId);
+        ObjectNode beforeCharacter = findObject(array(state, "characters"), Long.toString(characterId));
+        boolean wasEvolved = beforeCharacter != null && beforeCharacter.path("isEvolved").asBoolean(false);
+        LearningCharacter updated = characterCommandService.applyScoreDelta(
+                userId,
+                characterId,
+                stat,
+                DEMO_STAT_BOOST_AMOUNT,
+                CharacterEmotion.JOY,
+                "시연용 보너스로 " + displayStat(stat) + " 스탯이 " + DEMO_STAT_BOOST_AMOUNT + " 올랐어요."
+        ).orElseThrow(CharacterNotFoundException::new);
+
+        applyCharacterProjection(userId, state);
+        save(userId, state);
+        characterEventService.publishCharacterUpdatedAfterCommit(userId, updated);
+        ObjectNode item = characterProjectionService.project(updated);
+        item.put("_evolvedNow", !wasEvolved && updated.isEvolved());
+        return response(state, item);
+    }
+
+    @Transactional
     public GameMutationResponse deleteCharacter(long userId, String id) {
         long characterId = parseCharacterIdOrThrow(id);
         ObjectNode state = loadWithCharacterProjectionForUpdate(userId);
@@ -164,7 +204,7 @@ public class GameService {
             syncDailyReportAfterDeletedReference(state, deletion.removed().getId());
         }
         syncPendingReportsAfterDeletedReference(state, deletion.removed().getId());
-        syncStarterQuizzesAfterDeletedReference(state, deletion.removed().getId());
+        syncUnscoredQuizzesAfterDeletedReference(state, deletion.removed().getId());
         save(userId, state);
         return response(state, item);
     }
@@ -234,6 +274,25 @@ public class GameService {
         }
 
         return submitQuizLocally(userId, state, quiz, userAnswer);
+    }
+
+    @Transactional
+    public GameMutationResponse createDemoRecommendedQuizzes(long userId, JsonNode request) {
+        ObjectNode currentState = loadWithCharacterProjection(userId);
+        Long requestedCharacterId = parseCharacterId(request == null ? null : request.path("characterId"));
+        Long characterId = requestedCharacterId == null
+                ? parseCharacterId(activeCharacterId(currentState))
+                : requestedCharacterId;
+        if (characterId == null) {
+            return response(currentState, NullNode.instance);
+        }
+        if (characterCommandService.findOwned(userId, characterId).isEmpty()) {
+            return response(currentState, NullNode.instance);
+        }
+
+        reportCallbackService.createDemoRecommendedQuizzes(userId, characterId, todayDate());
+        ObjectNode state = loadWithCharacterProjection(userId);
+        return response(state, state.path("dailyReport"));
     }
 
     private GameMutationResponse requestQuizGrade(
@@ -350,61 +409,59 @@ public class GameService {
         if (report == null) {
             return response(state, state.path("dailyReport"));
         }
-        String reportCharacterId = syncReportCharacterToExistingOrActive(state, report);
-        if (bool(request, "fail")) {
-            state.set("dailyReport", dailyReport(report.path("date").asText(), reportCharacterId, "failed"));
-            state.put("notice", "AI가 잠깐 쉬는 중 - 학습은 저장됐어요. 점수 변화는 다음 분석에 반영돼요.");
-            save(userId, state);
-            return response(state, state.path("dailyReport"));
-        }
-        ObjectNode daily = dailyReport(report.path("date").asText(), reportCharacterId, "ready");
-        daily.put("summary", "어제 학습 리포트를 분석했어요. 핵심 개념을 정리하고 다음 주제로 이어갈 준비가 잘 되어 있습니다.");
-        ObjectNode deltas = objectMapper.createObjectNode().put("algo", 3).put("net", 1);
-        daily.set("deltas", deltas);
-        daily.put("quizComment", "추천 퀴즈를 풀며 개념을 한 번 더 확인해 보세요.");
-        daily.put("nextRecommendation", "다음 학습: 오늘 기록한 태그와 연결되는 대표 문제를 하나 더 풀어보기.");
-        state.set("dailyReport", daily);
-        ObjectNode character = reportCharacterId == null ? null : findObject(array(state, "characters"), reportCharacterId);
-        boolean evolvedNow = false;
+
+        String reportCharacterId = report.path("characterId").isNull()
+                ? null
+                : report.path("characterId").asText(null);
         Long characterId = parseCharacterId(reportCharacterId);
-        if (character != null && characterId != null && !report.path("scoreApplied").asBoolean(false)) {
-            boolean wasEvolved = character.path("isEvolved").asBoolean(false);
-            LearningCharacter updated = characterCommandService.applyScoreDeltas(
-                    userId,
-                    characterId,
-                    0,
-                    3,
-                    0,
-                    1,
-                    0,
-                    CharacterEmotion.JOY,
-                    "어제 공부가 몸에 스며들었어! 레이더가 차오르는 게 느껴져."
-            ).orElse(null);
-            if (updated == null) {
-                ObjectNode failed = dailyReport(report.path("date").asText(), null, "failed");
-                state.set("dailyReport", failed);
-                report.put("scoreApplied", false);
-                state.put("notice", "활성 캐릭터를 찾지 못해 점수 반영을 건너뛰었어요. 캐릭터를 선택한 뒤 다시 시도해 주세요.");
-                save(userId, state);
-                return response(state, failed);
+        LocalDate targetDate = parseDate(report.path("date").asText(""));
+        if (characterId == null
+                || targetDate == null
+                || findObject(array(state, "characters"), reportCharacterId) == null) {
+            ObjectNode failed = dailyReport(report.path("date").asText(today()), null, "failed");
+            String requestId = report.path("requestId").asText("").strip();
+            if (!requestId.isBlank()) {
+                failed.put("requestId", requestId);
             }
-            evolvedNow = !wasEvolved && updated.isEvolved();
-        } else if ((character == null || characterId == null) && !report.path("scoreApplied").asBoolean(false)) {
-            ObjectNode failed = dailyReport(report.path("date").asText(), null, "failed");
-            state.set("dailyReport", failed);
             report.put("scoreApplied", false);
-            state.put("notice", "활성 캐릭터를 찾지 못해 점수 반영을 건너뛰었어요. 캐릭터를 선택한 뒤 다시 시도해 주세요.");
+            state.set("dailyReport", failed);
+            state.put("notice", "리포트 분석 요청 대상을 찾지 못해 worker 요청을 보내지 못했어요.");
             save(userId, state);
             return response(state, failed);
         }
-        report.put("status", "reflected");
-        report.put("scoreApplied", true);
-        applyCharacterProjection(userId, state);
-        state.put("notice", evolvedNow && character != null
-                ? "🎉 " + character.path("name").asText() + " 진화! 육아점수 " + EVOLVE_THRESHOLD + " 돌파."
-                : "어제의 레포트 도착 - 학습이 반영됐어요.");
+
+        String requestId = reportRequestOutboxService.requestIdFor(userId, characterId, targetDate);
+        report.put("requestId", requestId);
+        reportRequestOutboxService.createOrRefreshSnapshot(userId, characterId, targetDate, report, state);
+
+        ObjectNode daily = dailyReport(report.path("date").asText(today()), reportCharacterId, "pending");
+        daily.put("requestId", requestId);
+        state.set("dailyReport", daily);
+
+        if (!reportQueueProperties.isEnabled()) {
+            state.put("notice", "리포트가 저장됐어요. worker 큐가 켜지면 분석 요청이 전송됩니다.");
+            save(userId, state);
+            return response(state, daily);
+        }
+
+        ReportOutboxDispatcher.DispatchResult dispatchResult =
+                reportOutboxDispatcher.dispatchRequest(requestId, Instant.now());
+        if (dispatchResult.sentCount() > 0) {
+            state.put("notice", "리포트 분석 요청을 worker에 전달했어요. 결과가 도착하면 갱신됩니다.");
+        } else if (dispatchResult.retryCount() > 0) {
+            state.put("notice", "리포트 분석 요청 전송이 지연됐어요. 잠시 후 다시 시도해 주세요.");
+        } else if (dispatchResult.failedCount() > 0) {
+            state.put("notice", "리포트 분석 요청 전송에 실패했어요. 설정을 확인한 뒤 다시 시도해 주세요.");
+        } else {
+            state.put("notice", "이미 리포트 분석 요청이 전송됐어요. 결과가 도착하면 갱신됩니다.");
+        }
         save(userId, state);
         return response(state, daily);
+    }
+
+    @Transactional
+    public GameMutationResponse runReportNow(long userId, JsonNode request) {
+        return deliverDailyReport(userId, request);
     }
 
     @Transactional
@@ -647,6 +704,17 @@ public class GameService {
         return LocalDate.now(APP_ZONE);
     }
 
+    private LocalDate parseDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException exception) {
+            return null;
+        }
+    }
+
     private String requiredText(JsonNode request, String field) {
         String value = text(request, field);
         if (value.isBlank()) {
@@ -791,7 +859,7 @@ public class GameService {
         }
     }
 
-    private void syncStarterQuizzesAfterDeletedReference(ObjectNode state, Long removedCharacterId) {
+    private void syncUnscoredQuizzesAfterDeletedReference(ObjectNode state, Long removedCharacterId) {
         String replacementId = activeCharacterId(state);
         for (JsonNode node : array(state, "quizzes")) {
             if (node instanceof ObjectNode quiz
@@ -804,24 +872,6 @@ public class GameService {
                 }
             }
         }
-    }
-
-    private String syncReportCharacterToExistingOrActive(ObjectNode state, ObjectNode report) {
-        String reportCharacterId = report.path("characterId").isNull()
-                ? null
-                : report.path("characterId").asText(null);
-        String replacementId = activeCharacterId(state);
-        if (replacementId != null) {
-            report.put("characterId", replacementId);
-            return replacementId;
-        }
-
-        if (reportCharacterId != null && findObject(array(state, "characters"), reportCharacterId) != null) {
-            return reportCharacterId;
-        }
-
-        report.set("characterId", NullNode.instance);
-        return null;
     }
 
     private String activeCharacterId(ObjectNode state) {
@@ -877,45 +927,6 @@ public class GameService {
             }
         }
         return null;
-    }
-
-    private void ensureStarterQuizzes(ObjectNode state, String characterId) {
-        ArrayNode quizzes = array(state, "quizzes");
-        String date = today();
-        quizzes.add(quiz(nextId(state, "q"), date, "algo", characterId,
-                "다익스트라 알고리즘이 음의 가중치 간선을 처리하지 못하는 이유를 설명해 주세요.",
-                "다익스트라는 한 번 확정한 최단거리를 다시 갱신하지 않는 그리디 전제에 기대기 때문에, 음수 간선으로 더 짧은 경로가 나중에 발견되는 경우를 처리하지 못합니다.",
-                List.of("그리디", "확정", "갱신", "음수 간선"),
-                "algo"));
-        quizzes.add(quiz(nextId(state, "q"), date, "net", characterId,
-                "TCP 3-way handshake에서 클라이언트가 마지막으로 보내는 세그먼트와 그 역할을 설명해 주세요.",
-                "클라이언트가 마지막으로 보내는 세그먼트는 ACK입니다. 서버의 SYN-ACK를 확인하고 연결 수립을 마무리한다는 의미를 전달합니다.",
-                List.of("ACK"),
-                "net"));
-    }
-
-    private ObjectNode quiz(String id, String date, String tag, String characterId, String question,
-                            String modelAnswer, List<String> answerKeywords, String deltaStat) {
-        ObjectNode quiz = objectMapper.createObjectNode()
-                .put("id", id)
-                .put("date", date)
-                .put("tag", tag)
-                .put("question", question)
-                .put("modelAnswer", modelAnswer)
-                .put("submitted", false)
-                .put("scored", false)
-                .put("gradeFailed", false)
-                .put("deltaStat", deltaStat)
-                .put("deltaAmount", 0)
-                .put("characterId", characterId);
-        ArrayNode keywordNodes = objectMapper.createArrayNode();
-        answerKeywords.forEach(keywordNodes::add);
-        quiz.set("answerKeywords", keywordNodes);
-        quiz.set("options", objectMapper.createArrayNode());
-        quiz.set("userAnswer", NullNode.instance);
-        quiz.set("correct", NullNode.instance);
-        quiz.set("feedback", NullNode.instance);
-        return quiz;
     }
 
     private String submissionIdFor(ObjectNode quiz) {
@@ -1070,6 +1081,16 @@ public class GameService {
             return CharacterEmotion.ANGRY;
         }
         return CharacterEmotion.JOY;
+    }
+
+    private String displayStat(String stat) {
+        return switch (stat) {
+            case "db" -> "DB";
+            case "cs" -> "CS";
+            case "net" -> "네트워크";
+            case "fw" -> "프레임워크";
+            default -> "알고리즘";
+        };
     }
 
     private void maybeEvolve(ObjectNode state, ObjectNode character) {

@@ -20,6 +20,8 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.commitgotchi.support.RecommendedQuizTestHelper.MODEL_ANSWER;
+import static com.commitgotchi.support.RecommendedQuizTestHelper.createRecommendedQuiz;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
@@ -31,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "commitgotchi.internal-api.secret=test-internal-secret")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTest {
@@ -112,14 +114,15 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andReturn();
         createCharacter(other.bearer(), "Other", "other keyword", "other personality")
                 .andExpect(status().isOk());
-        String quizId = JsonPath.read(created.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        Number characterId = JsonPath.read(created.getResponse().getContentAsString(), "$.item.id");
+        String quizId = createRecommendedQuiz(mockMvc, owner.bearer(), owner.id(), characterId.longValue());
 
         mockMvc.perform(post("/api/game/quizzes/{id}/submit", quizId)
                         .header("Authorization", owner.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
-                                """))
+                                {"userAnswer":"%s"}
+                                """.formatted(MODEL_ANSWER)))
                 .andExpect(status().isOk());
 
         MvcResult state = mockMvc.perform(get("/api/game/state").header("Authorization", owner.bearer()))
@@ -219,13 +222,13 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andExpect(status().isOk())
                 .andReturn();
         Number characterId = JsonPath.read(created.getResponse().getContentAsString(), "$.item.id");
-        String quizId = JsonPath.read(created.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        String quizId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), characterId.longValue());
         mockMvc.perform(post("/api/game/quizzes/{id}/submit", quizId)
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
-                                """))
+                                {"userAnswer":"%s"}
+                                """.formatted(MODEL_ANSWER)))
                 .andExpect(status().isOk());
 
         Map<String, Object> before = systemOwnedColumns(characterId);
@@ -400,7 +403,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andExpect(jsonPath("$.state.dailyReport.characterId").value(firstId.toString()))
                 .andExpect(jsonPath("$.state.reports[0].characterId").value(firstId.toString()))
                 .andExpect(jsonPath("$.state.characters[0].id").value(firstId))
-                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(3));
+                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(0));
 
         assertThat(characterRepository.findById(secondId.longValue())).isEmpty();
         assertThat(activeCharacterCount(user.id())).isEqualTo(1);
@@ -415,17 +418,26 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                 .andReturn();
         Number characterId = JsonPath.read(created.getResponse().getContentAsString(), "$.item.id");
 
-        mockMvc.perform(post("/api/game/reports")
+        MvcResult saved = mockMvc.perform(post("/api/game/reports")
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
                                 {"mood":"joy","title":"Daily study","content":"Kept compatibility data","tags":["algo"]}
                                 """))
-                .andExpect(status().isOk());
-        mockMvc.perform(post("/api/game/daily-report/deliver")
-                        .header("Authorization", user.bearer())
+                .andExpect(status().isOk())
+                .andReturn();
+        String requestId = JsonPath.read(saved.getResponse().getContentAsString(), "$.item.requestId");
+        String targetDate = JsonPath.read(saved.getResponse().getContentAsString(), "$.item.date");
+
+        mockMvc.perform(post("/api/report")
+                        .header("Authorization", "Internal test-internal-secret")
                         .contentType("application/json")
-                        .content("{}"))
+                        .content(reportCallbackPayload(requestId, user.id(), characterId.longValue(), targetDate)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.duplicate").value(false));
+
+        mockMvc.perform(get("/api/game/state")
+                        .header("Authorization", user.bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.dailyReport.status").value("ready"))
                 .andExpect(jsonPath("$.state.dailyReport.summary").isNotEmpty())
@@ -515,13 +527,13 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
     }
 
     @Test
-    void deletingCharacterReassignsUnscoredStarterQuizzesToActiveCharacter() throws Exception {
+    void deletingCharacterReassignsUnscoredRecommendedQuizzesToActiveCharacter() throws Exception {
         AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
         MvcResult first = createCharacter(user.bearer(), "First", "first keyword", "first personality")
                 .andExpect(status().isOk())
                 .andReturn();
         Number firstId = JsonPath.read(first.getResponse().getContentAsString(), "$.item.id");
-        String firstQuizId = JsonPath.read(first.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        String firstQuizId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), firstId.longValue());
 
         MvcResult second = createCharacter(user.bearer(), "Second", "second keyword", "second personality")
                 .andExpect(status().isOk())
@@ -539,8 +551,8 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
-                                """))
+                                {"userAnswer":"%s"}
+                                """.formatted(MODEL_ANSWER)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.item.characterId").value(secondId.toString()))
                 .andExpect(jsonPath("$.state.characters[0].id").value(secondId))
@@ -737,7 +749,24 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
 
     private String babyPresetSpriteSheetUrl(Number characterId) {
         long presetId = (characterId.longValue() % 3L) + 1L;
-        return "/character-assets/default_image" + presetId + ".png";
+        return "s3://commitgotchi-character-images/sprites/characters/" + presetId + "/sprite-sheet.png";
+    }
+
+    private String reportCallbackPayload(String requestId, long userId, long characterId, String targetDate) {
+        return """
+                {
+                  "requestId":"%s",
+                  "userId":%d,
+                  "characterId":%d,
+                  "targetDate":"%s",
+                  "status":"SUCCESS",
+                  "scoreDelta":{"db":0,"algorithm":3,"cs":0,"network":0,"framework":0},
+                  "statusMessage":"Worker report reflected.",
+                  "dailyReport":{"text":"worker body","feedback":"worker feedback"},
+                  "nextRecommendation":{"topics":["복습"],"rationale":"next"},
+                  "recommendedQuizzes":[]
+                }
+                """.formatted(requestId, userId, characterId, targetDate);
     }
 
     private String uniqueEmail() {

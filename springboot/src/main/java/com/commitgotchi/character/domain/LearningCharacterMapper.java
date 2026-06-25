@@ -64,6 +64,15 @@ public interface LearningCharacterMapper {
             LEFT JOIN characters baby ON baby.id = ((uc.id % 3) + 1)
             """;
 
+    String CODEX_CHARACTER_COLUMNS = """
+            id,
+            personality,
+            design_keyword,
+            image_status,
+            sprite_sheet_url,
+            CAST(sprite_meta AS text) AS sprite_meta
+            """;
+
     @Results(id = "LearningCharacterResult", value = {
             @Result(property = "id", column = "id", id = true),
             @Result(property = "catalogCharacterId", column = "catalog_character_id"),
@@ -175,6 +184,109 @@ public interface LearningCharacterMapper {
             """)
     @org.apache.ibatis.annotations.ResultMap("LearningCharacterResult")
     LearningCharacter findActiveByUserIdForUpdate(long userId);
+
+    @Results(id = "CodexCharacterProjectionResult", value = {
+            @Result(property = "id", column = "id", id = true),
+            @Result(property = "personality", column = "personality"),
+            @Result(property = "designKeyword", column = "design_keyword"),
+            @Result(property = "imageStatus", column = "image_status"),
+            @Result(property = "spriteSheetUrl", column = "sprite_sheet_url"),
+            @Result(property = "spriteMeta", column = "sprite_meta")
+    })
+    @Select("""
+            SELECT
+            """ + CODEX_CHARACTER_COLUMNS + """
+            FROM characters
+            WHERE id >= 4
+              AND image_status IN ('READY', 'FALLBACK')
+              AND (#{afterId,jdbcType=BIGINT} IS NULL OR id > #{afterId,jdbcType=BIGINT})
+            ORDER BY id ASC
+            LIMIT #{limit}
+            """)
+    List<CodexCharacterProjection> findCodexCharactersAfterId(
+            @Param("afterId") Long afterId,
+            @Param("limit") int limit
+    );
+
+    @Select("""
+            <script>
+            SELECT
+            """ + CODEX_CHARACTER_COLUMNS + """
+            FROM characters
+            WHERE id >= 4
+              AND image_status IN ('READY', 'FALLBACK')
+              AND id IN
+              <foreach collection="ids" item="id" open="(" separator="," close=")">
+                #{id}
+              </foreach>
+            ORDER BY id ASC
+            </script>
+            """)
+    @org.apache.ibatis.annotations.ResultMap("CodexCharacterProjectionResult")
+    List<CodexCharacterProjection> findCodexCharactersByIds(@Param("ids") List<Long> ids);
+
+    @Select("""
+            SELECT
+            """ + CODEX_CHARACTER_COLUMNS + """
+            FROM characters
+            WHERE id = #{id}
+              AND id >= 4
+              AND image_status IN ('READY', 'FALLBACK')
+            """)
+    @org.apache.ibatis.annotations.ResultMap("CodexCharacterProjectionResult")
+    CodexCharacterProjection findCodexCharacterById(long id);
+
+    @Select("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM user_character
+                WHERE user_id = #{userId}
+                  AND character_id = #{characterId}
+            )
+            """)
+    boolean existsUserCharacterByUserIdAndCatalogCharacterId(
+            @Param("userId") long userId,
+            @Param("characterId") long characterId
+    );
+
+    @Select("""
+            SELECT id
+            FROM user_character
+            WHERE user_id = #{userId}
+              AND character_id = #{characterId}
+              AND deleted_at IS NULL
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """)
+    Long findUserCharacterIdByUserIdAndCatalogCharacterId(
+            @Param("userId") long userId,
+            @Param("characterId") long characterId
+    );
+
+    @Select("""
+            INSERT INTO user_character (
+                user_id,
+                character_id,
+                name,
+                is_active,
+                created_at
+            )
+            VALUES (
+                #{userId},
+                #{characterId},
+                #{name},
+                #{active},
+                #{createdAt}
+            )
+            RETURNING id
+            """)
+    Long insertUserCharacterForCatalog(
+            @Param("userId") long userId,
+            @Param("characterId") long characterId,
+            @Param("name") String name,
+            @Param("active") boolean active,
+            @Param("createdAt") Instant createdAt
+    );
 
     @Select("SELECT COUNT(*) FROM user_character WHERE user_id = #{userId} AND deleted_at IS NULL")
     long countByUserId(long userId);

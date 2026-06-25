@@ -7,20 +7,92 @@
  *  - AC3 일일 레포트 실패 → status 'failed' · 작성 리포트 보존 · 점수 변화 없음
  *  - AC4 이미지 실패 → imageStatus 'FALLBACK' (캐릭터는 계속 사용 가능), retryImage 로 복구
  */
+import { readFileSync } from 'node:fs'
+import { game as gameApi } from '../src/api/client.js'
 import {
   gameState, activeCharacter, nurtureScore,
   submitQuiz, deliverDailyReport, createCharacter, retryImage,
-  setActive,
+  loadGameState, quizzesForCharacter, resetGameState, setActive,
 } from '../src/stores/game.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { if (cond) { pass++; console.log('  ✓', msg) } else { fail++; console.error('  ✗', msg) } }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const seedQuiz = (characterId, id = 'test-q1') => {
+  const quiz = {
+    id,
+    date: new Intl.DateTimeFormat('en-CA').format(new Date()),
+    sourceReportRequestId: 'test-report-request',
+    tag: 'algo',
+    question: '테스트 퀴즈',
+    answer: 0,
+    submitted: false,
+    selected: null,
+    correct: null,
+    scored: false,
+    gradeFailed: false,
+    feedback: null,
+    deltaStat: 'algo',
+    deltaAmount: 12,
+    characterId,
+  }
+  gameState.quizzes.push(quiz)
+  return quiz
+}
+
+console.log('Regression — 백엔드 grading 플래그 보존')
+{
+  const originalGameState = gameApi.state
+  const originalFetch = globalThis.fetch
+  const characterId = 101
+  const quizId = 'grading-q1'
+  gameApi.state = async () => ({
+    state: {
+      nextId: 102,
+      characters: [],
+      reports: [],
+      quizzes: [{
+        id: quizId,
+        date: new Intl.DateTimeFormat('en-CA').format(new Date()),
+        sourceReportRequestId: 'grading-report-request',
+        tag: 'algo',
+        question: '채점 대기 퀴즈',
+        userAnswer: '답안',
+        submitted: true,
+        scored: false,
+        gradeFailed: false,
+        grading: true,
+        deltaStat: 'algo',
+        deltaAmount: 0,
+        characterId,
+      }],
+    },
+  })
+  globalThis.fetch = () => new Promise(() => {})
+  try {
+    await loadGameState()
+    const quiz = gameState.quizzes.find(item => item.id === quizId)
+    ok(quiz?.grading === true, '백엔드 state의 grading=true가 store 상태에 보존')
+    ok(quizzesForCharacter(characterId)[0]?.grading === true, '화면 조회용 scoped quiz에도 grading=true 보존')
+  } finally {
+    resetGameState()
+    gameApi.state = originalGameState
+    globalThis.fetch = originalFetch
+  }
+}
+
+console.log('Regression — QuizView 채점 중 로딩 상태')
+{
+  const source = readFileSync(new URL('../src/views/QuizView.vue', import.meta.url), 'utf8')
+  ok(source.includes('function isGrading(q)'), 'QuizView는 store grading과 로컬 제출 상태를 합산하는 isGrading(q)를 사용')
+  ok(source.includes('<CgState v-if="isGrading(q)" tone="loading" inline :message="LOADING.quiz" />'), 'submitted=true/scored=false/grading=true 상태에서 로딩 CgState 표시')
+  ok(source.includes("{{ isGrading(q) ? LOADING.quiz : '답안 제출' }}"), '채점 중 제출 버튼 카피가 LOADING.quiz로 전환')
+}
 
 console.log('AC3 — 퀴즈 채점 실패 Fallback')
 setActive(gameState.characters[0].id)
 {
-  const q = gameState.quizzes[0]
+  const q = seedQuiz(activeCharacter.value.id)
   const before = nurtureScore(activeCharacter.value)
   const res = await submitQuiz(q.id, 0, { fail: true })
   ok(res && res.ok === false, '실패는 { ok:false } 로 반환')

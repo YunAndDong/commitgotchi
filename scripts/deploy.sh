@@ -408,7 +408,11 @@ load_env_from_ssm() {
   set_env_default "SPRING_PROFILES_ACTIVE" "prod" "false"
   set_env_default "REFRESH_COOKIE_SECURE" "true" "false"
   set_env_default "CHARACTER_IMAGE_BASE_URL" "http://fastapi:8000" "false"
-  set_env_default "CHARACTER_IMAGE_FALLBACK_SPRITE_SHEET_URL" "/character-assets/default_image1.png" "false"
+  local default_fallback_sprite_sheet_url="s3://commitgotchi-character-images/sprites/default_image1.png"
+  if has_env_key "CHARACTER_IMAGE_S3_OBJECT_PREFIX"; then
+    default_fallback_sprite_sheet_url="$(get_env_value CHARACTER_IMAGE_S3_OBJECT_PREFIX)/default_image1.png"
+  fi
+  set_env_default "CHARACTER_IMAGE_FALLBACK_SPRITE_SHEET_URL" "$default_fallback_sprite_sheet_url" "false"
   set_env_default "QUIZ_GRADING_ENABLED" "false" "false"
   set_env_default "QUIZ_GRADING_BASE_URL" "http://fastapi:8000" "false"
   set_env_default "QUIZ_GRADING_CALLBACK_URL" "http://springboot:8080/api/internal/quizzes/grade-result" "false"

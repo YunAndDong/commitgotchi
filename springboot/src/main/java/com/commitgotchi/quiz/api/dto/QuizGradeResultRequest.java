@@ -17,6 +17,7 @@ public record QuizGradeResultRequest(
         @Positive
         long userId,
 
+        @NotNull
         @Positive
         Long characterId,
 

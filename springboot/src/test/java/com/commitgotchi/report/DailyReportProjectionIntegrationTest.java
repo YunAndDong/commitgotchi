@@ -84,11 +84,63 @@ class DailyReportProjectionIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.state.dailyReport.recommendedQuizIds[0]", notNullValue()))
                 .andExpect(jsonPath("$.state.reports[0].status").value("reflected"))
                 .andExpect(jsonPath("$.state.reports[0].requestId").value(requestId))
+                .andExpect(jsonPath("$.state.reports[0].feedback").value("feedback"))
+                .andExpect(jsonPath("$.state.reports[0].nextRecommendation.topics[0]").value("JPA"))
                 .andExpect(jsonPath("$.state.quizzes[0].sourceReportRequestId").value(requestId));
 
         JsonNode persisted = persistedState(user.id());
         assertThat(persisted.path("characters")).isEmpty();
         assertThat(persisted.path("dailyReport").path("status").asText()).isEqualTo("ready");
+        JsonNode quiz = persisted.path("quizzes").get(0);
+        assertThat(quiz.path("problemId").asLong()).isEqualTo(77L);
+        assertThat(quiz.path("quizId").asLong()).isEqualTo(numericStateId(quiz.path("id").asText()));
+        assertThat(quiz.path("quizId").asLong()).isNotEqualTo(quiz.path("problemId").asLong());
+    }
+
+    @Test
+    void demoQuizEndpointCreatesRecommendedQuizzesForActiveCharacter() throws Exception {
+        AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        LearningCharacter character = createCharacter(user.id(), "Demo Quiz");
+
+        mockMvc.perform(post("/api/game/quizzes/demo")
+                        .header("Authorization", user.bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.dailyReport.status").value("ready"))
+                .andExpect(jsonPath("$.state.dailyReport.recommendedQuizIds.length()").value(2))
+                .andExpect(jsonPath("$.state.quizzes.length()").value(2))
+                .andExpect(jsonPath("$.state.quizzes[0].problemId").value(1))
+                .andExpect(jsonPath("$.state.quizzes[0].quizId").value(102))
+                .andExpect(jsonPath("$.state.quizzes[0].characterId").value(character.getId().toString()))
+                .andExpect(jsonPath("$.state.quizzes[0].sourceReportRequestId", containsString("demo-quiz-")))
+                .andExpect(jsonPath("$.state.quizzes[1].problemId").value(2))
+                .andExpect(jsonPath("$.state.quizzes[1].quizId").value(103))
+                .andExpect(jsonPath("$.state.quizzes[1].characterId").value(character.getId().toString()));
+
+        mockMvc.perform(post("/api/game/quizzes/demo")
+                        .header("Authorization", user.bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.quizzes.length()").value(2));
+    }
+
+    @Test
+    void demoQuizEndpointUsesRequestedCharacterWhenProvided() throws Exception {
+        AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        LearningCharacter first = createCharacter(user.id(), "Scoped Quiz A");
+        LearningCharacter activeSecond = createCharacter(user.id(), "Scoped Quiz B");
+
+        mockMvc.perform(post("/api/game/quizzes/demo")
+                        .header("Authorization", user.bearer())
+                        .contentType("application/json")
+                        .content("""
+                                {"characterId":%d}
+                                """.formatted(first.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.dailyReport.characterId").value(first.getId().toString()))
+                .andExpect(jsonPath("$.state.quizzes.length()").value(2))
+                .andExpect(jsonPath("$.state.quizzes[0].characterId").value(first.getId().toString()))
+                .andExpect(jsonPath("$.state.quizzes[1].characterId").value(first.getId().toString()))
+                .andExpect(jsonPath("$.state.characters[0].id").value(activeSecond.getId().intValue()))
+                .andExpect(jsonPath("$.state.characters[0].active").value(true));
     }
 
     @Test
@@ -196,6 +248,12 @@ class DailyReportProjectionIntegrationTest extends PostgresIntegrationTest {
                 userId
         );
         return objectMapper.readTree(json);
+    }
+
+    private long numericStateId(String stateId) {
+        String digits = stateId.replaceAll("\\D+", "");
+        assertThat(digits).isNotBlank();
+        return Long.parseLong(digits);
     }
 
     private String uniqueEmail() {

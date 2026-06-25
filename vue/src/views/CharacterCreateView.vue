@@ -43,8 +43,12 @@ async function submit() {
 </script>
 
 <template>
-  <div v-if="creating" class="create-pending center">
-    <CgCreationSpinner :name="form.name" :keyword="form.keyword" />
+  <div v-if="creating" class="create-pending">
+    <div class="create-pending__layout">
+      <RouterLink to="/select" class="cg-btn cg-btn--sm cg-back create-pending__back" aria-label="캐릭터 선택 화면으로 돌아가기">←</RouterLink>
+      <CgCreationSpinner :name="form.name" :keyword="form.keyword" />
+      <span class="create-pending__spacer" aria-hidden="true" />
+    </div>
   </div>
 
   <div v-else class="create">
@@ -109,7 +113,32 @@ async function submit() {
 </template>
 
 <style scoped>
-.create-pending { min-height: 70vh; }
+.create-pending {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 960px;
+  min-height: 70vh;
+  margin: 0 auto;
+  padding: var(--sp-3);
+}
+.create-pending__layout {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 440px) 40px;
+  align-items: start;
+  justify-content: center;
+  gap: var(--sp-3);
+  width: min(100%, 544px);
+}
+.create-pending__back {
+  align-self: start;
+  justify-self: start;
+}
+.create-pending__spacer {
+  display: block;
+  width: 40px;
+  height: 40px;
+}
 .create { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--sp-4); align-items: start; max-width: 960px; margin: 0 auto; }
 .create-heading { grid-column: 1 / -1; }
 .preview { padding: var(--sp-5); gap: var(--sp-3); position: sticky; top: 90px; }
@@ -118,5 +147,21 @@ async function submit() {
 .keyword-textarea { min-height: 84px; height: 84px; }
 .chipbtn { cursor: pointer; }
 .err { color: var(--angry); font-family: var(--font-head); font-size: 13px; }
+:global(html.is-ext-popup) .create-pending {
+  min-height: calc(var(--cg-ext-popup-height) - 72px);
+  padding: 0 var(--sp-2);
+}
+:global(html.is-ext-popup) .create-pending__layout {
+  grid-template-columns: 40px minmax(0, 380px) 40px;
+  gap: var(--sp-2);
+  width: min(100%, 476px);
+}
 @media (max-width: 760px) { .create { grid-template-columns: 1fr; } .preview { position: static; } }
+@media (max-width: 520px) {
+  .create-pending__layout {
+    grid-template-columns: 40px minmax(0, 1fr);
+    width: 100%;
+  }
+  .create-pending__spacer { display: none; }
+}
 </style>

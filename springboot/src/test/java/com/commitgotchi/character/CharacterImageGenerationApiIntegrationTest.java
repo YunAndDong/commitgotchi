@@ -88,15 +88,16 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
                 .andReturn();
 
         Number characterId = JsonPath.read(created.getResponse().getContentAsString(), "$.item.id");
+        Number catalogCharacterId = JsonPath.read(created.getResponse().getContentAsString(), "$.item.catalogCharacterId");
         String itemSpriteSheetUrl = JsonPath.read(created.getResponse().getContentAsString(), "$.item.spriteSheetUrl");
         assertThat(itemSpriteSheetUrl).isEqualTo(babyPresetSpriteSheetUrl(characterId));
         CharacterImageGenerationRequest request = imageClient.lastRequest();
         assertThat(request.userId()).isEqualTo(user.id());
-        assertThat(request.characterId()).isEqualTo(characterId.longValue());
+        assertThat(request.characterId()).isEqualTo(catalogCharacterId.longValue());
         assertThat(request.designKeyword()).isEqualTo("green study slime");
         assertThat(request.s3ObjectUrl())
                 .startsWith("https://commitgotchi-character-images.s3.ap-northeast-2.amazonaws.com/sprites")
-                .contains("/characters/" + characterId + "/sprite-sheet.png")
+                .contains("/characters/" + catalogCharacterId + "/sprite-sheet.png")
                 .contains("X-Amz-Algorithm=AWS4-HMAC-SHA256")
                 .contains("X-Amz-Signature=");
         assertThat(request.prompt()).isEqualTo("green study slime");
@@ -307,7 +308,7 @@ class CharacterImageGenerationApiIntegrationTest extends PostgresIntegrationTest
 
     private String babyPresetSpriteSheetUrl(Number characterId) {
         long presetId = (characterId.longValue() % 3L) + 1L;
-        return "/character-assets/default_image" + presetId + ".png";
+        return "s3://commitgotchi-character-images/sprites/characters/" + presetId + "/sprite-sheet.png";
     }
 
     private String uniqueEmail() {

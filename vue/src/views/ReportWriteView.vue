@@ -8,6 +8,8 @@ import { useRouter } from 'vue-router'
 import {
   saveReport,
   deliverDailyReport,
+  runReportNow,
+  showReportSubmittedNotice,
   todayReport,
   activeCharacter,
   STAT_KEYS,
@@ -19,10 +21,12 @@ const router = useRouter()
 const form = reactive({ mood: 'joy', title: '', content: '', tags: [] })
 const saved = ref(false)
 const submitting = ref(false)
-const demoSubmitting = ref(false)
+const instantSubmitting = ref(false)
+const instantPhase = ref('')
 const error = ref('')
 const c = activeCharacter
-const busy = computed(() => saved.value || submitting.value || demoSubmitting.value)
+const busy = computed(() => saved.value || submitting.value || instantSubmitting.value)
+const instantSubmitLabel = computed(() => instantSubmitting.value ? instantPhase.value : '즉시 제출')
 
 const moods = [
   { key: 'joy', face: '😊', label: '기쁨' },
@@ -50,28 +54,33 @@ async function submit() {
   submitting.value = true
   try {
     await saveReport({ ...form })
+    await deliverDailyReport()
+    showReportSubmittedNotice()
     saved.value = true
     setTimeout(() => router.push('/'), 900)
   } catch {
-    error.value = '리포트 저장에 실패했어요. 잠시 후 다시 시도해 주세요.'
+    error.value = '리포트 제출에 실패했어요. 잠시 후 다시 시도해 주세요.'
   } finally {
     submitting.value = false
   }
 }
 
-async function submitNowForDemo() {
-  if (!form.title.trim() || demoSubmitting.value) return
+async function submitNow() {
+  if (!form.title.trim() || instantSubmitting.value) return
   error.value = ''
-  demoSubmitting.value = true
+  instantSubmitting.value = true
+  instantPhase.value = '제출 중...'
   try {
     await saveReport({ ...form })
-    await deliverDailyReport()
+    instantPhase.value = '답변 생성 중...'
+    await runReportNow()
     saved.value = true
     router.push('/report/result')
   } catch {
-    error.value = '즉시 제출에 실패했어요. 잠시 후 다시 시도해 주세요.'
+    error.value = '즉시 제출 요청에 실패했어요. 잠시 후 다시 시도해 주세요.'
   } finally {
-    demoSubmitting.value = false
+    instantSubmitting.value = false
+    instantPhase.value = ''
   }
 }
 </script>
@@ -121,14 +130,14 @@ async function submitNowForDemo() {
 
         <div class="submit-actions">
           <button type="button" class="cg-btn cg-btn--primary cg-btn--block" :disabled="!form.title.trim() || busy" @click="submit">
-            {{ saved ? '저장됨 ✓' : (submitting ? '저장 중...' : '리포트 저장') }}
+            {{ saved ? '제출됨 ✓' : (submitting ? '제출 중...' : '리포트 제출') }}
           </button>
-          <button type="button" class="cg-btn cg-btn--accent cg-btn--block" :disabled="!form.title.trim() || busy" @click="submitNowForDemo">
-            {{ demoSubmitting ? '제출 중...' : '시연 (즉시 제출)' }}
+          <button type="button" class="cg-btn cg-btn--accent cg-btn--block" :disabled="!form.title.trim() || busy" @click="submitNow">
+            {{ instantSubmitLabel }}
           </button>
         </div>
         <p v-if="error" class="tiny report-error">{{ error }}</p>
-        <p class="tiny faint">저장하면 자정에 분석돼요. 내일 오전 9시 일일 레포트가 도착합니다.</p>
+        <p class="tiny faint">제출하면 worker 분석 요청을 보냅니다. 즉시 제출은 결과 화면으로 바로 이동해요.</p>
       </section>
 
       <aside class="cg-screen col center preview">

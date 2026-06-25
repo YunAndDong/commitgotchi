@@ -19,6 +19,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -76,6 +78,21 @@ public class ReportCallbackService {
         return ReportCallbackResponse.acceptedResult();
     }
 
+    @Transactional
+    public ReportCallbackResponse createDemoRecommendedQuizzes(long userId, long characterId, LocalDate targetDate) {
+        if (characterCommandService.findOwned(userId, characterId).isEmpty()) {
+            throw new IllegalArgumentException("Demo quiz character does not belong to user.");
+        }
+
+        ReportStateUpdate stateUpdate = applyReportResult(demoRecommendedQuizRequest(userId, characterId, targetDate));
+        if (stateUpdate.duplicate()) {
+            return ReportCallbackResponse.duplicateResult();
+        }
+
+        reportEventService.publishReportReadyAfterCommit(userId);
+        return ReportCallbackResponse.acceptedResult();
+    }
+
     private ReportStateUpdate applyReportResult(ReportCallbackRequest request) {
         GameState entity = gameStateRepository.findByIdForUpdate(request.userId())
                 .orElseGet(() -> GameState.create(request.userId(), stringifyForPersistence(emptyState())));
@@ -102,6 +119,7 @@ public class ReportCallbackService {
         report.set("deltas", uiDeltas(publicDelta));
         report.put("summary", reportText(request.dailyReport(), "text", request.statusMessage()));
         report.put("feedback", reportText(request.dailyReport(), "feedback", request.statusMessage()));
+        report.set("nextRecommendation", safeCopy(request.nextRecommendation()));
 
         ArrayNode recommendedQuizIds = appendRecommendedQuizzes(state, request);
 
@@ -127,6 +145,42 @@ public class ReportCallbackService {
         entity.updateStateJson(stringifyForPersistence(state));
         gameStateRepository.save(entity);
         return new ReportStateUpdate(false);
+    }
+
+    private ReportCallbackRequest demoRecommendedQuizRequest(long userId, long characterId, LocalDate targetDate) {
+        ObjectNode dailyReport = objectMapper.createObjectNode()
+                .put("text", "시연을 위해 추천 퀴즈 2개를 준비했어요.")
+                .put("feedback", "퀴즈 화면에서 바로 확인할 수 있어요.");
+        ObjectNode nextRecommendation = objectMapper.createObjectNode()
+                .put("rationale", "데모 화면에서 리포트 분석 추천 퀴즈 저장 흐름을 확인합니다.");
+        nextRecommendation.set("topics", objectMapper.createArrayNode().add("algorithm").add("network"));
+
+        return new ReportCallbackRequest(
+                "demo-quiz-%d-%d-%s".formatted(userId, characterId, targetDate),
+                userId,
+                characterId,
+                targetDate,
+                ReportCallbackStatus.SUCCESS,
+                new FastApiScoreDelta(0, 0, 0, 0, 0),
+                "시연용 추천 퀴즈가 준비됐어요.",
+                dailyReport,
+                nextRecommendation,
+                List.of(
+                        new ReportCallbackRequest.RecommendedQuiz(
+                                1L,
+                                "DFS와 BFS의 차이점은 무엇인가요?",
+                                "DFS는 깊이 우선 탐색으로 스택이나 재귀를 사용하고, BFS는 너비 우선 탐색으로 큐를 사용합니다. BFS는 가중치가 없는 그래프에서 최단 경로를 보장합니다.",
+                                new FastApiScoreDelta(0, 5, 5, 0, 0)
+                        ),
+                        new ReportCallbackRequest.RecommendedQuiz(
+                                2L,
+                                "RESTful API의 설계 원칙은 무엇인가요?",
+                                "RESTful API는 리소스를 URI로 표현하고 HTTP 메서드로 행위를 나타내며, stateless, client-server, uniform interface, cacheable 원칙을 지킵니다.",
+                                new FastApiScoreDelta(0, 0, 0, 5, 0)
+                        )
+                ),
+                List.of()
+        );
     }
 
     private boolean alreadyProcessed(ObjectNode state, ArrayNode reports, String requestId) {
@@ -187,12 +241,11 @@ public class ReportCallbackService {
             item.put("date", request.targetDate().toString());
             item.put("characterId", Long.toString(request.characterId()));
             item.put("sourceReportRequestId", request.requestId());
+            item.put("quizId", Long.parseLong(id.replaceAll("\\D+", "")));
             if (quiz.problemId() == null) {
                 item.set("problemId", NullNode.instance);
-                item.put("quizId", Long.parseLong(id.replaceAll("\\D+", "")));
             } else {
                 item.put("problemId", quiz.problemId());
-                item.put("quizId", quiz.problemId());
             }
             item.put("tag", primaryStat(quiz.scoreAllocation()));
             item.put("question", quiz.question());

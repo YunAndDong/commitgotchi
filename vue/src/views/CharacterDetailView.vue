@@ -5,7 +5,17 @@
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { gameState, nurtureScore, STAT_LABELS, updateCharacter, deleteCharacter, setActive } from '../stores/game.js'
+import {
+  clearStudyAnalysisNotice,
+  gameState,
+  hasStudyAnalysisNotice,
+  nurtureScore,
+  STAT_LABELS,
+  boostCharacterStat,
+  updateCharacter,
+  deleteCharacter,
+  setActive,
+} from '../stores/game.js'
 import CgSprite from '../components/CgSprite.vue'
 import CgRadar from '../components/CgRadar.vue'
 import CgGauge from '../components/CgGauge.vue'
@@ -33,6 +43,7 @@ function tagsText(tags = []) {
 const studyRecords = computed(() => {
   const reportRecords = reports.value.map((r, index) => ({
     key: `report-${r.id}`,
+    id: r.id,
     type: 'report',
     to: { name: 'report-detail', params: { id: r.id } },
     order: index,
@@ -41,9 +52,11 @@ const studyRecords = computed(() => {
     badge: r.status === 'analyzing' ? '분석 대기' : '반영됨',
     badgeClass: r.status === 'analyzing' ? 'cg-badge--warn' : 'cg-badge--ok',
     meta: tagsText(r.tags),
+    highlighted: hasStudyAnalysisNotice('report', r.id),
   }))
   const quizRecords = quizzes.value.map((q, index) => ({
     key: `quiz-${q.id}`,
+    id: q.id,
     type: 'quiz',
     to: { name: 'quiz-detail', params: { id: q.id } },
     order: reports.value.length + index,
@@ -52,6 +65,7 @@ const studyRecords = computed(() => {
     badge: q.correct ? '충분' : '보완',
     badgeClass: q.correct ? 'cg-badge--ok' : 'cg-badge--fire',
     meta: `${STAT_LABELS[q.deltaStat] || q.deltaStat} +${q.deltaAmount}`,
+    highlighted: hasStudyAnalysisNotice('quiz', q.id),
   }))
   return [...reportRecords, ...quizRecords]
     .filter(record => studyFilter.value === 'all' || record.type === studyFilter.value)
@@ -60,6 +74,9 @@ const studyRecords = computed(() => {
 function statValue(key) {
   const value = Number(c.value?.stats?.[key])
   return Number.isFinite(value) ? value : 0
+}
+function shortStatLabel(key) {
+  return ({ algo: '알고', fw: 'FW', cs: 'CS', net: 'NET', db: 'DB' })[key] || STAT_LABELS[key] || key
 }
 const radarStats = computed(() => [
   { key: 'algo', label: '알고리즘', value: statValue('algo') },
@@ -74,13 +91,49 @@ const editError = ref('')
 const deleteDialogOpen = ref(false)
 const deletePending = ref(false)
 const deleteError = ref('')
+const boostingStat = ref('')
+const boostError = ref('')
+const activatingCharacterId = ref('')
+const activeSyncError = ref('')
+const DEMO_BOOST_AMOUNT = 200
 const form = reactive({ name: '' })
 watch(c, value => {
   if (!value) return
   Object.assign(form, { name: value.name })
   studyPage.value = 1
+  void ensureCharacterActive(value)
 }, { immediate: true })
 watch(studyFilter, () => { studyPage.value = 1 })
+
+const activeSyncing = computed(() => !!activatingCharacterId.value)
+
+async function ensureCharacterActive(character = c.value) {
+  if (!character) return false
+  if (character.active) return true
+  const targetId = String(character.id)
+  if (activatingCharacterId.value === targetId) return false
+  activeSyncError.value = ''
+  activatingCharacterId.value = targetId
+  try {
+    const ok = await setActive(character.id)
+    if (!ok) activeSyncError.value = '선택한 캐릭터를 활성화하지 못했어요.'
+    return ok
+  } catch (e) {
+    activeSyncError.value = e?.message || '선택한 캐릭터를 활성화하지 못했어요.'
+    return false
+  } finally {
+    if (activatingCharacterId.value === targetId) activatingCharacterId.value = ''
+  }
+}
+
+async function goAfterActive(target) {
+  if (!await ensureCharacterActive()) return
+  router.push(target)
+}
+
+function quizTarget() {
+  return { name: 'quiz', query: { characterId: c.value.id } }
+}
 
 async function saveEdit() {
   editError.value = ''
@@ -122,7 +175,7 @@ async function confirmRemove() {
   try {
     await deleteCharacter(c.value.id)
     deleteDialogOpen.value = false
-    router.push('/')
+    router.push({ name: 'character-select' })
   } catch (e) {
     deleteError.value = e?.message || '캐릭터를 삭제하지 못했어요.'
   } finally {
@@ -133,6 +186,19 @@ async function confirmRemove() {
 async function activate() {
   await setActive(c.value.id)
 }
+
+async function boostStat(key) {
+  if (!c.value || boostingStat.value) return
+  boostError.value = ''
+  boostingStat.value = key
+  try {
+    await boostCharacterStat(c.value.id, key, DEMO_BOOST_AMOUNT)
+  } catch (e) {
+    boostError.value = e?.message || '스탯을 올리지 못했어요.'
+  } finally {
+    boostingStat.value = ''
+  }
+}
 </script>
 
 <template>
@@ -142,7 +208,22 @@ async function activate() {
         <RouterLink to="/select" class="cg-btn cg-btn--sm cg-back" aria-label="캐릭터 선택 화면으로 돌아가기">←</RouterLink>
         <h1 class="cg-page-title">캐릭터 상세</h1>
       </div>
+      <div class="cg-pagehead__actions stat-boost-actions" aria-label="시연용 스탯 보강">
+        <button
+          v-for="item in radarStats"
+          :key="item.key"
+          type="button"
+          class="cg-btn cg-btn--sm cg-btn--ghost stat-boost-btn"
+          :disabled="!!boostingStat"
+          :title="`${item.label} +${DEMO_BOOST_AMOUNT}`"
+          :aria-label="`${item.label} 스탯 ${DEMO_BOOST_AMOUNT} 올리기`"
+          @click="boostStat(item.key)"
+        >
+          {{ boostingStat === item.key ? '...' : `${shortStatLabel(item.key)} +${DEMO_BOOST_AMOUNT}` }}
+        </button>
+      </div>
     </header>
+    <p v-if="boostError" class="err tiny" role="alert">{{ boostError }}</p>
 
     <section class="detail-grid">
       <div class="left-col col">
@@ -163,10 +244,21 @@ async function activate() {
           <p v-if="editError" class="err tiny" role="alert">{{ editError }}</p>
           <p class="tiny faint mono">{{ c.keyword || '기본 디자인' }}</p>
           <span class="cg-badge" :class="c.active ? 'cg-badge--ok' : 'cg-badge--warn'">
-            {{ c.active ? '활성 캐릭터' : '비활성 캐릭터' }}
+            {{ c.active ? '활성 캐릭터' : activeSyncing ? '선택 중...' : '비활성 캐릭터' }}
           </span>
-          <RouterLink to="/report" class="cg-btn cg-btn--sm cg-btn--primary cg-btn--block">📓 리포트 작성</RouterLink>
-          <RouterLink to="/quiz" class="cg-btn cg-btn--sm cg-btn--accent cg-btn--block">🧩 퀴즈 풀기</RouterLink>
+          <p v-if="activeSyncError" class="err tiny" role="alert">{{ activeSyncError }}</p>
+          <button
+            type="button"
+            class="cg-btn cg-btn--sm cg-btn--primary cg-btn--block"
+            :disabled="activeSyncing"
+            @click="goAfterActive('/report')"
+          >📓 리포트 작성</button>
+          <button
+            type="button"
+            class="cg-btn cg-btn--sm cg-btn--accent cg-btn--block"
+            :disabled="activeSyncing"
+            @click="goAfterActive(quizTarget())"
+          >🧩 퀴즈 풀기</button>
         </div>
 
         <div class="char-actions col">
@@ -188,7 +280,7 @@ async function activate() {
                 <strong>{{ item.value }}</strong>
               </li>
             </ul>
-            <div class="radar-visual"><CgRadar :stats="c.stats" :size="220" /></div>
+            <div class="radar-visual"><CgRadar :stats="c.stats" :size="240" /></div>
           </div>
         </div>
 
@@ -204,8 +296,10 @@ async function activate() {
             </div>
             <p v-if="!studyRecords.length" class="muted tiny">해당 기록이 없어요.</p>
             <ul class="rows col">
-              <li v-for="record in paged(studyRecords, studyPage)" :key="record.key" class="rowitem">
-                <RouterLink :to="record.to" class="rowitem-link" :aria-label="`${record.title} 상세 보기`">
+              <li v-for="record in paged(studyRecords, studyPage)" :key="record.key" class="rowitem"
+                  :class="{ 'rowitem--analysis-arrived': record.highlighted }">
+                <RouterLink :to="record.to" class="rowitem-link" :aria-label="`${record.title} 상세 보기`"
+                            @click="clearStudyAnalysisNotice(record.type, record.id)">
                   <div class="row between">
                     <strong :class="{ qline: record.type === 'quiz' }">{{ record.title }}</strong>
                     <span class="cg-badge" :class="record.badgeClass">{{ record.badge }}</span>
@@ -297,7 +391,20 @@ async function activate() {
   text-align: center;
 }
 .side { align-items: flex-end; width: 100%; }
-.radar-card, .lists { width: min(100%, 520px); }
+.stat-boost-actions {
+  flex-wrap: nowrap;
+  gap: 5px;
+  min-width: 0;
+}
+.stat-boost-btn {
+  min-height: 28px;
+  padding: 3px 7px;
+  border-width: 1.5px;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.radar-card, .lists { width: min(100%, 600px); }
 .radar-head {
   display: flex;
   align-items: flex-start;
@@ -310,14 +417,16 @@ async function activate() {
 }
 .radar-body {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
+  grid-template-columns: 150px minmax(280px, 1fr);
   gap: var(--sp-3);
   align-items: center;
 }
 .radar-visual {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   width: 100%;
+  min-width: 0;
+  overflow: visible;
 }
 .stat-list {
   display: grid;
@@ -343,6 +452,8 @@ async function activate() {
 .study-filter { width: 116px; min-height: 36px; padding: 6px 10px; font-size: 13px; }
 .rows { gap: 8px; list-style: none; }
 .rowitem {
+  position: relative;
+  overflow: hidden;
   border: 2px solid var(--surface-edge);
   border-radius: var(--r);
   background: var(--surface-2);
@@ -356,7 +467,30 @@ async function activate() {
 .rowitem:focus-within {
   border-color: var(--primary-d);
 }
+.rowitem--analysis-arrived {
+  border-color: var(--accent2);
+  animation: analysis-arrived-flash 1.15s ease-in-out infinite;
+}
+.rowitem--analysis-arrived::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    transparent 34%,
+    color-mix(in srgb, var(--accent2) 24%, transparent) 48%,
+    color-mix(in srgb, #fff 42%, transparent) 52%,
+    transparent 66%,
+    transparent 100%
+  );
+  transform: translateX(-120%);
+  animation: analysis-arrived-sheen 1.35s ease-in-out infinite;
+}
 .rowitem-link {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -392,10 +526,38 @@ async function activate() {
   color: var(--badge-fire-fg);
 }
 .err { color: var(--angry); }
+@keyframes analysis-arrived-flash {
+  0%, 100% {
+    background: var(--surface-2);
+    filter: brightness(1);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent2) 0%, transparent);
+  }
+  50% {
+    background: var(--surface);
+    filter: brightness(1.08);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent2) 28%, transparent);
+  }
+}
+@keyframes analysis-arrived-sheen {
+  0% {
+    transform: translateX(-120%);
+    opacity: .1;
+  }
+  42%, 58% {
+    opacity: .85;
+  }
+  100% {
+    transform: translateX(120%);
+    opacity: .1;
+  }
+}
 @media (max-width: 680px) {
   .detail-grid { grid-template-columns: 1fr; }
   .left-col, .charcol, .radar-card, .lists { width: 100%; }
   .side { align-items: stretch; }
+}
+@media (max-width: 560px) {
+  .stat-boost-actions { order: 3; width: 100%; justify-content: flex-start; }
 }
 @media (max-width: 440px) {
   .radar-head {

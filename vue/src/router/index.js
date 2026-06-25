@@ -1,11 +1,18 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { authState, bootstrap, isAuthenticated } from '../stores/auth.js'
-import { activeCharacter } from '../stores/game.js'
+import { activeCharacter, loadGameState } from '../stores/game.js'
 
 const isExtensionPopup = () => (
   location.protocol === 'chrome-extension:' ||
   document.documentElement.classList.contains('is-ext-popup')
 )
+
+async function refreshGameState() {
+  if (isAuthenticated()) {
+    try { await loadGameState() } catch { /* keep current state and let the target view render its empty/error state */ }
+  }
+  return true
+}
 
 const routes = [
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { public: true } },
@@ -17,7 +24,7 @@ const routes = [
   { path: '/report', name: 'report', component: () => import('../views/ReportWriteView.vue') },
   { path: '/report/result', name: 'report-result', component: () => import('../views/ReportResultView.vue') },
   { path: '/report/:id', name: 'report-detail', component: () => import('../views/ReportDetailView.vue') },
-  { path: '/quiz', name: 'quiz', component: () => import('../views/QuizView.vue') },
+  { path: '/quiz', name: 'quiz', component: () => import('../views/QuizView.vue'), beforeEnter: refreshGameState },
   { path: '/quiz/:id', name: 'quiz-detail', component: () => import('../views/QuizDetailView.vue') },
   { path: '/ranking', name: 'ranking', component: () => import('../views/RankingView.vue') },
   { path: '/codex', name: 'codex', component: () => import('../views/CodexView.vue') },

@@ -11,7 +11,11 @@
  * held by the backend in an HttpOnly cookie and transparently rotated on a 401.
  */
 
-const BASE = import.meta.env?.VITE_API_BASE_URL || ''
+const configuredBase = import.meta.env?.VITE_API_BASE_URL || ''
+const isExtensionRuntime = () => (
+  typeof location !== 'undefined' && location.protocol === 'chrome-extension:'
+)
+const BASE = configuredBase || (isExtensionRuntime() ? 'http://localhost:8080' : '')
 const NORMALIZED_BASE = String(BASE || '').replace(/\/+$/, '')
 const TOKENS_KEY = 'cg.tokens'
 const REQUEST_TIMEOUT_MS = 15000
@@ -63,6 +67,16 @@ export function apiAssetUrl(path) {
     return new URL(value, NORMALIZED_BASE).toString()
   }
   return `${NORMALIZED_BASE}${value}`
+}
+
+function withQuery(path, params = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value == null || value === '') return
+    search.set(key, String(value))
+  })
+  const query = search.toString()
+  return query ? `${path}?${query}` : path
 }
 
 export class ApiError extends Error {
@@ -251,8 +265,53 @@ export function openCharacterEventStream(characterId, handlers = {}) {
   return { close }
 }
 
+export function openReportEventStream(handlers = {}) {
+  const controller = new AbortController()
+  let closed = false
+  const close = () => {
+    closed = true
+    controller.abort()
+  }
+  openAuthedStream('/api/game/reports/events', controller.signal)
+    .then(response => consumeSse(response, handlers, controller.signal))
+    .catch(error => {
+      if (!closed && error?.name !== 'AbortError') handlers.onError?.(error)
+    })
+    .finally(() => {
+      if (!closed) handlers.onClose?.()
+    })
+  return { close }
+}
+
 export const users = {
   me: () => authed('GET', '/api/users/me'),
+}
+
+export const codex = {
+  listCharacters: ({ afterId, limit } = {}) => authed('GET', withQuery('/api/codex/characters', { afterId, limit })),
+  spriteUrls: (ids) => authed('POST', '/api/codex/characters/sprite-urls', { body: { ids } }),
+  reviews: (characterId, { page, size } = {}) => authed(
+    'GET',
+    withQuery(`/api/codex/characters/${encodeURIComponent(String(characterId))}/reviews`, { page, size }),
+  ),
+  addReview: (characterId, body) => authed(
+    'POST',
+    `/api/codex/characters/${encodeURIComponent(String(characterId))}/reviews`,
+    { body },
+  ),
+  updateReview: (characterId, reviewId, body) => authed(
+    'PATCH',
+    `/api/codex/characters/${encodeURIComponent(String(characterId))}/reviews/${encodeURIComponent(String(reviewId))}`,
+    { body },
+  ),
+  deleteReview: (characterId, reviewId) => authed(
+    'DELETE',
+    `/api/codex/characters/${encodeURIComponent(String(characterId))}/reviews/${encodeURIComponent(String(reviewId))}`,
+  ),
+  raiseCharacter: (characterId) => authed(
+    'POST',
+    `/api/codex/characters/${encodeURIComponent(String(characterId))}/raise`,
+  ),
 }
 
 export const game = {
@@ -260,10 +319,20 @@ export const game = {
   createCharacter: (body) => authed('POST', '/api/game/characters', { body }),
   updateCharacter: (id, body) => authed('PATCH', `/api/game/characters/${encodeURIComponent(String(id))}`, { body }),
   setActiveCharacter: (id) => authed('PATCH', `/api/game/characters/${encodeURIComponent(String(id))}/active`),
+  boostCharacterStat: (id, body) => authed('POST', `/api/game/characters/${encodeURIComponent(String(id))}/demo-stat-boost`, { body }),
   retryImage: (id) => authed('POST', `/api/game/characters/${encodeURIComponent(String(id))}/retry-image`),
   deleteCharacter: (id) => authed('DELETE', `/api/game/characters/${encodeURIComponent(String(id))}`),
   saveReport: (body) => authed('POST', '/api/game/reports', { body }),
+  runReportNow: async (body = {}) => {
+    try {
+      return await authed('POST', '/api/game/reports/run-now', { body })
+    } catch (error) {
+      if (error?.status !== 404) throw error
+      return authed('POST', '/api/game/daily-report/deliver', { body })
+    }
+  },
   submitQuiz: (id, body) => authed('POST', `/api/game/quizzes/${encodeURIComponent(String(id))}/submit`, { body }),
+  createDemoQuizzes: (body = {}) => authed('POST', '/api/game/quizzes/demo', { body }),
   deliverDailyReport: (body = {}) => authed('POST', '/api/game/daily-report/deliver', { body }),
   createBoardPost: (body) => authed('POST', '/api/game/board-posts', { body }),
   updateBoardPost: (id, body) => authed('PATCH', `/api/game/board-posts/${encodeURIComponent(String(id))}`, { body }),

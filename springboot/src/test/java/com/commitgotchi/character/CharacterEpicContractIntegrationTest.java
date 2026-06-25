@@ -29,6 +29,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.commitgotchi.support.RecommendedQuizTestHelper.MODEL_ANSWER;
+import static com.commitgotchi.support.RecommendedQuizTestHelper.createRecommendedQuiz;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -39,7 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "commitgotchi.internal-api.secret=test-internal-secret")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
@@ -137,10 +139,10 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
         MvcResult created = createCharacter(user.bearer(), "Projection", "projection keyword", "projection personality")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.characters[0].spriteSheetUrl").isNotEmpty())
-                .andExpect(jsonPath("$.state.quizzes.length()").value(2))
+                .andExpect(jsonPath("$.state.quizzes.length()").value(0))
                 .andReturn();
         Number firstId = itemId(created);
-        String firstQuizId = JsonPath.read(created.getResponse().getContentAsString(), "$.state.quizzes[0].id");
+        String firstQuizId = createRecommendedQuiz(mockMvc, user.bearer(), user.id(), firstId.longValue());
 
         assertStoredCharactersEmpty(user.id());
         assertStoredStateDoesNotContain(user.id(), "spriteSheetUrl");
@@ -176,8 +178,8 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
                         .header("Authorization", user.bearer())
                         .contentType("application/json")
                         .content("""
-                                {"userAnswer":"그리디 전제 때문에 음수 간선이 있으면 확정한 최단거리를 다시 갱신하지 못합니다."}
-                                """))
+                                {"userAnswer":"%s"}
+                                """.formatted(MODEL_ANSWER)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.characters[0].stats.algo").value(12))
                 .andExpect(jsonPath("$.state.characters[0].battlePower").value(12));
@@ -189,9 +191,10 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
                         .content("{}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.dailyReport.characterId").value(firstId.toString()))
-                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(15))
-                .andExpect(jsonPath("$.state.characters[0].stats.net").value(1))
-                .andExpect(jsonPath("$.state.characters[0].battlePower").value(16));
+                .andExpect(jsonPath("$.state.dailyReport.status").value("pending"))
+                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(12))
+                .andExpect(jsonPath("$.state.characters[0].stats.net").value(0))
+                .andExpect(jsonPath("$.state.characters[0].battlePower").value(12));
         assertStoredCharactersEmpty(user.id());
         assertStoredStateDoesNotContain(user.id(), "spriteMeta");
 
@@ -203,20 +206,86 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.state.characters.length()").value(1))
                 .andExpect(jsonPath("$.state.characters[0].id").value(secondId))
                 .andExpect(jsonPath("$.state.dailyReport.characterId").value(secondId))
-                .andExpect(jsonPath("$.state.reports[0].characterId").value(firstId.toString()));
+                .andExpect(jsonPath("$.state.reports[0].characterId").value(secondId.toString()));
 
         JsonNode stored = storedState(user.id());
         assertThat(stored.get("characters")).isNotNull();
         assertThat(stored.get("characters").isArray()).isTrue();
         assertThat(stored.get("characters").size()).isZero();
         assertThat(stored.path("dailyReport").path("characterId").asLong()).isEqualTo(secondId.longValue());
-        assertThat(stored.path("reports").get(0).path("characterId").asText()).isEqualTo(firstId.toString());
+        assertThat(stored.path("reports").get(0).path("characterId").asText()).isEqualTo(secondId.toString());
 
         mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state.characters[0].id").value(secondId))
                 .andExpect(jsonPath("$.state.characters[0].spriteSheetUrl").isNotEmpty())
                 .andExpect(jsonPath("$.state.characters[0].spriteMeta.frameMap.angry[1]").value(2));
+    }
+
+    @Test
+    void boostsRequestedStatByTwoHundredForDemo() throws Exception {
+        AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        Number characterId = itemId(createCharacter(user.bearer(), "Demo", "demo keyword", "demo personality")
+                .andExpect(status().isOk())
+                .andReturn());
+
+        boostStat(user.bearer(), characterId, "db")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.item.stats.db").value(200))
+                .andExpect(jsonPath("$.item.battlePower").value(200))
+                .andExpect(jsonPath("$.item.message").value("시연용 보너스로 DB 스탯이 200 올랐어요."))
+                .andExpect(jsonPath("$.state.characters[0].stats.db").value(200))
+                .andExpect(jsonPath("$.state.characters[0].battlePower").value(200));
+        assertStoredCharactersEmpty(user.id());
+
+        mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.characters[0].stats.db").value(200))
+                .andExpect(jsonPath("$.state.characters[0].battlePower").value(200));
+    }
+
+    @Test
+    void demoStatBoostPersistsStatsAndEvolvesAtOneThousandBattlePower() throws Exception {
+        AdminTestFixture.ProvisionedUser user = fixture.provisionUser(uniqueEmail(), "very-secure-password");
+        Number characterId = itemId(createCharacter(user.bearer(), "Evolution", "evolution keyword", "evolution personality")
+                .andExpect(status().isOk())
+                .andReturn());
+
+        for (int i = 1; i <= 4; i++) {
+            boostStat(user.bearer(), characterId, "algo")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.item.stats.algo").value(i * 200))
+                    .andExpect(jsonPath("$.item.battlePower").value(i * 200))
+                    .andExpect(jsonPath("$.item.isEvolved").value(false));
+        }
+
+        java.util.Map<String, Object> beforeEvolution = storedCharacterColumns(characterId);
+        assertThat(beforeEvolution)
+                .containsEntry("stat_algorithm", 800)
+                .containsEntry("battle_power", 800)
+                .containsEntry("is_evolved", false);
+
+        boostStat(user.bearer(), characterId, "algo")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.item.stats.algo").value(1000))
+                .andExpect(jsonPath("$.item.battlePower").value(1000))
+                .andExpect(jsonPath("$.item.isEvolved").value(true))
+                .andExpect(jsonPath("$.item._evolvedNow").value(true))
+                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(1000))
+                .andExpect(jsonPath("$.state.characters[0].battlePower").value(1000))
+                .andExpect(jsonPath("$.state.characters[0].isEvolved").value(true));
+
+        java.util.Map<String, Object> afterEvolution = storedCharacterColumns(characterId);
+        assertThat(afterEvolution)
+                .containsEntry("stat_algorithm", 1000)
+                .containsEntry("battle_power", 1000)
+                .containsEntry("is_evolved", true);
+
+        mockMvc.perform(get("/api/game/state").header("Authorization", user.bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state.characters[0].stats.algo").value(1000))
+                .andExpect(jsonPath("$.state.characters[0].battlePower").value(1000))
+                .andExpect(jsonPath("$.state.characters[0].isEvolved").value(true));
     }
 
     @Test
@@ -308,6 +377,15 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
                 .header("Authorization", bearer));
     }
 
+    private ResultActions boostStat(String bearer, Object characterId, String stat) throws Exception {
+        return mockMvc.perform(post("/api/game/characters/{id}/demo-stat-boost", characterId)
+                .header("Authorization", bearer)
+                .contentType("application/json")
+                .content("""
+                        {"stat":"%s","amount":200}
+                        """.formatted(stat)));
+    }
+
     private ResultActions deleteCharacter(String bearer, Object characterId) throws Exception {
         return mockMvc.perform(delete("/api/game/characters/{id}", characterId)
                 .header("Authorization", bearer));
@@ -380,6 +458,19 @@ class CharacterEpicContractIntegrationTest extends PostgresIntegrationTest {
                             FROM user_character
                             WHERE id = ?
                         )
+                        """,
+                characterId.longValue()
+        );
+    }
+
+    private java.util.Map<String, Object> storedCharacterColumns(Number characterId) {
+        return jdbcTemplate.queryForMap(
+                """
+                        SELECT stat_algorithm, stat_cs, stat_db, stat_network, stat_framework,
+                               battle_power, is_evolved
+                        FROM user_character
+                        WHERE id = ?
+                          AND deleted_at IS NULL
                         """,
                 characterId.longValue()
         );
