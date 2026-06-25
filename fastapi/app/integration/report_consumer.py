@@ -155,7 +155,19 @@ def process_report_request_message(
             ),
         )
     except Exception:
+        logger.exception(
+            "report analysis raised; using safe fallback requestId=%s",
+            request.request_id,
+        )
         report_result = _safe_fallback_report_result()
+
+    _rq = report_result.get("recommendedQuizzes")
+    logger.info(
+        "report analyzed requestId=%s status=%s recommendedQuizzes=%d",
+        request.request_id,
+        report_result.get("status"),
+        len(_rq) if isinstance(_rq, list) else -1,
+    )
 
     try:
         callback_result = callback_client.send_report_callback(

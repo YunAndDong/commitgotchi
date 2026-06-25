@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Mapping, Protocol
 from urllib.error import HTTPError
 from urllib.parse import urlsplit, urlunsplit
@@ -16,6 +17,8 @@ from .spring_payloads import (
     build_report_callback_payload,
 )
 
+
+logger = logging.getLogger(__name__)
 
 INTERNAL_AUTH_HEADER_NAME = "Authorization"
 INTERNAL_AUTH_SCHEME = "Internal"
@@ -169,7 +172,15 @@ class SpringCallbackClient:
                 error="spring callback connection error",
             )
 
-        return classify_spring_callback_response(response)
+        result = classify_spring_callback_response(response)
+        if not result.ok:
+            logger.warning(
+                "spring callback non-OK path=%s status=%s body=%s",
+                path,
+                response.status_code,
+                (response.body or "")[:500],
+            )
+        return result
 
 
 def build_spring_callback_url(*, base_url: str, path: str) -> str:
