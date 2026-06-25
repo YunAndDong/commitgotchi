@@ -164,6 +164,11 @@ What actual deploy does:
 
 If `REPORT_REQUEST_QUEUE_ENABLED=true`, `DEPLOY_WORKER_PROFILE=auto` enables
 the compose `worker` profile so `fastapi-report-worker` starts too.
+In that mode `deploy.sh` also requires `REPORT_REQUEST_QUEUE_URL`; the FastAPI
+worker consumes by URL and cannot fall back to queue name. Queue-enabled deploys
+also require `REPORT_REQUEST_DISPATCHER_ENABLED=true` so existing outbox rows are
+drained. If the dispatcher is enabled while the queue is disabled, deploy fails
+before compose to avoid marking outbox rows as sent through the noop producer.
 
 ### Deploy Options
 

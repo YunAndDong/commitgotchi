@@ -373,7 +373,14 @@ load_env_from_ssm() {
   fetch_parameter_env "SPRING_INTERNAL_API_SECRET" "spring/SPRING_INTERNAL_API_SECRET" "true" "" "true"
   fetch_parameter_env "CHARACTER_IMAGE_ENABLED" "spring/CHARACTER_IMAGE_ENABLED" "false" "true" "false"
   fetch_parameter_env "REPORT_REQUEST_QUEUE_ENABLED" "spring/REPORT_REQUEST_QUEUE_ENABLED" "false" "false" "false"
-  fetch_parameter_env "REPORT_REQUEST_DISPATCHER_ENABLED" "spring/REPORT_REQUEST_DISPATCHER_ENABLED" "false" "false" "false"
+  local report_request_queue_enabled
+  report_request_queue_enabled="$(get_env_value REPORT_REQUEST_QUEUE_ENABLED)"
+  fetch_parameter_env \
+    "REPORT_REQUEST_DISPATCHER_ENABLED" \
+    "spring/REPORT_REQUEST_DISPATCHER_ENABLED" \
+    "false" \
+    "$report_request_queue_enabled" \
+    "false"
   # Demo debug controller toggle. Default false; set the SSM param to "true" only
   # for a live demo, then back to false (random-token guarded, no auth).
   fetch_parameter_env "COMMITGOTCHI_DEBUG_ENABLED" "spring/COMMITGOTCHI_DEBUG_ENABLED" "false" "false" "false"
@@ -515,6 +522,52 @@ preflight_tls() {
     warn "Nginx config references Let's Encrypt files directly; compose would fail before TLS is bootstrapped."
     warn "Run scripts/bootstrap-tls.sh --plan first, then --apply after operator approval."
     is_non_mutating || die "TLS preflight failed."
+  fi
+}
+
+preflight_report_queue() {
+  local queue_enabled
+  local dispatcher_enabled
+  local queue_url
+
+  queue_enabled="$(get_env_value REPORT_REQUEST_QUEUE_ENABLED || true)"
+  dispatcher_enabled="$(get_env_value REPORT_REQUEST_DISPATCHER_ENABLED || true)"
+  queue_url="$(get_env_value REPORT_REQUEST_QUEUE_URL || true)"
+
+  if is_truthy "$queue_enabled"; then
+    if [[ -z "$queue_url" ]]; then
+      if is_non_mutating; then
+        PREFLIGHT_WARNINGS+=("REPORT_REQUEST_QUEUE_ENABLED=true but REPORT_REQUEST_QUEUE_URL is empty; fastapi-report-worker cannot consume SQS messages.")
+      else
+        die "REPORT_REQUEST_QUEUE_ENABLED=true requires REPORT_REQUEST_QUEUE_URL for fastapi-report-worker."
+      fi
+    fi
+
+    if ! worker_profile_enabled; then
+      if is_non_mutating; then
+        PREFLIGHT_WARNINGS+=("REPORT_REQUEST_QUEUE_ENABLED=true but DEPLOY_WORKER_PROFILE disables the worker compose profile.")
+      else
+        die "REPORT_REQUEST_QUEUE_ENABLED=true requires the worker compose profile. Set DEPLOY_WORKER_PROFILE=auto or true."
+      fi
+    fi
+
+    if ! is_truthy "$dispatcher_enabled"; then
+      if is_non_mutating; then
+        PREFLIGHT_WARNINGS+=("REPORT_REQUEST_QUEUE_ENABLED=true but REPORT_REQUEST_DISPATCHER_ENABLED is not true; existing PENDING outbox rows will not be drained by the scheduler.")
+      else
+        die "REPORT_REQUEST_QUEUE_ENABLED=true requires REPORT_REQUEST_DISPATCHER_ENABLED=true for prod outbox draining."
+      fi
+    fi
+    log "Report request queue is enabled; commitgotchi-fastapi-report-worker-prod is expected after compose up."
+    return
+  fi
+
+  if is_truthy "$dispatcher_enabled"; then
+    if is_non_mutating; then
+      PREFLIGHT_WARNINGS+=("REPORT_REQUEST_DISPATCHER_ENABLED=true but REPORT_REQUEST_QUEUE_ENABLED is not true; the dispatcher would use a noop producer.")
+    else
+      die "REPORT_REQUEST_DISPATCHER_ENABLED=true requires REPORT_REQUEST_QUEUE_ENABLED=true."
+    fi
   fi
 }
 
@@ -820,6 +873,7 @@ main() {
   load_caller_identity
   load_env_from_ssm
   write_env_file
+  preflight_report_queue
   preflight_tls
   preflight_ecr_images
   ecr_login
