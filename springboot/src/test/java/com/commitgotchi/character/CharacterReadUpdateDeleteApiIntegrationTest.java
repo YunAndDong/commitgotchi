@@ -749,7 +749,7 @@ class CharacterReadUpdateDeleteApiIntegrationTest extends PostgresIntegrationTes
 
     private String babyPresetSpriteSheetUrl(Number characterId) {
         long presetId = (characterId.longValue() % 3L) + 1L;
-        return "s3://commitgotchi-character-images/sprites/" + presetId + "/sprite-sheet.png";
+        return "s3://commitgotchi-character-images/sprites/characters/" + presetId + "/sprite-sheet.png";
     }
 
     private String reportCallbackPayload(String requestId, long userId, long characterId, String targetDate) {
